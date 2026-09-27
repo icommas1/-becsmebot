@@ -4,10 +4,12 @@ const express = require("express");
 const {
   PublicKey,
   Connection,
-Keypair,
+  Keypair,
   LAMPORTS_PER_SOL
 } = require("@solana/web3.js");
+
 const bs58 = require("bs58").default;
+
 const app = express();
 app.use(express.json());
 
@@ -15,16 +17,7 @@ const PORT = process.env.PORT || 3000;
 const RPC_URL = process.env.HELIUS_RPC_URL;
 const JUPITER_API_KEY = process.env.JUPITER_API_KEY;
 const SOLANA_PRIVATE_KEY = process.env.SOLANA_PRIVATE_KEY;
-if (!SOLANA_PRIVATE_KEY) {
-  throw new Error("SOLANA_PRIVATE_KEY is missing");
-}
-const signer = Keypair.fromSecretKey(
-  bs58.decode(SOLANA_PRIVATE_KEY)
-);
 
-if (signer.publicKey.toBase58() !== BOT_WALLET) {
-  throw new Error("SOLANA_PRIVATE_KEY does not match BOT_WALLET");
-}
 const BOT_WALLET =
   "DJ9dHrRXSPEdyLEkJ96Hj79S7Qkt7mgrryT3Q5J5bVws";
 
@@ -38,6 +31,15 @@ if (!JUPITER_API_KEY) {
 
 const wallet = new PublicKey(BOT_WALLET);
 const connection = new Connection(RPC_URL, "confirmed");
+
+function getSigner() {
+  if (!SOLANA_PRIVATE_KEY) {
+    throw new Error("SOLANA_PRIVATE_KEY is missing");
+  }
+
+  const secretKey = bs58.decode(SOLANA_PRIVATE_KEY);
+  return Keypair.fromSecretKey(secretKey);
+}
 
 // BecsBot status
 app.get("/", (req, res) => {
@@ -60,6 +62,7 @@ app.get("/health", async (req, res) => {
       rpcConnected: true,
       slot,
       jupiterConfigured: !!JUPITER_API_KEY,
+      signerConfigured: !!SOLANA_PRIVATE_KEY,
       tradingEnabled: false
     });
   } catch (error) {
@@ -69,16 +72,32 @@ app.get("/health", async (req, res) => {
     });
   }
 });
+
+// Signer verification
+// DOES NOT sign, send, or trade anything
 app.get("/signer-test", (req, res) => {
-  res.json({
-    ok: true,
-    signerConfigured: true,
-    signerWallet: signer.publicKey.toBase58(),
-    expectedWallet: BOT_WALLET,
-    matches: signer.publicKey.toBase58() === BOT_WALLET,
-    tradingEnabled: false
-  });
+  try {
+    const signer = getSigner();
+    const signerWallet = signer.publicKey.toBase58();
+
+    res.json({
+      ok: true,
+      signerConfigured: true,
+      signerWallet,
+      expectedWallet: BOT_WALLET,
+      matches: signerWallet === BOT_WALLET,
+      tradingEnabled: false
+    });
+  } catch (error) {
+    res.status(500).json({
+      ok: false,
+      signerConfigured: false,
+      tradingEnabled: false,
+      error: error.message
+    });
+  }
 });
+
 // Wallet tracking
 app.get("/wallet", async (req, res) => {
   try {
@@ -93,8 +112,7 @@ app.get("/wallet", async (req, res) => {
 
     const tokens = tokenAccounts.value
       .map((account) => {
-        const info =
-          account.account.data.parsed.info;
+        const info = account.account.data.parsed.info;
 
         return {
           mint: info.mint,
@@ -171,5 +189,8 @@ app.listen(PORT, "0.0.0.0", () => {
   console.log(`Bot wallet: ${wallet.toBase58()}`);
   console.log("Helius RPC: configured");
   console.log("Jupiter API: configured");
+  console.log(
+    `Solana signer: ${SOLANA_PRIVATE_KEY ? "configured" : "missing"}`
+  );
   console.log("Trading: DISABLED");
 });
