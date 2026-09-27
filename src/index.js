@@ -4,17 +4,27 @@ const express = require("express");
 const {
   PublicKey,
   Connection,
+Keypair,
   LAMPORTS_PER_SOL
 } = require("@solana/web3.js");
-
+const bs58 = require("bs58").default;
 const app = express();
 app.use(express.json());
 
 const PORT = process.env.PORT || 3000;
 const RPC_URL = process.env.HELIUS_RPC_URL;
 const JUPITER_API_KEY = process.env.JUPITER_API_KEY;
+const SOLANA_PRIVATE_KEY = process.env.SOLANA_PRIVATE_KEY;
+if (!SOLANA_PRIVATE_KEY) {
+  throw new Error("SOLANA_PRIVATE_KEY is missing");
+}
+const signer = Keypair.fromSecretKey(
+  bs58.decode(SOLANA_PRIVATE_KEY)
+);
 
-
+if (signer.publicKey.toBase58() !== BOT_WALLET) {
+  throw new Error("SOLANA_PRIVATE_KEY does not match BOT_WALLET");
+}
 const BOT_WALLET =
   "DJ9dHrRXSPEdyLEkJ96Hj79S7Qkt7mgrryT3Q5J5bVws";
 
@@ -59,7 +69,16 @@ app.get("/health", async (req, res) => {
     });
   }
 });
-
+app.get("/signer-test", (req, res) => {
+  res.json({
+    ok: true,
+    signerConfigured: true,
+    signerWallet: signer.publicKey.toBase58(),
+    expectedWallet: BOT_WALLET,
+    matches: signer.publicKey.toBase58() === BOT_WALLET,
+    tradingEnabled: false
+  });
+});
 // Wallet tracking
 app.get("/wallet", async (req, res) => {
   try {
