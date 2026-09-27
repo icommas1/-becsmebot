@@ -12,18 +12,23 @@ app.use(express.json());
 
 const PORT = process.env.PORT || 3000;
 const RPC_URL = process.env.HELIUS_RPC_URL;
+const JUPITER_API_KEY = process.env.JUPITER_API_KEY;
 
 const BOT_WALLET =
   "4BWgYmzT8xuNMm9VygSwKpVct6Sxdcc685QvwtiasuKA";
 
 if (!RPC_URL) {
-  throw new Error("HELIUS_RPC_URL is not configured");
+  throw new Error("HELIUS_RPC_URL is missing");
+}
+
+if (!JUPITER_API_KEY) {
+  throw new Error("JUPITER_API_KEY is missing");
 }
 
 const wallet = new PublicKey(BOT_WALLET);
 const connection = new Connection(RPC_URL, "confirmed");
 
-// Basic BecsBot status
+// BecsBot status
 app.get("/", (req, res) => {
   res.json({
     name: "BecsBot",
@@ -34,7 +39,7 @@ app.get("/", (req, res) => {
   });
 });
 
-// Verify Solana/Helius connection
+// Helius connection test
 app.get("/health", async (req, res) => {
   try {
     const slot = await connection.getSlot();
@@ -43,28 +48,22 @@ app.get("/health", async (req, res) => {
       ok: true,
       rpcConnected: true,
       slot,
+      jupiterConfigured: !!JUPITER_API_KEY,
       tradingEnabled: false
     });
   } catch (error) {
-    console.error("Health error:", error);
-
     res.status(500).json({
       ok: false,
-      rpcConnected: false,
-      error: error.message,
-      tradingEnabled: false
+      error: error.message
     });
   }
 });
 
-// Read BecsBot wallet
+// Wallet tracking
 app.get("/wallet", async (req, res) => {
   try {
-    // SOL balance
-    const lamports = await connection.getBalance(wallet);
-    const solBalance = lamports / LAMPORTS_PER_SOL;
+    const balance = await connection.getBalance(wallet);
 
-    // SPL token accounts owned by BecsBot
     const tokenAccounts =
       await connection.getParsedTokenAccountsByOwner(wallet, {
         programId: new PublicKey(
@@ -73,31 +72,75 @@ app.get("/wallet", async (req, res) => {
       });
 
     const tokens = tokenAccounts.value
-      .map(({ account }) => {
-        const info = account.data.parsed.info;
-        const amount = info.tokenAmount;
+      .map((account) => {
+        const info =
+          account.account.data.parsed.info;
 
         return {
           mint: info.mint,
-          amount: amount.uiAmount,
-          decimals: amount.decimals
+          amount: info.tokenAmount.uiAmount
         };
       })
-      .filter((token) => token.amount && token.amount > 0);
+      .filter((token) => token.amount > 0);
 
     res.json({
       wallet: wallet.toBase58(),
-      sol: solBalance,
+      sol: balance / LAMPORTS_PER_SOL,
       tokens,
       tokenCount: tokens.length,
       tradingEnabled: false,
       updatedAt: new Date().toISOString()
     });
   } catch (error) {
-    console.error("Wallet error:", error);
+    res.status(500).json({
+      error: error.message
+    });
+  }
+});
 
+// Jupiter API connection test
+// Quote only - DOES NOT execute a trade
+app.get("/jupiter-test", async (req, res) => {
+  try {
+    const params = new URLSearchParams({
+      inputMint:
+        "So11111111111111111111111111111111111111112",
+      outputMint:
+        "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v",
+      amount: "1000000"
+    });
+
+    const response = await fetch(
+      `https://api.jup.ag/swap/v2/order?${params}`,
+      {
+        headers: {
+          "x-api-key": JUPITER_API_KEY
+        }
+      }
+    );
+
+    const data = await response.json();
+
+    if (!response.ok) {
+      throw new Error(
+        data.error ||
+        data.message ||
+        `Jupiter HTTP ${response.status}`
+      );
+    }
+
+    res.json({
+      ok: true,
+      jupiterConnected: true,
+      tradingEnabled: false,
+      test: "SOL to USDC quote only",
+      quote: data
+    });
+  } catch (error) {
     res.status(500).json({
       ok: false,
+      jupiterConnected: false,
+      tradingEnabled: false,
       error: error.message
     });
   }
@@ -106,5 +149,7 @@ app.get("/wallet", async (req, res) => {
 app.listen(PORT, "0.0.0.0", () => {
   console.log(`BecsBot online on port ${PORT}`);
   console.log(`Bot wallet: ${wallet.toBase58()}`);
+  console.log("Helius RPC: configured");
+  console.log("Jupiter API: configured");
   console.log("Trading: DISABLED");
 });
