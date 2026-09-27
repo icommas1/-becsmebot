@@ -14,8 +14,9 @@ const PORT = process.env.PORT || 3000;
 const RPC_URL = process.env.HELIUS_RPC_URL;
 const JUPITER_API_KEY = process.env.JUPITER_API_KEY;
 
+
 const BOT_WALLET =
-  "4BWgYmzT8xuNMm9VygSwKpVct6Sxdcc685QvwtiasuKA";
+  "DJ9dHrRXSPEdyLEkJ96Hj79S7Qkt7mgrryT3Q5J5bVws";
 
 if (!RPC_URL) {
   throw new Error("HELIUS_RPC_URL is missing");
