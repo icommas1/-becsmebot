@@ -4,6 +4,7 @@ const path = require("node:path");
 const crypto = require("node:crypto");
 const express = require("express");
 const { Connection, PublicKey, LAMPORTS_PER_SOL } = require("@solana/web3.js");
+const { createPumpFeed } = require("./pump-feed");
 
 const SOL = "So11111111111111111111111111111111111111112";
 const PUMP = new PublicKey("6EF8rrecthR5Dkzon8Nwu78hRvfCKubJ14M5uBEwF6P");
@@ -31,6 +32,7 @@ if (!apiKey || !dashboardKey || !rpcUrl) {
 
 const wallet = new PublicKey(WALLET);
 const connection = new Connection(rpcUrl, "confirmed");
+const pumpFeed = createPumpFeed({ apiKey: process.env.PUMP_PORTAL_API_KEY || "" });
 const ledgerPath = dataDir ? path.join(dataDir, "basket.json") : null;
 const [volumeAccount] = PublicKey.findProgramAddressSync(
   [Buffer.from("user_volume_accumulator"), wallet.toBuffer()], PUMP
@@ -145,6 +147,13 @@ async function scan() {
       connection.getAccountInfo(volumeAccount)
     ]);
     const unique = new Map();
+    const trending = new Map([...five, ...hour]
+      .filter((token) => token?.id).map((token) => [token.id, token]));
+    for (const launch of pumpFeed.snapshot()) {
+      if (!trending.has(launch.id)) continue;
+      const token = trending.get(launch.id);
+      unique.set(launch.id, { ...token, symbol: token.symbol || launch.symbol });
+    }
     for (const token of [...five, ...hour]) {
       if (!token?.id || !isPump(token) || unique.has(token.id)) continue;
       try { new PublicKey(token.id); unique.set(token.id, token); }
@@ -174,7 +183,8 @@ app.get("/", (_req, res) => res.sendFile(path.join(__dirname, "dashboard.html"))
 app.get("/health", (_req, res) => res.json({
   ok: true, tradingEnabled: TRADING_ENABLED,
   lastScanAt: state.lastScanAt, lastError: state.lastError,
-  running: state.running, paused: state.paused
+  running: state.running, paused: state.paused,
+  pumpFeed: pumpFeed.status()
 }));
 function requireKey(req, res, next) {
   if (req.get("x-dashboard-key") !== dashboardKey) {
@@ -190,6 +200,7 @@ app.get("/api/basket", requireKey, (_req, res) => res.json({
   lastError: state.lastError, candidates: state.candidates,
   pumpVolumeReady: state.pumpVolumeReady,
   pumpVolumeAccount: volumeAccount.toBase58(),
+  pumpFeed: pumpFeed.status(),
   purchases: state.ledger
 }));
 app.post("/api/pause", requireKey, (_req, res) => {
@@ -200,6 +211,7 @@ app.post("/api/pause", requireKey, (_req, res) => {
 });
 app.listen(process.env.PORT || 3000, "0.0.0.0", () => {
   console.log("BecsBot Pump curve account preview running for", WALLET);
+  pumpFeed.start();
   scan();
   setInterval(scan, SCAN_MS);
 });
