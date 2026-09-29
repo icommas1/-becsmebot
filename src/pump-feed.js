@@ -4,7 +4,8 @@ const MAX_LAUNCHES = 5000;
 const LAUNCH_TTL_MS = 60 * 60 * 1000;
 const MAX_RECONNECT_MS = 5 * 60 * 1000;
 
-function createPumpFeed({ WebSocket = require("ws"), apiKey = "", now = Date.now } = {}) {
+function createPumpFeed({ WebSocket = require("ws"), apiKey = "", now = Date.now,
+  onEvent = () => {} } = {}) {
   const launches = new Map();
   let socket = null;
   let reconnectTimer = null;
@@ -45,6 +46,7 @@ function createPumpFeed({ WebSocket = require("ws"), apiKey = "", now = Date.now
     if (type === "migrate" || type === "migration") {
       launches.delete(event.mint);
       lastEventAt = new Date(now()).toISOString();
+      onEvent({ type: "migration", mint: event.mint });
       return;
     }
     if (type !== "create") return;
@@ -57,6 +59,7 @@ function createPumpFeed({ WebSocket = require("ws"), apiKey = "", now = Date.now
     });
     lastEventAt = new Date(now()).toISOString();
     prune();
+    onEvent({ type: "launch", mint: event.mint });
   }
 
   function reconnect() {

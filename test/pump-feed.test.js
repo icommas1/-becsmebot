@@ -18,7 +18,9 @@ class FakeSocket extends EventEmitter {
 test("subscribes once and handles launch, duplicate, migration, and invalid events", () => {
   FakeSocket.instances = [];
   let clock = 0;
-  const feed = createPumpFeed({ WebSocket: FakeSocket, now: () => clock });
+  const events = [];
+  const feed = createPumpFeed({ WebSocket: FakeSocket, now: () => clock,
+    onEvent: (event) => events.push(event) });
   feed.start();
   feed.start();
   assert.equal(FakeSocket.instances.length, 1);
@@ -47,6 +49,10 @@ test("subscribes once and handles launch, duplicate, migration, and invalid even
 
   socket.emit("message", Buffer.from(JSON.stringify({ txType: "migration", mint })));
   assert.deepEqual(feed.snapshot(), []);
+  assert.deepEqual(events, [
+    { type: "launch", mint }, { type: "launch", mint },
+    { type: "migration", mint }
+  ]);
   feed.stop();
   assert.equal(feed.status().status, "stopped");
 });

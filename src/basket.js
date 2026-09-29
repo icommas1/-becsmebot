@@ -18,6 +18,7 @@ const CURVE_DISCRIMINATOR = crypto.createHash("sha256")
 const WALLET = "DJ9dHrRXSPEdyLEkJ96Hj79S7Qkt7mgrryT3Q5J5bVws";
 const BET_USD = 1;
 const SCAN_MS = 5 * 60 * 1000;
+const STREAM_SCAN_MIN_MS = 60 * 1000;
 // Direct Pump bonding-curve execution is not implemented; no buy route exists here.
 const TRADING_ENABLED = false;
 
@@ -31,7 +32,12 @@ if (!apiKey || !dashboardKey || !rpcUrl) {
 
 const wallet = new PublicKey(WALLET);
 const connection = new Connection(rpcUrl, "confirmed");
-const pumpFeed = createPumpFeed({ apiKey: process.env.PUMP_PORTAL_API_KEY || "" });
+const pumpFeed = createPumpFeed({
+  apiKey: process.env.PUMP_PORTAL_API_KEY || "",
+  onEvent: () => scheduleStreamScan()
+});
+let streamScanTimer = null;
+let streamDirty = false;
 const ledgerPath = dataDir ? path.join(dataDir, "basket.json") : null;
 const [volumeAccount] = PublicKey.findProgramAddressSync(
   [Buffer.from("user_volume_accumulator"), wallet.toBuffer()], PUMP
@@ -177,7 +183,22 @@ async function scan() {
   } finally {
     state.lastScanAt = new Date().toISOString();
     state.running = false;
+    if (streamDirty) scheduleStreamScan();
   }
+}
+
+function scheduleStreamScan() {
+  streamDirty = true;
+  if (streamScanTimer || state.paused) return;
+  const sinceLast = Date.now() - Date.parse(state.lastScanAt || 0);
+  const delay = Math.max(5000, STREAM_SCAN_MIN_MS - sinceLast);
+  streamScanTimer = setTimeout(async () => {
+    streamScanTimer = null;
+    if (state.paused) return;
+    if (state.running) return scheduleStreamScan();
+    streamDirty = false;
+    await scan();
+  }, delay);
 }
 
 const app = express();
@@ -209,7 +230,13 @@ app.get("/api/basket", requireKey, (_req, res) => res.json({
 app.post("/api/pause", requireKey, (_req, res) => {
   state.paused = !state.paused;
   if (ledgerPath) persist();
-  if (!state.paused) scan();
+  if (!state.paused) {
+    streamDirty = false;
+    scan();
+  } else if (streamScanTimer) {
+    clearTimeout(streamScanTimer);
+    streamScanTimer = null;
+  }
   res.json({ paused: state.paused });
 });
 app.listen(process.env.PORT || 3000, "0.0.0.0", () => {
