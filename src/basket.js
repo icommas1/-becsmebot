@@ -18,7 +18,6 @@ const CURVE_DISCRIMINATOR = crypto.createHash("sha256")
 const WALLET = "DJ9dHrRXSPEdyLEkJ96Hj79S7Qkt7mgrryT3Q5J5bVws";
 const BET_USD = 1;
 const SCAN_MS = 5 * 60 * 1000;
-const SAMPLE_SIZE = 5;
 // Direct Pump bonding-curve execution is not implemented; no buy route exists here.
 const TRADING_ENABLED = false;
 
@@ -88,6 +87,14 @@ async function jupiter(url) {
   return data;
 }
 
+async function getManyAccounts(keys) {
+  const infos = [];
+  for (let index = 0; index < keys.length; index += 100) {
+    infos.push(...await connection.getMultipleAccountsInfo(keys.slice(index, index + 100)));
+  }
+  return infos;
+}
+
 async function inspectTokens(tokens) {
   const entries = tokens.map((token) => {
     const mint = new PublicKey(token.id);
@@ -97,7 +104,7 @@ async function inspectTokens(tokens) {
     return { token, mint, curve };
   });
   if (!entries.length) return [];
-  const first = await connection.getMultipleAccountsInfo(
+  const first = await getManyAccounts(
     entries.flatMap(({ mint, curve }) => [mint, curve])
   );
   const active = entries.flatMap((entry, index) => {
@@ -114,7 +121,7 @@ async function inspectTokens(tokens) {
     return { ...entry, ata };
   });
   if (!withAta.length) return [];
-  const accountInfos = await connection.getMultipleAccountsInfo(
+  const accountInfos = await getManyAccounts(
     withAta.map(({ ata }) => ata)
   );
   return withAta.map(({ token, mint, curve, ata, tokenProgram }, index) => {
@@ -159,11 +166,7 @@ async function scan() {
       try { new PublicKey(token.id); unique.set(token.id, token); }
       catch (_) { /* Ignore invalid metadata. */ }
     }
-    const tokens = [...unique.values()];
-    const offset = Math.floor(Date.now() / SCAN_MS) % Math.max(1, tokens.length);
-    const sample = Array.from({ length: Math.min(SAMPLE_SIZE, tokens.length) },
-      (_, index) => tokens[(offset + index) % tokens.length]);
-    state.candidates = await inspectTokens(sample);
+    state.candidates = await inspectTokens([...unique.values()]);
     state.solUsd = Number(prices[SOL]?.usdPrice) || null;
     state.walletSol = balance / LAMPORTS_PER_SOL;
     state.pumpVolumeReady = Boolean(volumeInfo && volumeInfo.owner.equals(PUMP));

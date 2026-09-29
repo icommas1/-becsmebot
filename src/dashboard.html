@@ -18,7 +18,7 @@
   <section><strong>LIVE TRADING IS LOCKED OFF</strong><p>This dashboard checks curve and receiving account status. It creates no accounts and sends no orders.</p></section>
   <section><h2>Status</h2><div id="status">Loading…</div><button id="stop">Pause scans</button></section>
   <section><h2>Active Pump curve sample</h2>
-    <small>Recent Pump launches cross-matched with Jupiter trends, with Pump-labeled Jupiter fallback. Up to five are verified against the on-chain SOL curve each scan.</small>
+    <small>Recent Pump launches cross-matched with Jupiter trends, with Pump-labeled Jupiter fallback. Each candidate is verified against the on-chain SOL curve.</small>
     <ol id="candidates"></ol>
   </section>
   <section><h2>Wallet setup</h2><div id="setup">Loading…</div></section>
@@ -55,7 +55,7 @@
         " · Wallet: " + (s.walletSol == null ? "—" : s.walletSol.toFixed(5)) + " SOL" +
         " · SOL $" + (s.solUsd || "—") +
         (s.lastError ? " · Error: " + s.lastError : "");
-      list("candidates", s.candidates,
+      list("candidates", s.candidates.slice(0, 30),
         (x) => x.symbol + " · active SOL curve · receiving account: " +
           x.accountStatus + " · mint " + x.mint);
       document.getElementById("setup").textContent =

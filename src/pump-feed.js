@@ -1,6 +1,6 @@
 const { PublicKey } = require("@solana/web3.js");
 
-const MAX_LAUNCHES = 1000;
+const MAX_LAUNCHES = 5000;
 const LAUNCH_TTL_MS = 60 * 60 * 1000;
 const MAX_RECONNECT_MS = 5 * 60 * 1000;
 

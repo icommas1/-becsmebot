@@ -11,7 +11,8 @@ PumpPortal WebSocket connection. Launch and migration subscriptions are free;
 it does not subscribe to metered trade events. It remembers recent launches in
 memory, cross-matches them against Jupiter's 5-minute and 1-hour trending
 lists, and still accepts tokens marked Pump by Jupiter if the stream missed a
-launch. It samples up to five candidates every five minutes and verifies each
+launch. It checks all trending candidates every five minutes in bounded RPC
+batches and verifies each
 mint's Pump bonding-curve PDA on chain: Pump program ownership, expected account
 type, `complete == false`, and native SOL quote mint. This **is not a complete
 record of Pump.fun launches**, particularly during disconnects or
