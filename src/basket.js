@@ -127,7 +127,7 @@ async function quote(token, amount) {
 
 async function buyOnce(token, amount, order) {
   if (!LIVE_TRADING_UNLOCKED || state.paused) return;
-  if (!order.transaction || !order.requestId || Number(order.feeBps) > 200) return;
+  if (!order.transaction || !order.requestId) return;
   const account = signer();
   if (await connection.getBalance(wallet) <= amount) return;
   state.ledger[token.id] = { status: "pending", at: new Date().toISOString() };

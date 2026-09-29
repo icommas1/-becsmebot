@@ -14,6 +14,12 @@ payers when Jupiter supplies them. A swap fee quote alone does not account for
 network fees or token-account rent. The earlier bot implementation is available
 in Git history; `src/basket.js` is the sole service entry point.
 
+When trading is eventually enabled, the strategy does not reject a usable
+route for a high quoted fee rate or an unfavorable output quote. It requests
+approximately $1 worth of SOL as input per token and records one attempt per
+mint. Network fees and token-account rent, if charged to the wallet, are
+additional costs; a route can still fail to execute.
+
 Set `HELIUS_RPC_URL`, `JUPITER_API_KEY`, and `DASHBOARD_KEY` in Railway.
 `SOLANA_PRIVATE_KEY` is not needed for the preview. Never commit a key.
 
