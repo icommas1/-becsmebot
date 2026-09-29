@@ -16,9 +16,12 @@ in Git history; `src/basket.js` is the sole service entry point.
 
 When trading is eventually enabled, the strategy does not reject a usable
 route for a high quoted fee rate or an unfavorable output quote. It requests
-approximately $1 worth of SOL as input per token and records one attempt per
-mint. Network fees and token-account rent, if charged to the wallet, are
-additional costs; a route can still fail to execute.
+SOL input whose Jupiter order quote rounds to $1.00, adjusting and requoting
+up to twice if needed. It does not send an order without that quoted USD value,
+and records one attempted buy per mint. A $1.00 quote is a point-in-time
+valuation, not a guarantee of exact dollar cost or execution. Network fees and
+token-account rent, if charged to the wallet, are additional costs; a route
+can still fail to execute.
 
 Set `HELIUS_RPC_URL`, `JUPITER_API_KEY`, and `DASHBOARD_KEY` in Railway.
 `SOLANA_PRIVATE_KEY` is not needed for the preview. Never commit a key.

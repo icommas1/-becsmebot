@@ -59,7 +59,9 @@
         (x) => x.symbol + " · " + x.source + " · " + x.mint);
       list("quotes", s.quotes,
         (x) => x.symbol + " · " + (x.routeAvailable
-          ? x.sol + " SOL · swap fee " + (x.feeBps ?? "—") + " bps" +
+          ? "input quote $" + (x.quotedUsd == null ? "—" : x.quotedUsd.toFixed(2)) +
+            (x.dollarMatched ? "" : " · waiting for $1.00 quote") +
+            " · " + x.sol + " SOL · swap fee " + (x.feeBps ?? "—") + " bps" +
             " · network fee: " + (x.signatureFeePayer === s.wallet
               ? "wallet" : x.signatureFeePayer ? "sponsored" : "unknown") +
             " · account rent: " + (x.rentFeePayer === s.wallet

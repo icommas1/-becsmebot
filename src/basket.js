@@ -125,6 +125,22 @@ async function quote(token, amount) {
   return jupiter("/swap/v2/order?" + params);
 }
 
+async function quoteOneDollar(token, initialAmount) {
+  let amount = initialAmount;
+  let order;
+  for (let attempt = 0; attempt < 3; attempt++) {
+    if (attempt) await delay();
+    order = await quote(token, amount);
+    const usd = order.inUsdValue;
+    if (!order.transaction || typeof usd !== "number" ||
+        !Number.isFinite(usd) || usd <= 0 || usd.toFixed(2) === "1.00") break;
+    const revised = Math.round(amount * BET_USD / usd);
+    if (revised < 1 || revised === amount) break;
+    amount = revised;
+  }
+  return { order, amount };
+}
+
 async function buyOnce(token, amount, order) {
   if (!LIVE_TRADING_UNLOCKED || state.paused) return;
   if (!order.transaction || !order.requestId) return;
@@ -189,16 +205,21 @@ async function scan() {
     for (const token of sample) {
       await delay();
       try {
-        const order = await quote(token, amount);
+        const { order, amount: quotedAmount } = await quoteOneDollar(token, amount);
         const available = Boolean(order.transaction);
+        const quotedUsd = typeof order.inUsdValue === "number" &&
+          Number.isFinite(order.inUsdValue) ? order.inUsdValue : null;
+        const dollarMatched = quotedUsd !== null &&
+          quotedUsd.toFixed(2) === "1.00";
         state.quotes.push({
           mint: token.id, symbol: token.symbol,
-          sol: amount / LAMPORTS_PER_SOL,
-          routeAvailable: available, feeBps: order.feeBps ?? null,
+          sol: quotedAmount / LAMPORTS_PER_SOL,
+          quotedUsd, dollarMatched, routeAvailable: available,
+          feeBps: order.feeBps ?? null,
           signatureFeePayer: order.signatureFeePayer ?? null,
           rentFeePayer: order.rentFeePayer ?? null
         });
-        if (available) await buyOnce(token, amount, order);
+        if (available && dollarMatched) await buyOnce(token, quotedAmount, order);
       } catch (error) {
         state.quotes.push({ mint: token.id, symbol: token.symbol, error: error.message });
       }
