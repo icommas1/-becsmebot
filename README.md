@@ -11,8 +11,8 @@ Live trading is hard locked off in `src/basket.js`. The dashboard fetches
 quotes and sends no orders. It shows the public wallet's SOL balance, scans a
 rotating group of five eligible tokens, and reports the order's stated fee
 payers when Jupiter supplies them. A swap fee quote alone does not account for
-network fees or token-account rent. The old `src/index.js` remains for reference
-but is no longer the start script.
+network fees or token-account rent. The earlier bot implementation is available
+in Git history; `src/basket.js` is the sole service entry point.
 
 Set `HELIUS_RPC_URL`, `JUPITER_API_KEY`, and `DASHBOARD_KEY` in Railway.
 `SOLANA_PRIVATE_KEY` is not needed for the preview. Never commit a key.
