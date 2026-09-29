@@ -1,0 +1,73 @@
+<!doctype html>
+<html lang="en">
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>BecsBot</title>
+<style>
+  body { font: 16px -apple-system, BlinkMacSystemFont, sans-serif; background: #0b1019; color: #f6f8ff; margin: 0; }
+  main { max-width: 760px; margin: auto; padding: 20px; }
+  section { background: #182130; border: 1px solid #334159; border-radius: 16px; padding: 18px; margin: 16px 0; }
+  h1 { margin-bottom: 4px; }
+  small { color: #b7c1d3; }
+  li { margin: 12px 0; overflow-wrap: anywhere; }
+  button { background: #e75959; border: 0; border-radius: 8px; color: white; padding: 12px; font-weight: bold; }
+</style>
+<main>
+  <h1>BecsBot</h1>
+  <small>$1 in SOL per new trending token · buy once · hold</small>
+  <section><strong>LIVE TRADING IS LOCKED OFF</strong><p>This dashboard previews candidates and quotes. It sends no orders.</p></section>
+  <section><h2>Status</h2><div id="status">Loading…</div><button id="stop">Pause scans</button></section>
+  <section><h2>Trending candidates</h2>
+    <small>Jupiter 5-minute and 1-hour lists, including Pump.fun launches where identified by Jupiter.</small>
+    <ol id="candidates"></ol>
+  </section>
+  <section><h2>$1 swap quotes</h2><ul id="quotes"></ul></section>
+</main>
+<script>
+  let key = sessionStorage.getItem("becsKey") || "";
+  async function call(url, options = {}) {
+    if (!key) key = prompt("BecsBot dashboard key") || "";
+    if (key) sessionStorage.setItem("becsKey", key);
+    const response = await fetch(url, { ...options, headers: { "x-dashboard-key": key } });
+    if (response.status === 401) {
+      key = "";
+      sessionStorage.removeItem("becsKey");
+      throw Error("Dashboard key rejected");
+    }
+    if (!response.ok) throw Error("Request failed: " + response.status);
+    return response.json();
+  }
+  function list(id, items, format) {
+    const box = document.getElementById(id);
+    box.replaceChildren();
+    for (const item of items) {
+      const li = document.createElement("li");
+      li.textContent = format(item);
+      box.appendChild(li);
+    }
+  }
+  async function refresh() {
+    try {
+      const s = await call("/api/basket");
+      document.getElementById("status").textContent =
+        (s.paused ? "Paused" : "Scanning") + " · " + (s.lastScanAt || "First scan pending") +
+        " · SOL $" + (s.solUsd || "—") + (s.lastError ? " · Error: " + s.lastError : "");
+      list("candidates", s.candidates.slice(0, 30),
+        (x) => x.symbol + " · " + x.source + " · " + x.mint);
+      list("quotes", s.quotes,
+        (x) => x.symbol + " · " + (x.routeAvailable
+          ? x.sol + " SOL · fee " + x.feeBps + " bps"
+          : x.error || "No route"));
+      document.getElementById("stop").textContent = s.paused ? "Resume scans" : "Pause scans";
+    } catch (error) {
+      document.getElementById("status").textContent = error.message;
+    }
+  }
+  document.getElementById("stop").onclick = async () => {
+    try { await call("/api/pause", { method: "POST" }); await refresh(); }
+    catch (error) { alert(error.message); }
+  };
+  refresh();
+  setInterval(refresh, 10000);
+</script>
+</html>

@@ -3,9 +3,9 @@
   "version": "0.1.0",
   "private": true,
   "description": "BecsBot Solana trading service",
-  "main": "src/index.js",
+  "main": "src/basket.js",
   "scripts": {
-    "start": "node src/index.js"
+    "start": "node src/basket.js"
   },
   "engines": {
     "node": ">=20"
