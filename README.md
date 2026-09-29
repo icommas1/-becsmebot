@@ -13,6 +13,10 @@ rotating group of five eligible tokens, and reports the order's stated fee
 payers when Jupiter supplies them. A swap fee quote alone does not account for
 network fees or token-account rent. The earlier bot implementation is available
 in Git history; `src/basket.js` is the sole service entry point.
+The dashboard also estimates the swap fee and wallet-paid network and account
+rent amounts from each order's fee fields. These are quotes, not final costs;
+account rent is SOL held for a new token account and may be recovered if that
+account is later closed.
 
 When trading is eventually enabled, the strategy does not reject a usable
 route for a high quoted fee rate or an unfavorable output quote. It requests

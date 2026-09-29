@@ -217,7 +217,11 @@ async function scan() {
           quotedUsd, dollarMatched, routeAvailable: available,
           feeBps: order.feeBps ?? null,
           signatureFeePayer: order.signatureFeePayer ?? null,
-          rentFeePayer: order.rentFeePayer ?? null
+          signatureFeeLamports: order.signatureFeeLamports ?? null,
+          prioritizationFeePayer: order.prioritizationFeePayer ?? null,
+          prioritizationFeeLamports: order.prioritizationFeeLamports ?? null,
+          rentFeePayer: order.rentFeePayer ?? null,
+          rentFeeLamports: order.rentFeeLamports ?? null
         });
         if (available && dollarMatched) await buyOnce(token, quotedAmount, order);
       } catch (error) {

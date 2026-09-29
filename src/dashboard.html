@@ -46,6 +46,24 @@
       box.appendChild(li);
     }
   }
+  function feeEstimate(x, s) {
+    const usd = (lamports) => "$" + (lamports * s.solUsd / 1e9).toFixed(4);
+    const fees = [
+      [x.signatureFeeLamports, x.signatureFeePayer],
+      [x.prioritizationFeeLamports, x.prioritizationFeePayer]
+    ];
+    const network = fees.reduce((sum, [amount, payer]) =>
+      sum + (payer === s.wallet && Number.isFinite(amount) ? amount : 0), 0);
+    const rent = x.rentFeePayer === s.wallet && Number.isFinite(x.rentFeeLamports)
+      ? x.rentFeeLamports : 0;
+    const unknown = [...fees, [x.rentFeeLamports, x.rentFeePayer]]
+      .some(([amount, payer]) => amount == null || (amount > 0 && !payer));
+    const swap = Number.isFinite(x.feeBps) && Number.isFinite(x.quotedUsd)
+      ? "$" + (x.quotedUsd * x.feeBps / 10000).toFixed(4) : "unknown";
+    return "swap fee ≈ " + swap + " · wallet network ≈ " + usd(network) +
+      " · wallet account rent ≈ " + usd(rent) +
+      (unknown ? " · some costs unknown" : "");
+  }
   async function refresh() {
     try {
       const s = await call("/api/basket");
@@ -61,11 +79,7 @@
         (x) => x.symbol + " · " + (x.routeAvailable
           ? "input quote $" + (x.quotedUsd == null ? "—" : x.quotedUsd.toFixed(2)) +
             (x.dollarMatched ? "" : " · waiting for $1.00 quote") +
-            " · " + x.sol + " SOL · swap fee " + (x.feeBps ?? "—") + " bps" +
-            " · network fee: " + (x.signatureFeePayer === s.wallet
-              ? "wallet" : x.signatureFeePayer ? "sponsored" : "unknown") +
-            " · account rent: " + (x.rentFeePayer === s.wallet
-              ? "wallet" : x.rentFeePayer ? "sponsored" : "unknown")
+            " · " + x.sol + " SOL · " + feeEstimate(x, s)
           : x.error || "No route"));
       document.getElementById("stop").textContent = s.paused ? "Resume scans" : "Pause scans";
     } catch (error) {
