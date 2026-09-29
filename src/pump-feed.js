@@ -3,7 +3,8 @@ const { PublicKey } = require("@solana/web3.js");
 const MAX_LAUNCHES = 5000;
 const LAUNCH_TTL_MS = 60 * 60 * 1000;
 const MAX_RECONNECT_MS = 5 * 60 * 1000;
-const MAX_TRADE_MINTS = 10;
+// Jupiter supplies at most 50 mints from each of two trending windows.
+const MAX_TRADE_MINTS = 100;
 const MAX_TRADE_EVENTS = 1000;
 const TRADE_WINDOW_MS = 60 * 1000;
 

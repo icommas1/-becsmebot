@@ -1,6 +1,7 @@
 const test = require("node:test");
 const assert = require("node:assert/strict");
 const EventEmitter = require("node:events");
+const { PublicKey } = require("@solana/web3.js");
 const { createPumpFeed } = require("../src/pump-feed");
 
 class FakeSocket extends EventEmitter {
@@ -99,4 +100,22 @@ test("expires stale launch events", () => {
   assert.equal(feed.snapshot().length, 1);
   clock = 60 * 60 * 1000 + 1;
   assert.equal(feed.snapshot().length, 0);
+});
+
+test("paid stream covers the full verified trending scan", () => {
+  FakeSocket.instances = [];
+  const feed = createPumpFeed({ WebSocket: FakeSocket, apiKey: "test-key" });
+  const mints = Array.from({ length: 105 }, (_, index) => {
+    const bytes = Buffer.alloc(32);
+    bytes.writeUInt32LE(index + 1);
+    return new PublicKey(bytes).toBase58();
+  });
+  feed.setTradeMints(mints);
+  feed.start();
+  const socket = FakeSocket.instances[0];
+  socket.readyState = 1;
+  socket.emit("open");
+  assert.equal(feed.status().watchedMints, 100);
+  assert.deepEqual(socket.sent[2].keys, mints.slice(0, 100));
+  feed.stop();
 });

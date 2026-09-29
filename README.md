@@ -9,7 +9,8 @@ and automatic buying are not implemented. No service route sends a transaction.
 The service listens for Pump.fun launch and migration events through one
 PumpPortal WebSocket connection. Launch and migration subscriptions are free.
 With `PUMP_PORTAL_API_KEY`, it also subscribes to metered trade events for at
-most 10 verified trending Pump mints at once. The feed counts buys and sells
+most 100 verified trending Pump mints at once (the full 5-minute and 1-hour
+Jupiter scan, after deduplication and on-chain checks). The feed counts buys and sells
 over the last minute and unsubscribes after 1000 trade events per process.
 Without the key, it never subscribes to paid events. The counter resets on
 service restart; Railway has no persistent volume, so this is not an account
