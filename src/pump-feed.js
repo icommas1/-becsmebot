@@ -3,10 +3,17 @@ const { PublicKey } = require("@solana/web3.js");
 const MAX_LAUNCHES = 5000;
 const LAUNCH_TTL_MS = 60 * 60 * 1000;
 const MAX_RECONNECT_MS = 5 * 60 * 1000;
+const MAX_TRADE_MINTS = 10;
+const MAX_TRADE_EVENTS = 1000;
+const TRADE_WINDOW_MS = 60 * 1000;
 
 function createPumpFeed({ WebSocket = require("ws"), apiKey = "", now = Date.now,
   onEvent = () => {} } = {}) {
   const launches = new Map();
+  const watched = new Set();
+  const subscribed = new Set();
+  const trades = new Map();
+  let tradeEvents = 0;
   let socket = null;
   let reconnectTimer = null;
   let stopped = true;
@@ -17,7 +24,8 @@ function createPumpFeed({ WebSocket = require("ws"), apiKey = "", now = Date.now
 
   function recordError(error) {
     const message = String(error?.message || error || "connection failed");
-    lastError = (apiKey ? message.replaceAll(apiKey, "[redacted]") : message)
+    lastError = (apiKey ? message.replaceAll(apiKey, "[redacted]")
+      .replaceAll(encodeURIComponent(apiKey), "[redacted]") : message)
       .slice(0, 200);
   }
 
@@ -41,8 +49,22 @@ function createPumpFeed({ WebSocket = require("ws"), apiKey = "", now = Date.now
     let event;
     try { event = JSON.parse(raw.toString()); }
     catch (_) { return; }
+    if (event?.error) recordError(event.error);
     if (!validMint(event?.mint)) return;
     const type = String(event.txType || "").toLowerCase();
+    if ((type === "buy" || type === "sell") && subscribed.has(event.mint)) {
+      tradeEvents++;
+      const recent = trades.get(event.mint) || [];
+      recent.push({ at: now(), type });
+      trades.set(event.mint, recent.filter((trade) =>
+        trade.at > now() - TRADE_WINDOW_MS));
+      lastEventAt = new Date(now()).toISOString();
+      if (tradeEvents >= MAX_TRADE_EVENTS) {
+        watched.clear();
+        syncTradeSubscriptions();
+      }
+      return;
+    }
     if (type === "migrate" || type === "migration") {
       launches.delete(event.mint);
       lastEventAt = new Date(now()).toISOString();
@@ -60,6 +82,23 @@ function createPumpFeed({ WebSocket = require("ws"), apiKey = "", now = Date.now
     lastEventAt = new Date(now()).toISOString();
     prune();
     onEvent({ type: "launch", mint: event.mint });
+  }
+
+  function sendSubscription(method, mints) {
+    if (mints.length) {
+      socket.send(JSON.stringify({ method, keys: mints }));
+    }
+  }
+
+  function syncTradeSubscriptions() {
+    if (socket?.readyState !== 1) return;
+    const remove = [...subscribed].filter((mint) => !watched.has(mint));
+    sendSubscription("unsubscribeTokenTrade", remove);
+    for (const mint of remove) { subscribed.delete(mint); trades.delete(mint); }
+    if (!apiKey || tradeEvents >= MAX_TRADE_EVENTS) return;
+    const add = [...watched].filter((mint) => !subscribed.has(mint));
+    sendSubscription("subscribeTokenTrade", add);
+    for (const mint of add) subscribed.add(mint);
   }
 
   function reconnect() {
@@ -93,6 +132,7 @@ function createPumpFeed({ WebSocket = require("ws"), apiKey = "", now = Date.now
       console.log("Pump launch feed connected");
       current.send(JSON.stringify({ method: "subscribeNewToken" }));
       current.send(JSON.stringify({ method: "subscribeMigration" }));
+      syncTradeSubscriptions();
     });
     current.on("message", handleMessage);
     current.on("error", (error) => {
@@ -100,6 +140,7 @@ function createPumpFeed({ WebSocket = require("ws"), apiKey = "", now = Date.now
     });
     current.on("close", () => {
       if (socket === current) socket = null;
+      subscribed.clear();
       if (!stopped) console.warn("Pump launch feed disconnected; reconnecting");
       reconnect();
     });
@@ -118,13 +159,38 @@ function createPumpFeed({ WebSocket = require("ws"), apiKey = "", now = Date.now
       reconnectTimer = null;
       if (socket) socket.close();
       socket = null;
+      subscribed.clear();
+    },
+    setTradeMints(mints) {
+      watched.clear();
+      if (apiKey && tradeEvents < MAX_TRADE_EVENTS) {
+        for (const mint of mints) {
+          if (watched.size >= MAX_TRADE_MINTS) break;
+          if (validMint(mint)) watched.add(mint);
+        }
+      }
+      syncTradeSubscriptions();
+    },
+    tradeActivity() {
+      const cutoff = now() - TRADE_WINDOW_MS;
+      return Object.fromEntries([...watched].map((mint) => {
+        const recent = (trades.get(mint) || []).filter((trade) => trade.at > cutoff);
+        trades.set(mint, recent);
+        return [mint, {
+          buys: recent.filter((trade) => trade.type === "buy").length,
+          sells: recent.filter((trade) => trade.type === "sell").length
+        }];
+      }));
     },
     snapshot() {
       prune();
       return [...launches.values()].reverse();
     },
     status() {
-      return { status, lastError, lastEventAt, recentLaunches: launches.size };
+      return { status, lastError, lastEventAt, recentLaunches: launches.size,
+        paidTradeFeedConfigured: Boolean(apiKey), watchedMints: subscribed.size,
+        tradeEvents, tradeEventLimit: MAX_TRADE_EVENTS,
+        tradeFeedCapped: tradeEvents >= MAX_TRADE_EVENTS };
     },
     // Exposed for deterministic feed parsing tests; never sends a transaction.
     handleMessage

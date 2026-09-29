@@ -173,6 +173,7 @@ async function scan() {
       catch (_) { /* Ignore invalid metadata. */ }
     }
     state.candidates = await inspectTokens([...unique.values()]);
+    pumpFeed.setTradeMints(state.candidates.map((candidate) => candidate.mint));
     state.solUsd = Number(prices[SOL]?.usdPrice) || null;
     state.walletSol = balance / LAMPORTS_PER_SOL;
     state.pumpVolumeReady = Boolean(volumeInfo && volumeInfo.owner.equals(PUMP));
@@ -225,6 +226,7 @@ app.get("/api/basket", requireKey, (_req, res) => res.json({
   pumpVolumeReady: state.pumpVolumeReady,
   pumpVolumeAccount: volumeAccount.toBase58(),
   pumpFeed: pumpFeed.status(),
+  tradeActivityLastMinute: pumpFeed.tradeActivity(),
   purchases: state.ledger
 }));
 app.post("/api/pause", requireKey, (_req, res) => {
@@ -237,6 +239,7 @@ app.post("/api/pause", requireKey, (_req, res) => {
     clearTimeout(streamScanTimer);
     streamScanTimer = null;
   }
+  if (state.paused) pumpFeed.setTradeMints([]);
   res.json({ paused: state.paused });
 });
 app.listen(process.env.PORT || 3000, "0.0.0.0", () => {

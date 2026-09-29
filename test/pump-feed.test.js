@@ -9,10 +9,11 @@ class FakeSocket extends EventEmitter {
     super();
     this.url = url;
     this.sent = [];
+    this.readyState = 0;
     FakeSocket.instances.push(this);
   }
   send(message) { this.sent.push(JSON.parse(message)); }
-  close() { this.emit("close"); }
+  close() { this.readyState = 3; this.emit("close"); }
 }
 
 test("subscribes once and handles launch, duplicate, migration, and invalid events", () => {
@@ -25,6 +26,7 @@ test("subscribes once and handles launch, duplicate, migration, and invalid even
   feed.start();
   assert.equal(FakeSocket.instances.length, 1);
   const socket = FakeSocket.instances[0];
+  socket.readyState = 1;
   socket.emit("open");
   assert.deepEqual(socket.sent, [
     { method: "subscribeNewToken" }, { method: "subscribeMigration" }
@@ -55,6 +57,37 @@ test("subscribes once and handles launch, duplicate, migration, and invalid even
   ]);
   feed.stop();
   assert.equal(feed.status().status, "stopped");
+});
+
+test("paid trades watch selected mints on one socket and stop at the event cap", () => {
+  FakeSocket.instances = [];
+  let clock = 100000;
+  const feed = createPumpFeed({ WebSocket: FakeSocket, apiKey: "secret",
+    now: () => clock });
+  const mint = "So11111111111111111111111111111111111111112";
+  feed.setTradeMints([mint, "invalid"]);
+  feed.start();
+  const socket = FakeSocket.instances[0];
+  assert.equal(socket.sent.length, 0);
+  assert.equal(socket.url.includes("secret"), true);
+  socket.readyState = 1;
+  socket.emit("open");
+  assert.deepEqual(socket.sent[2], { method: "subscribeTokenTrade", keys: [mint] });
+  socket.emit("message", JSON.stringify({ txType: "buy", mint }));
+  clock += 1000;
+  socket.emit("message", JSON.stringify({ txType: "sell", mint }));
+  assert.deepEqual(feed.tradeActivity()[mint], { buys: 1, sells: 1 });
+  for (let i = 0; i < 998; i++) {
+    socket.emit("message", JSON.stringify({ txType: "buy", mint }));
+  }
+  assert.equal(feed.status().tradeFeedCapped, true);
+  assert.equal(feed.status().watchedMints, 0);
+  assert.deepEqual(socket.sent.at(-1), {
+    method: "unsubscribeTokenTrade", keys: [mint]
+  });
+  feed.setTradeMints([mint]);
+  assert.equal(feed.status().watchedMints, 0);
+  feed.stop();
 });
 
 test("expires stale launch events", () => {
