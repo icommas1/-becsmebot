@@ -14,14 +14,14 @@
 </style>
 <main>
   <h1>BecsBot</h1>
-  <small>$1 in SOL per new trending token · buy once · hold</small>
-  <section><strong>LIVE TRADING IS LOCKED OFF</strong><p>This dashboard previews candidates and quotes. It sends no orders.</p></section>
+  <small>Pump.fun SOL bonding curves · $1 plan · buy once · hold</small>
+  <section><strong>LIVE TRADING IS LOCKED OFF</strong><p>This dashboard checks curve and receiving account status. It creates no accounts and sends no orders.</p></section>
   <section><h2>Status</h2><div id="status">Loading…</div><button id="stop">Pause scans</button></section>
-  <section><h2>Trending candidates</h2>
-    <small>Jupiter 5-minute and 1-hour lists, including Pump.fun launches where identified by Jupiter.</small>
+  <section><h2>Active Pump curve sample</h2>
+    <small>Up to five Pump-labeled tokens sampled from Jupiter trending each scan, verified against Pump's on-chain SOL curve. This is not a complete Pump.fun launch feed.</small>
     <ol id="candidates"></ol>
   </section>
-  <section><h2>$1 swap quotes</h2><ul id="quotes"></ul></section>
+  <section><h2>Wallet setup</h2><div id="setup">Loading…</div></section>
 </main>
 <script>
   let key = sessionStorage.getItem("becsKey") || "";
@@ -46,41 +46,22 @@
       box.appendChild(li);
     }
   }
-  function feeEstimate(x, s) {
-    const usd = (lamports) => "$" + (lamports * s.solUsd / 1e9).toFixed(4);
-    const fees = [
-      [x.signatureFeeLamports, x.signatureFeePayer],
-      [x.prioritizationFeeLamports, x.prioritizationFeePayer]
-    ];
-    const network = fees.reduce((sum, [amount, payer]) =>
-      sum + (payer === s.wallet && Number.isFinite(amount) ? amount : 0), 0);
-    const rent = x.rentFeePayer === s.wallet && Number.isFinite(x.rentFeeLamports)
-      ? x.rentFeeLamports : 0;
-    const unknown = [...fees, [x.rentFeeLamports, x.rentFeePayer]]
-      .some(([amount, payer]) => amount == null || (amount > 0 && !payer));
-    const swap = Number.isFinite(x.feeBps) && Number.isFinite(x.quotedUsd)
-      ? "$" + (x.quotedUsd * x.feeBps / 10000).toFixed(4) : "unknown";
-    return "swap fee ≈ " + swap + " · wallet network ≈ " + usd(network) +
-      " · wallet account rent ≈ " + usd(rent) +
-      (unknown ? " · some costs unknown" : "");
-  }
   async function refresh() {
     try {
       const s = await call("/api/basket");
       document.getElementById("status").textContent =
-        (s.paused ? "Paused" : s.running ? "Scanning now" : "Watching trends") +
+        (s.paused ? "Paused" : s.running ? "Checking now" : "Checking Pump curves") +
         " · Last scan: " + (s.lastScanAt || "pending") +
         " · Wallet: " + (s.walletSol == null ? "—" : s.walletSol.toFixed(5)) + " SOL" +
         " · SOL $" + (s.solUsd || "—") +
         (s.lastError ? " · Error: " + s.lastError : "");
-      list("candidates", s.candidates.slice(0, 30),
-        (x) => x.symbol + " · " + x.source + " · " + x.mint);
-      list("quotes", s.quotes,
-        (x) => x.symbol + " · " + (x.routeAvailable
-          ? "input quote $" + (x.quotedUsd == null ? "—" : x.quotedUsd.toFixed(2)) +
-            (x.dollarMatched ? "" : " · waiting for $1.00 quote") +
-            " · " + x.sol + " SOL · " + feeEstimate(x, s)
-          : x.error || "No route"));
+      list("candidates", s.candidates,
+        (x) => x.symbol + " · active SOL curve · receiving account: " +
+          x.accountStatus + " · mint " + x.mint);
+      document.getElementById("setup").textContent =
+        "Pump wallet volume account: " + (s.pumpVolumeReady === null ? "checking" :
+          s.pumpVolumeReady ? "ready" : "needed on first Pump buy") +
+        ". Existing token accounts are reused after a sale; new mints need their own account.";
       document.getElementById("stop").textContent = s.paused ? "Resume scans" : "Pause scans";
     } catch (error) {
       document.getElementById("status").textContent = error.message;

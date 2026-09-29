@@ -1,22 +1,25 @@
 require("dotenv").config();
-
 const fs = require("node:fs");
 const path = require("node:path");
+const crypto = require("node:crypto");
 const express = require("express");
-const {
-  Connection, Keypair, PublicKey, VersionedTransaction, LAMPORTS_PER_SOL
-} = require("@solana/web3.js");
-const bs58 = require("bs58").default;
+const { Connection, PublicKey, LAMPORTS_PER_SOL } = require("@solana/web3.js");
 
 const SOL = "So11111111111111111111111111111111111111112";
-const PROGRAMS = [
+const PUMP = new PublicKey("6EF8rrecthR5Dkzon8Nwu78hRvfCKubJ14M5uBEwF6P");
+const ATA_PROGRAM = new PublicKey("ATokenGPvbdGVxr1b2hvZbsiqW5xWH25efTNsLJA8knL");
+const TOKEN_PROGRAMS = new Set([
   "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA",
   "TokenzQdBNbLqP5VEhdkAS6EPFLC1PHnBqCXEpPxuEb"
-];
+]);
+const CURVE_DISCRIMINATOR = crypto.createHash("sha256")
+  .update("account:BondingCurve").digest().subarray(0, 8);
 const WALLET = "DJ9dHrRXSPEdyLEkJ96Hj79S7Qkt7mgrryT3Q5J5bVws";
 const BET_USD = 1;
 const SCAN_MS = 5 * 60 * 1000;
-const LIVE_TRADING_UNLOCKED = false;
+const SAMPLE_SIZE = 5;
+// Direct Pump bonding-curve execution is not implemented; no buy route exists here.
+const TRADING_ENABLED = false;
 
 const apiKey = process.env.JUPITER_API_KEY;
 const dashboardKey = process.env.DASHBOARD_KEY;
@@ -25,16 +28,16 @@ const dataDir = process.env.DATA_DIR;
 if (!apiKey || !dashboardKey || !rpcUrl) {
   throw new Error("HELIUS_RPC_URL, JUPITER_API_KEY and DASHBOARD_KEY are required");
 }
-if (LIVE_TRADING_UNLOCKED && !dataDir) {
-  throw new Error("Live trading requires persistent DATA_DIR");
-}
 
 const wallet = new PublicKey(WALLET);
 const connection = new Connection(rpcUrl, "confirmed");
 const ledgerPath = dataDir ? path.join(dataDir, "basket.json") : null;
+const [volumeAccount] = PublicKey.findProgramAddressSync(
+  [Buffer.from("user_volume_accumulator"), wallet.toBuffer()], PUMP
+);
 const state = {
   lastScanAt: null, lastError: null, running: false, paused: false,
-  solUsd: null, walletSol: null, candidates: [], quotes: [], ledger: {}
+  solUsd: null, walletSol: null, candidates: [], pumpVolumeReady: null, ledger: {}
 };
 
 function persist() {
@@ -56,35 +59,24 @@ if (ledgerPath) {
   }
 }
 
-function oneDollarInLamports(price) {
-  if (!Number.isFinite(price) || price <= 0) throw new Error("SOL price unavailable");
-  return Math.floor(BET_USD * LAMPORTS_PER_SOL / price);
-}
-
 function isPump(token) {
   return /pump/i.test(String(token.launchpad || ""));
 }
 
-function eligible(token, owned) {
-  try {
-    new PublicKey(token.id);
-    return token.id !== SOL && !owned.has(token.id) &&
-      !state.ledger[token.id] && !token.freezeAuthority &&
-      !token.mintAuthority && Number(token.liquidity) >= 10000;
-  } catch (_) {
-    return false;
-  }
+function isSolCurve(info) {
+  if (!info || !info.owner.equals(PUMP) || info.data.length < 49 ||
+      !info.data.subarray(0, 8).equals(CURVE_DISCRIMINATOR) ||
+      info.data[48] !== 0) return false;
+  // Older accounts had no quote_mint field. Newer accounts use the default
+  // (all-zero) pubkey for SOL; reject partially appended data.
+  if (info.data.length > 83 && info.data.length < 115) return false;
+  return info.data.length < 115 ||
+    info.data.subarray(83, 115).every((byte) => byte === 0);
 }
 
-const delay = () => new Promise((resolve) => setTimeout(resolve, 1100));
-
-async function jupiter(url, options = {}) {
+async function jupiter(url) {
   const response = await fetch("https://api.jup.ag" + url, {
-    ...options,
-    headers: {
-      "x-api-key": apiKey,
-      ...(options.body ? { "Content-Type": "application/json" } : {})
-    }
+    headers: { "x-api-key": apiKey }
   });
   const data = await response.json();
   if (!response.ok) {
@@ -94,80 +86,49 @@ async function jupiter(url, options = {}) {
   return data;
 }
 
-async function ownedMints() {
-  const results = await Promise.all(PROGRAMS.map((programId) =>
-    connection.getParsedTokenAccountsByOwner(wallet, {
-      programId: new PublicKey(programId)
-    })
-  ));
-  const owned = new Set();
-  for (const result of results) {
-    for (const entry of result.value) {
-      const info = entry.account.data.parsed.info;
-      if (BigInt(info.tokenAmount.amount) > 0n) owned.add(info.mint);
-    }
-  }
-  return owned;
-}
-
-function signer() {
-  if (!process.env.SOLANA_PRIVATE_KEY) throw new Error("Signer missing");
-  const account = Keypair.fromSecretKey(bs58.decode(process.env.SOLANA_PRIVATE_KEY));
-  if (!account.publicKey.equals(wallet)) throw new Error("Signer wallet mismatch");
-  return account;
-}
-
-async function quote(token, amount) {
-  const params = new URLSearchParams({
-    inputMint: SOL, outputMint: token.id,
-    amount: String(amount), taker: WALLET
+async function inspectTokens(tokens) {
+  const entries = tokens.map((token) => {
+    const mint = new PublicKey(token.id);
+    const [curve] = PublicKey.findProgramAddressSync(
+      [Buffer.from("bonding-curve"), mint.toBuffer()], PUMP
+    );
+    return { token, mint, curve };
   });
-  return jupiter("/swap/v2/order?" + params);
-}
-
-async function quoteOneDollar(token, initialAmount) {
-  let amount = initialAmount;
-  let order;
-  for (let attempt = 0; attempt < 3; attempt++) {
-    if (attempt) await delay();
-    order = await quote(token, amount);
-    const usd = order.inUsdValue;
-    if (!order.transaction || typeof usd !== "number" ||
-        !Number.isFinite(usd) || usd <= 0 || usd.toFixed(2) === "1.00") break;
-    const revised = Math.round(amount * BET_USD / usd);
-    if (revised < 1 || revised === amount) break;
-    amount = revised;
-  }
-  return { order, amount };
-}
-
-async function buyOnce(token, amount, order) {
-  if (!LIVE_TRADING_UNLOCKED || state.paused) return;
-  if (!order.transaction || !order.requestId) return;
-  const account = signer();
-  if (await connection.getBalance(wallet) <= amount) return;
-  state.ledger[token.id] = { status: "pending", at: new Date().toISOString() };
-  persist();
-  try {
-    const tx = VersionedTransaction.deserialize(Buffer.from(order.transaction, "base64"));
-    tx.sign([account]);
-    const result = await jupiter("/swap/v2/execute", {
-      method: "POST",
-      body: JSON.stringify({
-        signedTransaction: Buffer.from(tx.serialize()).toString("base64"),
-        requestId: order.requestId
-      })
-    });
-    state.ledger[token.id] = {
-      status: result.status === "Success" ? "filled" : "unknown",
-      signature: result.signature || null, at: new Date().toISOString()
+  if (!entries.length) return [];
+  const first = await connection.getMultipleAccountsInfo(
+    entries.flatMap(({ mint, curve }) => [mint, curve])
+  );
+  const active = entries.flatMap((entry, index) => {
+    const mintInfo = first[2 * index];
+    const curveInfo = first[2 * index + 1];
+    return mintInfo && TOKEN_PROGRAMS.has(mintInfo.owner.toBase58()) &&
+      isSolCurve(curveInfo) ? [{ ...entry, tokenProgram: mintInfo.owner }] : [];
+  });
+  const withAta = active.map((entry) => {
+    const [ata] = PublicKey.findProgramAddressSync(
+      [wallet.toBuffer(), entry.tokenProgram.toBuffer(), entry.mint.toBuffer()],
+      ATA_PROGRAM
+    );
+    return { ...entry, ata };
+  });
+  if (!withAta.length) return [];
+  const accountInfos = await connection.getMultipleAccountsInfo(
+    withAta.map(({ ata }) => ata)
+  );
+  return withAta.map(({ token, mint, curve, ata, tokenProgram }, index) => {
+    const info = accountInfos[index];
+    const ready = Boolean(info && info.owner.equals(tokenProgram) &&
+      info.data.length >= 64 &&
+      info.data.subarray(0, 32).equals(mint.toBuffer()) &&
+      info.data.subarray(32, 64).equals(wallet.toBuffer()));
+    return {
+      mint: mint.toBase58(), symbol: token.symbol || "?",
+      curve: curve.toBase58(), tokenProgram: tokenProgram.toBase58(),
+      receivingAccount: ata.toBase58(), accountReady: ready,
+      accountStatus: ready ? "reuse existing" :
+        info ? "account needs review" : "create with first buy"
     };
-  } catch (error) {
-    state.ledger[token.id] = {
-      status: "unknown", error: error.message, at: new Date().toISOString()
-    };
-  }
-  persist();
+  });
 }
 
 async function scan() {
@@ -175,63 +136,32 @@ async function scan() {
   state.running = true;
   try {
     const five = await jupiter("/tokens/v2/toptrending/5m?limit=50");
-    await delay();
+    await new Promise((resolve) => setTimeout(resolve, 1100));
     const hour = await jupiter("/tokens/v2/toptrending/1h?limit=50");
-    await delay();
-    const prices = await jupiter("/price/v3?ids=" + SOL);
-    const price = Number(prices[SOL]?.usdPrice);
-    const amount = oneDollarInLamports(price);
-    const [owned, balance] = await Promise.all([
-      ownedMints(), connection.getBalance(wallet)
+    await new Promise((resolve) => setTimeout(resolve, 1100));
+    const [prices, balance, volumeInfo] = await Promise.all([
+      jupiter("/price/v3?ids=" + SOL),
+      connection.getBalance(wallet),
+      connection.getAccountInfo(volumeAccount)
     ]);
     const unique = new Map();
     for (const token of [...five, ...hour]) {
-      if (token?.id && !unique.has(token.id)) unique.set(token.id, token);
+      if (!token?.id || !isPump(token) || unique.has(token.id)) continue;
+      try { new PublicKey(token.id); unique.set(token.id, token); }
+      catch (_) { /* Ignore invalid metadata. */ }
     }
-    const tokens = [...unique.values()].filter((token) => eligible(token, owned));
-    state.solUsd = price;
-    state.walletSol = balance / LAMPORTS_PER_SOL;
-    state.candidates = tokens.map((token) => ({
-      mint: token.id, symbol: token.symbol,
-      source: isPump(token) ? "Pump.fun token on Jupiter trending" : "Jupiter trending",
-      liquidity: token.liquidity
-    }));
-    state.quotes = [];
-    // Rotate through the entire list, including the end that a plain slice misses.
-    // Preview only: live trading remains hard locked off.
+    const tokens = [...unique.values()];
     const offset = Math.floor(Date.now() / SCAN_MS) % Math.max(1, tokens.length);
-    const sample = Array.from({ length: Math.min(5, tokens.length) },
+    const sample = Array.from({ length: Math.min(SAMPLE_SIZE, tokens.length) },
       (_, index) => tokens[(offset + index) % tokens.length]);
-    for (const token of sample) {
-      await delay();
-      try {
-        const { order, amount: quotedAmount } = await quoteOneDollar(token, amount);
-        const available = Boolean(order.transaction);
-        const quotedUsd = typeof order.inUsdValue === "number" &&
-          Number.isFinite(order.inUsdValue) ? order.inUsdValue : null;
-        const dollarMatched = quotedUsd !== null &&
-          quotedUsd.toFixed(2) === "1.00";
-        state.quotes.push({
-          mint: token.id, symbol: token.symbol,
-          sol: quotedAmount / LAMPORTS_PER_SOL,
-          quotedUsd, dollarMatched, routeAvailable: available,
-          feeBps: order.feeBps ?? null,
-          signatureFeePayer: order.signatureFeePayer ?? null,
-          signatureFeeLamports: order.signatureFeeLamports ?? null,
-          prioritizationFeePayer: order.prioritizationFeePayer ?? null,
-          prioritizationFeeLamports: order.prioritizationFeeLamports ?? null,
-          rentFeePayer: order.rentFeePayer ?? null,
-          rentFeeLamports: order.rentFeeLamports ?? null
-        });
-        if (available && dollarMatched) await buyOnce(token, quotedAmount, order);
-      } catch (error) {
-        state.quotes.push({ mint: token.id, symbol: token.symbol, error: error.message });
-      }
-    }
+    state.candidates = await inspectTokens(sample);
+    state.solUsd = Number(prices[SOL]?.usdPrice) || null;
+    state.walletSol = balance / LAMPORTS_PER_SOL;
+    state.pumpVolumeReady = Boolean(volumeInfo && volumeInfo.owner.equals(PUMP));
     state.lastError = null;
   } catch (error) {
     state.lastError = error.message;
-    console.error("Basket scan:", error.message);
+    console.error("Pump preview scan:", error.message);
   } finally {
     state.lastScanAt = new Date().toISOString();
     state.running = false;
@@ -242,7 +172,7 @@ const app = express();
 app.use(express.json());
 app.get("/", (_req, res) => res.sendFile(path.join(__dirname, "dashboard.html")));
 app.get("/health", (_req, res) => res.json({
-  ok: true, tradingEnabled: false,
+  ok: true, tradingEnabled: TRADING_ENABLED,
   lastScanAt: state.lastScanAt, lastError: state.lastError,
   running: state.running, paused: state.paused
 }));
@@ -254,11 +184,13 @@ function requireKey(req, res, next) {
 }
 app.get("/api/basket", requireKey, (_req, res) => res.json({
   betUsd: BET_USD, wallet: WALLET,
-  tradingEnabled: false, paused: state.paused,
+  tradingEnabled: TRADING_ENABLED, paused: state.paused,
   solUsd: state.solUsd, walletSol: state.walletSol,
   running: state.running, lastScanAt: state.lastScanAt,
   lastError: state.lastError, candidates: state.candidates,
-  quotes: state.quotes, purchases: state.ledger
+  pumpVolumeReady: state.pumpVolumeReady,
+  pumpVolumeAccount: volumeAccount.toBase58(),
+  purchases: state.ledger
 }));
 app.post("/api/pause", requireKey, (_req, res) => {
   state.paused = !state.paused;
@@ -267,7 +199,7 @@ app.post("/api/pause", requireKey, (_req, res) => {
   res.json({ paused: state.paused });
 });
 app.listen(process.env.PORT || 3000, "0.0.0.0", () => {
-  console.log("BecsBot basket preview running for", WALLET);
+  console.log("BecsBot Pump curve account preview running for", WALLET);
   scan();
   setInterval(scan, SCAN_MS);
 });
