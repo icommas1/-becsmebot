@@ -34,7 +34,7 @@ const connection = new Connection(rpcUrl, "confirmed");
 const ledgerPath = dataDir ? path.join(dataDir, "basket.json") : null;
 const state = {
   lastScanAt: null, lastError: null, running: false, paused: false,
-  solUsd: null, candidates: [], quotes: [], ledger: {}
+  solUsd: null, walletSol: null, candidates: [], quotes: [], ledger: {}
 };
 
 function persist() {
@@ -165,22 +165,28 @@ async function scan() {
     const prices = await jupiter("/price/v3?ids=" + SOL);
     const price = Number(prices[SOL]?.usdPrice);
     const amount = oneDollarInLamports(price);
-    const owned = await ownedMints();
+    const [owned, balance] = await Promise.all([
+      ownedMints(), connection.getBalance(wallet)
+    ]);
     const unique = new Map();
     for (const token of [...five, ...hour]) {
       if (token?.id && !unique.has(token.id)) unique.set(token.id, token);
     }
     const tokens = [...unique.values()].filter((token) => eligible(token, owned));
     state.solUsd = price;
+    state.walletSol = balance / LAMPORTS_PER_SOL;
     state.candidates = tokens.map((token) => ({
       mint: token.id, symbol: token.symbol,
       source: isPump(token) ? "Pump.fun token on Jupiter trending" : "Jupiter trending",
       liquidity: token.liquidity
     }));
     state.quotes = [];
-    // Preview only a rotating sample; no live orders can run in this release.
+    // Rotate through the entire list, including the end that a plain slice misses.
+    // Preview only: live trading remains hard locked off.
     const offset = Math.floor(Date.now() / SCAN_MS) % Math.max(1, tokens.length);
-    for (const token of tokens.slice(offset, offset + 5)) {
+    const sample = Array.from({ length: Math.min(5, tokens.length) },
+      (_, index) => tokens[(offset + index) % tokens.length]);
+    for (const token of sample) {
       await delay();
       try {
         const order = await quote(token, amount);
@@ -188,7 +194,9 @@ async function scan() {
         state.quotes.push({
           mint: token.id, symbol: token.symbol,
           sol: amount / LAMPORTS_PER_SOL,
-          routeAvailable: available, feeBps: order.feeBps ?? null
+          routeAvailable: available, feeBps: order.feeBps ?? null,
+          signatureFeePayer: order.signatureFeePayer ?? null,
+          rentFeePayer: order.rentFeePayer ?? null
         });
         if (available) await buyOnce(token, amount, order);
       } catch (error) {
@@ -210,7 +218,8 @@ app.use(express.json());
 app.get("/", (_req, res) => res.sendFile(path.join(__dirname, "dashboard.html")));
 app.get("/health", (_req, res) => res.json({
   ok: true, tradingEnabled: false,
-  lastScanAt: state.lastScanAt, lastError: state.lastError
+  lastScanAt: state.lastScanAt, lastError: state.lastError,
+  running: state.running, paused: state.paused
 }));
 function requireKey(req, res, next) {
   if (req.get("x-dashboard-key") !== dashboardKey) {
@@ -219,8 +228,10 @@ function requireKey(req, res, next) {
   next();
 }
 app.get("/api/basket", requireKey, (_req, res) => res.json({
-  betUsd: BET_USD, tradingEnabled: false, paused: state.paused,
-  solUsd: state.solUsd, lastScanAt: state.lastScanAt,
+  betUsd: BET_USD, wallet: WALLET,
+  tradingEnabled: false, paused: state.paused,
+  solUsd: state.solUsd, walletSol: state.walletSol,
+  running: state.running, lastScanAt: state.lastScanAt,
   lastError: state.lastError, candidates: state.candidates,
   quotes: state.quotes, purchases: state.ledger
 }));
