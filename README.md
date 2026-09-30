@@ -34,7 +34,7 @@ Tests cover normalization, incoming feeds and failures, missing prices, history 
 
 ## Contributor guide and repository checks
 
-Read [AGENTS.md](AGENTS.md), [ARCHITECTURE.md](ARCHITECTURE.md), [RADAR_SPEC.md](RADAR_SPEC.md) and [SIGNALS_SPEC.md](SIGNALS_SPEC.md). The stable Railway entry point remains `src/basket.js`; market modules, API contracts and browser assets are separated under `src/market`, `src/api` and `src/web`.
+Read [AGENTS.md](AGENTS.md), [ARCHITECTURE.md](ARCHITECTURE.md), [RADAR_SPEC.md](RADAR_SPEC.md), [SIGNALS_SPEC.md](SIGNALS_SPEC.md), [CONTRIBUTING.md](CONTRIBUTING.md) and [SECURITY.md](SECURITY.md). The stable Railway entry point remains `src/basket.js`; market modules, API contracts and browser assets are separated under `src/market`, `src/api` and `src/web`.
 
 Copy `.env.example` to `.env` for local configuration and keep your API key server-side. Use Node 22/24 for CI parity.
 

@@ -23,6 +23,16 @@ BecsBot is a single Node/Express service serving a vanilla HTML/CSS/JavaScript t
 
 ## Data path
 
+```text
+Jupiter Price V3 / Tokens V2
+  -> strict upstream schemas
+  -> canonical-mint normalization and feed deduplication
+  -> bounded market cache and persisted observations
+  -> Radar rows and observed Signals
+  -> validated Express responses
+  -> browser presentation and browser-local paper accounting
+```
+
 The process scans SOL Price V3 and thirteen Tokens V2 feeds once a minute. Jupiter requests are serialized with a 2.2-second gap, a ten-second timeout, a 24-request pending bound and at most one 429 retry. The scan cannot overlap itself. Successful feed data replaces its prior cache; failed feeds retain their prior timestamps and an error. Schema failures follow the same failure path. Fresh metadata cannot refresh a cached price timestamp.
 
 Normalization merges canonical mints and feeds. Positive finite prices and numeric metrics are retained; absence stays unavailable. The snapshot contains feed timestamps, radar rows, observed trails and ranked signals. The browser polls this cached snapshot every ten seconds; this does not make market scans faster or turn REST into a stream.
@@ -45,14 +55,36 @@ Price cache TTL is 20 seconds; search cache TTL is one minute. Concurrent identi
 
 Ajv compiles schemas in strict mode without coercion or mutation. Upstream token schemas allow additional provider fields for forward compatibility. Local successful response contracts validate numeric values, mints, timestamps and disabled trading flags. The local schema file is the machine-readable source of truth.
 
+## Data sources of truth
+
+| Value | Implemented source of truth |
+| --- | --- |
+| Token identity | Canonical 32-byte base58 `id` returned by Jupiter; rows deduplicate by this mint |
+| Symbol and name | Most recently merged non-empty Jupiter token metadata, length-limited for display |
+| Token price | Positive finite Tokens V2 `usdPrice` for discovery; Price V3 is separately required for paper sells |
+| Market cap | Positive finite Jupiter `mcap`; missing/zero remains unavailable |
+| Liquidity | Positive finite Jupiter `liquidity`; missing/zero remains unavailable |
+| Volume | Sum of nonnegative buy and sell volume for the corresponding Jupiter interval |
+| Token age | Jupiter `createdAt`, falling back to `firstPool.createdAt`; interpreted by the browser |
+| Holders | Positive finite Jupiter `holderCount`; no separate holder service is queried |
+| Launch source | Membership in configured Tokens V2 category feeds plus optional Jupiter `launchpad` metadata |
+| Wallet signals | Not implemented; no wallet history is fetched or scored |
+| Positions | Browser-local simulated holds in `becsPaperV1`; there is no server or live position store |
+
+When multiple feeds describe one mint, feeds and ranks accumulate. Later merged non-empty fields can update metadata, while the row's price timestamp remains tied to the feed that actually supplied its retained price. This ordering is an implementation detail, not a promise that any category is globally authoritative.
+
 ## Execution and UI
 
 Browser `becsPaperV1` storage owns cash, holdings, settings, activity and buy-once records. Auto resets to off on reload. Charts and market scans continue on the server when a phone closes; paper auto requires the page to remain active. iOS background suspension can pause it. Settings migration preserves cash and holds. There is no cross-device wallet synchronization.
 
 Manual contact actions, dock actions and auto use the same paper accounting functions. Sells require current Price V3 marks; estimated portfolio values may show labeled stale marks. See the radar and signals specs for eligibility and state rules.
 
+The execution boundary is intentionally one-way: the browser can request public market/search/price data, but the server exposes no signing route. Compatibility paths under `/api/sell` and `/api/pause` always return 410. Tests replace provider access with fixtures and assert that paper actions do not call those paths.
+
 ## Verification and delivery
 
 CI runs syntax/schema checks and unit/integration tests on Node 22/24, plus iPhone WebKit, mobile Chromium and desktop Chromium using a local fixture server. Failures retain traces/screenshots for seven days. No test needs a production API key.
 
 The Railway workflow runs after pushes to main, manually, and every six hours. It makes only four GET requests per attempt, allows deployment warm-up retries, validates contracts, checks all thirteen feed timestamps and a recent SOL mark, and checks terminal/asset availability. A healthy process with delayed market data fails this smoke check. It does not send orders, change settings or buy a developer plan. Dependabot opens weekly npm and Actions update PRs; updates are not automatically merged.
+
+Railway service variables, volume attachment and health-check configuration live outside this repository. The repository defines the startup command and expected variable names but cannot prove those external settings. No `railway.toml`, Dockerfile or Procfile is currently required.
