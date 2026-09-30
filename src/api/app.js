@@ -1,8 +1,10 @@
 const path=require("node:path");
+const {randomUUID}=require("node:crypto");
 const express=require("express");
 const { assertSchema, isValid }=require("./validation");
 
 function createApp(market) {
+  const instanceId=randomUUID();
   const send = (res, name, value) => res.json(assertSchema(name, value));
   const app=express();app.set("trust proxy",1);app.disable("x-powered-by");
   app.use(express.json({limit:"20kb"}));
@@ -36,11 +38,11 @@ function createApp(market) {
     return false;
   };
   app.get("/api/basket",(req,res)=>{
-    if(conditional(req,res,market.snapshotRevision?`W/\"basket-${market.snapshotRevision()}\"`:null))return;
+    if(conditional(req,res,market.snapshotRevision?`W/\"basket-${instanceId}-${market.snapshotRevision()}\"`:null))return;
     send(res,"snapshot",market.terminalSnapshot?market.terminalSnapshot():market.snapshot());
   });
   app.get("/api/history",(req,res)=>{
-    if(conditional(req,res,market.historyRevision?`W/\"history-${market.historyRevision()}\"`:null))return;
+    if(conditional(req,res,market.historyRevision?`W/\"history-${instanceId}-${market.historyRevision()}\"`:null))return;
     const value=market.chartHistory?market.chartHistory():{scanAt:null,trails:{}};
     send(res,"historyResponse",value);
   });

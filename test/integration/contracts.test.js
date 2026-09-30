@@ -38,6 +38,22 @@ test("browser payloads preserve Radar and Signals while separating bounded chart
   const historyResponse=await fetch(base+"/api/history");
   assert.equal((await fetch(base+"/api/history",{headers:{"If-None-Match":historyResponse.headers.get("etag")}})).status,304);
 });
+test("ETags from a previous server instance cannot suppress changed market data after restart",async t=>{
+  const markets=[];
+  for(const price of [200,250]){
+    const market=createMarket({request:async url=>url.startsWith("/price")?{[SOL]:{usdPrice:price}}:[{id:SOL,symbol:"SOL",usdPrice:price}]});
+    await market.scan();markets.push(market);
+  }
+  const first=await serve(t,markets[0]),restarted=await serve(t,markets[1]);
+  for(const route of ["/api/basket","/api/history"]){
+    const original=await fetch(first+route);
+    const response=await fetch(restarted+route,{headers:{"If-None-Match":original.headers.get("etag")}});
+    assert.equal(response.status,200,route+" must invalidate the previous instance validator");
+    const value=await response.json();
+    if(route==="/api/basket")assert.equal(value.solUsd,250);
+    else assert.equal(value.trails[SOL].at(-1)[1],250);
+  }
+});
 test("response schema violations return 503 instead of exposing malformed data",async t=>{
   const market=await fixtureMarket();const base=await serve(t,{snapshot:market.snapshot,search:async()=>[{mint:"invalid"}],paperPrices:async()=>({[SOL]:{priceUsd:0,observedAt:Date.now()}})});
   assert.equal((await fetch(base+"/api/search?q=SOL")).status,503);
