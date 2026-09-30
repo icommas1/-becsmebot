@@ -102,6 +102,7 @@ function createApp(market) {
   app.use(express.json({limit:"20kb"}));
   app.use((_req,res,next)=>{res.set("Cache-Control","no-store");res.set("Referrer-Policy","no-referrer");next();});
   app.get("/",(_req,res)=>res.sendFile(path.join(__dirname,"dashboard.html")));
+  app.get("/assets/becs-logo.jpg",(_req,res)=>res.sendFile(path.join(__dirname,"assets","becs-logo.jpg")));
   app.get("/health",(_req,res)=>{
     const s=market.snapshot();res.json({ok:true,tradingEnabled:false,manualSell:{enabled:false},
       lastScanAt:s.lastScanAt,lastError:s.lastError,running:s.running,feeds:s.feeds});

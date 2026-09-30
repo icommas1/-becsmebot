@@ -4,6 +4,8 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>BecsBot · Jupiter terminal</title>
+<link rel="icon" type="image/jpeg" href="/assets/becs-logo.jpg">
+<link rel="apple-touch-icon" href="/assets/becs-logo.jpg">
 <style>
 :root { color-scheme: dark; --bg:#0b1019; --card:#172231; --line:#34445b; --muted:#b4c2d3; --good:#59d6a2; --bad:#ff8585; --accent:#70b8ff; --scale:1 }
 * { box-sizing:border-box } body { margin:0; background:var(--bg); color:#f5f8ff; font:15px -apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif }
@@ -95,11 +97,12 @@ body{grid-template-areas:"head" "main" "tape" "dock" "nav";grid-template-rows:49
 }
 @media(prefers-reduced-motion:reduce){.radar-map:before,.live-dot{animation:none!important}.token-deck{scroll-behavior:auto}}
 
+.brand-logo{display:grid;place-items:center;flex:none;width:44px;height:44px;min-height:44px;padding:6px;margin:-6px 0;border:0;background:transparent;border-radius:3px}.brand-logo img{display:block;width:32px;height:32px;object-fit:cover;object-position:85% 70%;border:1px solid #407b71;border-radius:3px}.brand-logo:focus-visible{outline:2px solid var(--accent);outline-offset:1px}.brand-sheet{width:min(600px,calc(100vw - 24px));max-height:85dvh;padding:0;border:1px solid var(--line);background:var(--bg);color:inherit}.brand-sheet::backdrop{background:#000b}.brand-sheet .sheet-top{padding:8px 12px}.brand-sheet h2{margin:0;font-size:16px}.brand-sheet button{min-width:44px;min-height:44px}.brand-sheet>img{display:block;width:100%;height:auto}
 </style>
 </head>
 <body data-view="radar">
 <header class="terminal-header">
-  <div class="brand"><span class="brand-mark">B</span><div><h1>BecsBot <span class="brand-terminal">TERMINAL</span></h1><small>Jupiter market data · paper trading</small></div></div>
+  <div class="brand"><button id="brand-logo" class="brand-logo" aria-label="View BecsBot logo"><img src="/assets/becs-logo.jpg" alt="" width="32" height="32"></button><div><h1>BecsBot <span class="brand-terminal">TERMINAL</span></h1><small>Jupiter market data · paper trading</small></div></div>
   <div class="header-data"><span id="hud-cash" class="hud-metric">CASH —</span><span id="hud-pnl" class="hud-metric">P/L —</span><span id="mode-label" class="pill paper">PAPER MODE</span><span id="sol-rate" class="pill">SOL price pending</span><span id="status">Loading scan…</span></div>
   <button id="refresh" class="secondary" aria-label="Refresh data">↻ Refresh</button>
 </header>
@@ -158,6 +161,7 @@ body{grid-template-areas:"head" "main" "tape" "dock" "nav";grid-template-rows:49
 <footer class="execution-dock" aria-label="Paper execution dock"><button id="dock-token" class="dock-token secondary">Select token</button><span class="dock-mode">PAPER</span><div id="dock-sizes" class="dock-sizes"></div><label class="dock-custom">Custom $<input id="dock-amount" type="number" min="0.01" step="0.01" value="1" aria-label="Custom paper trade dollars"></label><button id="dock-buy">BUY $1</button><button id="dock-sell" class="secondary">SELL $1</button><small id="dock-status">Select a launch · real trading off</small></footer>
 <dialog id="token-sheet" class="token-sheet"><div class="sheet-top"><h2 id="sheet-title">Token details</h2><button id="sheet-close" class="secondary" aria-label="Close token details">×</button></div><div id="sheet-content"></div><div class="actionbar"><button id="sheet-buy">Paper buy $1</button><button id="sheet-sell" class="secondary">Paper sell $1</button></div></dialog>
 <div id="toast" role="status" aria-live="polite"></div>
+<dialog id="brand-sheet" class="brand-sheet" aria-labelledby="brand-title"><div class="sheet-top"><h2 id="brand-title">BecsBot</h2><button id="brand-close" class="secondary" aria-label="Close BecsBot logo">×</button></div><img src="/assets/becs-logo.jpg" alt="Becs collage with a black cat wearing a BECS helmet" width="600" height="400"></dialog>
 <script>
 const STORE = "becsPaperV1";
 const RADAR_UI_STORE = "becsRadarUiV1", TRAIL_STORE = "becsRadarTrailV1";
@@ -496,6 +500,8 @@ $("page-size").value=String(radarUi.pageSize);$("page-size").onchange=()=>{radar
 $("previous").onclick=()=>{radarPage=Math.max(0,radarPage-1);renderRadar();};
 $("next").onclick=()=>{radarPage++;renderRadar();};
 $("refresh").onclick=refresh;
+$("brand-logo").onclick=()=>$("brand-sheet").showModal();
+$("brand-close").onclick=()=>$("brand-sheet").close();
 function setTerminalView(view) {
   const valid=["radar","paper","activity","settings","signals","connections"];
   view=valid.includes(view)?view:"radar";
