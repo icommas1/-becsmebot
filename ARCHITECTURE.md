@@ -16,7 +16,17 @@ BecsBot is a single Node/Express service serving a vanilla HTML/CSS/JavaScript t
 | `src/market/market.js` | Scans, caches, single-flight requests and snapshots |
 | `src/market/history.js` | Bounded 24-hour chart persistence |
 | `src/market/signals.js` | Multiples against the first retained observation |
-| `src/web/` | Terminal and supplied logo |
+| `src/web/dashboard.html` | Semantic terminal shell and self-hosted module entry point |
+| `src/web/assets/dashboard.css` | Terminal layout and responsive presentation |
+| `src/web/assets/js/dashboard.mjs` | Browser startup, shared state coordination, refresh and event wiring |
+| `src/web/assets/js/core.mjs` | Shared formatting, time and signal-presentation helpers |
+| `src/web/assets/js/filters.mjs` | Radar topic selection, launch eligibility and sort values |
+| `src/web/assets/js/paper-wallet.mjs` | Browser-local persistence, migration and paper accounting |
+| `src/web/assets/js/api-client.mjs` | Same-origin read and paper-price requests |
+| `src/web/assets/js/dom.mjs` | Safe text nodes, sparklines and activity bars |
+| `src/web/assets/js/radar-view.mjs` | Radar cards/instrument and filtered Signals presentation |
+| `src/web/assets/js/paper-view.mjs` | Wallet, positions, activity, tape, dock and detail sheet |
+| `src/web/assets/becs-logo.jpg` | Supplied terminal artwork |
 | `test/unit`, `test/integration`, `test/e2e` | Logic, HTTP and real browser regression tests |
 | `test/fixtures` | Deterministic market/server fixtures, no live credentials |
 | `scripts/` | Syntax/schema check and read-only Railway smoke runner |

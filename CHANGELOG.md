@@ -4,6 +4,8 @@ All notable repository-level changes are recorded here. Product strategy and pro
 
 ## Unreleased
 
+- Split the dashboard into shared rules/state helpers, API access, Radar/Signals views and paper-wallet views without changing routes or trading behavior.
+
 - Added security, contribution and operations guidance plus explicit data-source-of-truth documentation.
 - Added safe handling for explicit unavailable Price V3 marks and deterministic duplicate-feed normalization.
 - Expanded Playwright coverage to six desktop/mobile/tablet projects and all terminal navigation panels.
