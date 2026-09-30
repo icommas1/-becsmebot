@@ -45,7 +45,7 @@ Jupiter Price V3 / Tokens V2
 
 The process scans SOL Price V3 and thirteen Tokens V2 feeds once a minute. Jupiter requests are serialized with a 2.2-second gap, a ten-second timeout, a 24-request pending bound and at most one 429 retry. The scan cannot overlap itself. Successful feed data replaces its prior cache; failed feeds retain their prior timestamps and an error. Schema failures follow the same failure path. Fresh metadata cannot refresh a cached price timestamp.
 
-Normalization merges canonical mints and feeds. Positive finite prices and numeric metrics are retained; absence stays unavailable. The snapshot contains feed timestamps, radar rows, observed trails and ranked signals. The browser polls this cached snapshot every ten seconds; this does not make market scans faster or turn REST into a stream.
+Normalization merges canonical mints and feeds. Positive finite prices and numeric metrics are retained; absence stays unavailable. The server retains full observed history for signal ranking. `GET /api/basket` sends feed timestamps, Radar rows and compact Signals references; the browser joins each signal to its Radar row by mint. `GET /api/history` sends chart trails separately, downsampled to at most 120 points per mint while retaining endpoints and bucket extrema. The browser revalidates the basket every 15 seconds and requests chart history only after `lastScanAt` changes. ETags return 304 for unchanged basket/history revisions. Market scans remain once per minute; REST polling does not make scans faster or turn them into a stream.
 
 `DATA_DIR/market-history.json` is atomically replaced with restricted file permissions. History keeps up to 1,000 mints, 1,440 points per mint and 24 hours. Invalid, old and future observations are discarded. Pruning is shared and limited to once per scan interval so repeated browser snapshot reads do not repeatedly sort the complete history. Failure to read history rebuilds it from later scans; persistence errors do not stop market discovery. Railway's `/app/data` volume must remain mounted.
 
@@ -57,6 +57,7 @@ Normalization merges canonical mints and feeds. Positive finite prices and numer
 | `GET /assets/becs-logo.jpg` | Fixed supplied artwork |
 | `GET /health` | Liveness, feed/scan state, real trading disabled |
 | `GET /api/basket` | Validated cached market snapshot |
+| `GET /api/history` | Validated, bounded chart trails, independent from signal history |
 | `GET /api/search?q=...` | Trimmed 2–80-character query; one-minute cache |
 | `POST /api/paper/prices` | Strict `{mints:[...]}` body, max 100 canonical mints, upstream chunks of 50 |
 | `/api/sell/*`, `/api/pause/*` | 410 compatibility blocks |
@@ -95,6 +96,6 @@ The execution boundary is intentionally one-way: the browser can request public 
 
 CI runs syntax/schema checks and unit/integration tests on Node 22/24, plus iPhone WebKit, mobile Chromium and desktop Chromium using a local fixture server. Failures retain traces/screenshots for seven days. No test needs a production API key.
 
-The Railway workflow runs after pushes to main, manually, and every six hours. It makes only four GET requests per attempt, allows deployment warm-up retries, validates contracts, confirms all thirteen configured feeds, a recent scan, disabled live trading and terminal/asset availability. Provider freshness is reported separately so a Jupiter outage is not misclassified as a BecsBot process outage; strict market-data readiness is available through `SMOKE_REQUIRE_MARKET_DATA=1`. It does not send orders, change settings or buy a developer plan. Dependabot opens weekly npm and Actions update PRs; updates are not automatically merged.
+The Railway workflow runs after pushes to main, manually, and every six hours. It makes only five GET requests per attempt, allows deployment warm-up retries, validates contracts including bounded chart history, confirms all thirteen configured feeds, a recent scan, disabled live trading and terminal/asset availability. Provider freshness is reported separately so a Jupiter outage is not misclassified as a BecsBot process outage; strict market-data readiness is available through `SMOKE_REQUIRE_MARKET_DATA=1`. It does not send orders, change settings or buy a developer plan. Dependabot opens weekly npm and Actions update PRs; updates are not automatically merged.
 
 Railway service variables, volume attachment and health-check configuration live outside this repository. The repository defines the startup command and expected variable names but cannot prove those external settings. No `railway.toml`, Dockerfile or Procfile is currently required.

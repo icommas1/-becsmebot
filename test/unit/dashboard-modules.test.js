@@ -58,13 +58,20 @@ test("dashboard API client uses only read and paper-price contracts",async()=>{
   const [,,, {createApiClient}]=await modules,calls=[];
   const client=createApiClient(async(url,options)=>{
     calls.push({url,options});
-    return {ok:true,json:async()=>url==="/api/basket"?{radar:[]}:url.startsWith("/api/search")?{rows:[]}:{prices:{}}};
+    if(url==="/api/basket"&&options.headers?.["If-None-Match"])return {status:304,ok:false};
+    const body=url==="/api/basket"?{radar:[{mint,symbol:"TEST",priceUsd:2}],signals:[{mint,firstSeenAt:1,observedAt:2,multiple:2,peakMultiple:3}]}:
+      url==="/api/history"?{scanAt:null,trails:{[mint]:[[1,2],[2,3]]}}:url.startsWith("/api/search")?{rows:[]}:{prices:{}};
+    return {status:200,ok:true,headers:{get:()=>url==="/api/basket"?'W/"basket-1"':url==="/api/history"?'W/"history-1"':null},json:async()=>body};
   });
-  await client.basket();await client.search("A B");await client.paperPrices([mint]);
-  assert.deepEqual(calls.map(call=>call.url),["/api/basket","/api/search?q=A%20B","/api/paper/prices"]);
+  const basket=await client.basket();assert.deepEqual(basket.signals,[{...basket.radar[0],firstSeenAt:1,observedAt:2,multiple:2,peakMultiple:3}]);
+  assert.deepEqual(await client.basket(),basket);
+  assert.deepEqual(await client.history(),{scanAt:null,trails:{[mint]:[[1,2],[2,3]]}});
+  await client.search("A B");await client.paperPrices([mint]);
+  assert.deepEqual(calls.map(call=>call.url),["/api/basket","/api/basket","/api/history","/api/search?q=A%20B","/api/paper/prices"]);
   assert.equal(calls[0].options.credentials,"same-origin");
-  assert.equal(calls[2].options.method,"POST");
-  assert.deepEqual(JSON.parse(calls[2].options.body),{mints:[mint]});
+  assert.equal(calls[1].options.headers["If-None-Match"],'W/"basket-1"');
+  assert.equal(calls[4].options.method,"POST");
+  assert.deepEqual(JSON.parse(calls[4].options.body),{mints:[mint]});
   assert.equal(calls.some(call=>call.url.includes("/api/sell")),false);
 });
 

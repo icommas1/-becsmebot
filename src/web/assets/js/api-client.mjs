@@ -1,4 +1,5 @@
 export function createApiClient(fetchImpl=globalThis.fetch) {
+  const conditionalCache=new Map();
   async function call(url,options={}) {
     const response=await fetchImpl(url,{...options,credentials:"same-origin"});
     if(!response.ok) {
@@ -6,6 +7,19 @@ export function createApiClient(fetchImpl=globalThis.fetch) {
       throw Error(body.error||"Request failed: "+response.status);
     }
     return response.json();
+  }
+  async function conditionalGet(url,key) {
+    const cached=conditionalCache.get(key),headers={};
+    if(cached?.etag)headers["If-None-Match"]=cached.etag;
+    const response=await fetchImpl(url,{credentials:"same-origin",headers});
+    if(response.status===304&&cached)return cached.value;
+    if(!response.ok) {
+      const body=await response.json().catch(()=>({}));
+      throw Error(body.error||"Request failed: "+response.status);
+    }
+    const value=await response.json();
+    conditionalCache.set(key,{etag:response.headers?.get?.("etag")||null,value});
+    return value;
   }
   const paperPrices=mints=>call("/api/paper/prices",{
     method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({mints})
@@ -19,7 +33,13 @@ export function createApiClient(fetchImpl=globalThis.fetch) {
     return prices;
   }
   return Object.freeze({
-    basket:()=>call("/api/basket"),
+    basket:async()=>{
+      const value=await conditionalGet("/api/basket","basket");
+      if(!Array.isArray(value.signals))return value;
+      const rows=new Map((value.radar||[]).map(row=>[row.mint,row]));
+      return {...value,signals:value.signals.map(signal=>({...rows.get(signal.mint),...signal})).filter(signal=>signal.mint)};
+    },
+    history:()=>conditionalGet("/api/history","history"),
     search:query=>call("/api/search?q="+encodeURIComponent(query)),
     paperPrices,allPaperPrices
   });

@@ -393,7 +393,14 @@
         "signals": {
           "type": "array",
           "items": {
-            "$ref": "#/definitions/signal"
+            "oneOf": [
+              {
+                "$ref": "#/definitions/signal"
+              },
+              {
+                "$ref": "#/definitions/signalSummary"
+              }
+            ]
           },
           "maxItems": 1000
         },
@@ -423,8 +430,7 @@
         "solPriceAt",
         "scanIntervalMs",
         "radar",
-        "signals",
-        "trails"
+        "signals"
       ],
       "additionalProperties": false
     },
@@ -929,6 +935,70 @@
       },
       "required": [
         "error"
+      ],
+      "additionalProperties": false
+    },
+    "signalSummary": {
+      "type": "object",
+      "properties": {
+        "mint": {
+          "type": "string",
+          "format": "solana-mint"
+        },
+        "firstSeenAt": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "observedAt": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "multiple": {
+          "type": "number",
+          "exclusiveMinimum": 0
+        },
+        "peakMultiple": {
+          "type": "number",
+          "exclusiveMinimum": 0
+        }
+      },
+      "required": [
+        "mint",
+        "firstSeenAt",
+        "observedAt",
+        "multiple",
+        "peakMultiple"
+      ],
+      "additionalProperties": false
+    },
+    "historyResponse": {
+      "type": "object",
+      "properties": {
+        "scanAt": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "format": "date-time"
+        },
+        "trails": {
+          "type": "object",
+          "propertyNames": {
+            "type": "string",
+            "format": "solana-mint"
+          },
+          "additionalProperties": {
+            "type": "array",
+            "items": {
+              "$ref": "#/definitions/point"
+            },
+            "maxItems": 120
+          }
+        }
+      },
+      "required": [
+        "scanAt",
+        "trails"
       ],
       "additionalProperties": false
     }

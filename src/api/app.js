@@ -20,13 +20,30 @@ function createApp(market) {
     dotfiles:"deny",fallthrough:false,index:false
   }));
   app.get("/health",(_req,res)=>{
-    const s=market.snapshot();send(res,"health",{ok:true,tradingEnabled:false,manualSell:{enabled:false},
+    const s=market.terminalSnapshot?market.terminalSnapshot():market.snapshot();send(res,"health",{ok:true,tradingEnabled:false,manualSell:{enabled:false},
       lastScanAt:s.lastScanAt,lastError:s.lastError,running:s.running,feeds:s.feeds});
   });
   // No signing module is loaded. Even old clients cannot execute a real sale.
   app.use("/api/sell",(_req,res)=>res.status(410).json({error:"Real trading is disabled on the public terminal"}));
   app.use("/api/pause",(_req,res)=>res.status(410).json({error:"Market scans run automatically"}));
-  app.get("/api/basket",(_req,res)=>send(res,"snapshot",market.snapshot()));
+  const conditional = (req,res,tag) => {
+    if (!tag) return false;
+    res.set("ETag",tag);
+    const validators=(req.get("If-None-Match")||"").split(",").map(value=>value.trim());
+    if (validators.some(value=>value==="*"||value===tag||value.replace(/^W\//,"")===tag.replace(/^W\//,""))) {
+      res.status(304).end(); return true;
+    }
+    return false;
+  };
+  app.get("/api/basket",(req,res)=>{
+    if(conditional(req,res,market.snapshotRevision?`W/\"basket-${market.snapshotRevision()}\"`:null))return;
+    send(res,"snapshot",market.terminalSnapshot?market.terminalSnapshot():market.snapshot());
+  });
+  app.get("/api/history",(req,res)=>{
+    if(conditional(req,res,market.historyRevision?`W/\"history-${market.historyRevision()}\"`:null))return;
+    const value=market.chartHistory?market.chartHistory():{scanAt:null,trails:{}};
+    send(res,"historyResponse",value);
+  });
   const requests=new Map();let globalRequests=[];
   function limit(req,res,next) {
     const now=Date.now(),ip=req.ip||"unknown",cutoff=now-60000;

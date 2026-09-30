@@ -35,6 +35,16 @@ test("launch filters update Radar and Signals together",async({page})=>{
   await expect(page.locator("#radar .token-contact")).toHaveCount(2);
   await expect(page.locator("#signals .rail-contact")).toHaveCount(2);
 });
+test("unchanged refreshes revalidate the basket without refetching chart history",async({page})=>{
+  const statuses=[],historyRequests=[];
+  page.on("response",response=>{if(response.url().endsWith("/api/basket"))statuses.push(response.status());});
+  page.on("request",request=>{if(request.url().endsWith("/api/history"))historyRequests.push(request);});
+  await page.locator("#refresh").click();
+  await expect.poll(()=>statuses.length).toBeGreaterThan(0);
+  expect(statuses.at(-1)).toBe(304);
+  expect(historyRequests).toHaveLength(0);
+  expect(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth)).toBe(true);
+});
 test("all terminal navigation panels remain reachable",async({page})=>{
   for(const [button,view,content] of [
     ["Markets","radar","FRESH"],["Paper wallet","paper","Paper wallet"],

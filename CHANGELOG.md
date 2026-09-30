@@ -1,5 +1,8 @@
 # Changelog
 
+## Unreleased
+- Split chart history from the frequent basket response, cap browser chart trails at 120 extrema-preserving points, compact Signals transport, and add conditional ETag requests. The browser now polls every 15 seconds and reloads chart history only after a completed scan; server-side signal history and paper behavior remain unchanged.
+
 All notable repository-level changes are recorded here. Product strategy and proposed behavior do not belong in this file.
 
 ## Unreleased
