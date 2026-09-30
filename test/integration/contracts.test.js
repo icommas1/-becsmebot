@@ -27,7 +27,8 @@ test("response schema violations return 503 instead of exposing malformed data",
 test("a provider-facing route failure does not take down cached read-only routes",async t=>{
   const market=await fixtureMarket();
   const base=await serve(t,{snapshot:market.snapshot,search:async()=>{throw Error("provider unavailable");},paperPrices:market.paperPrices});
-  assert.equal((await fetch(base+"/api/search?q=SOL")).status,503);
+  const failed=await fetch(base+"/api/search?q=SOL");assert.equal(failed.status,503);
+  assert.deepEqual(await failed.json(),{error:"Market data temporarily unavailable"});
   assert.equal((await fetch(base+"/health")).status,200);
   assert.equal((await fetch(base+"/api/basket")).status,200);
 });

@@ -30,7 +30,11 @@ test('public APIs reject signing, invalid inputs and excessive requests',async()
  const app=createApp({snapshot:()=>createMarket({request:async()=>[]}).snapshot(),search:async()=>[],paperPrices:async mints=>Object.fromEntries(mints.map(m=>[m,null]))});
  const server=app.listen(0,'127.0.0.1');await new Promise(r=>server.once('listening',r));const base='http://127.0.0.1:'+server.address().port;
  try {
- assert.equal((await fetch(base+'/api/basket')).status,200);
+ const basket=await fetch(base+'/api/basket');assert.equal(basket.status,200);
+ assert.equal(basket.headers.get('x-content-type-options'),'nosniff');
+ assert.equal(basket.headers.get('x-frame-options'),'DENY');
+ assert.match(basket.headers.get('content-security-policy'),/frame-ancestors 'none'/);
+ assert.equal(basket.headers.get('access-control-allow-origin'),null);
  assert.equal((await fetch(base+'/api/auth/status')).status,404);
  assert.equal((await fetch(base+'/api/sell/quote',{method:'POST',headers:{'x-dashboard-key':'anything'}})).status,410);
  assert.equal((await fetch(base+'/api/search?q=x')).status,400);
