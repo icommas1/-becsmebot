@@ -4,6 +4,8 @@ Public full-page markets and paper trading dashboard. No login. Real transaction
 
 ## Markets and signals
 
+The terminal opens to New launches sorted newest first. Default shared launch filters are age ≤24 hours, market cap ≤$1 million and liquidity ≥$2,000. Missing age/cap, suspicious tokens and stale/unavailable prices are excluded. Launch filters live directly above the radar with a restore button; minimum/maximum age and cap, liquidity, holders, organic score and 5m volume remain adjustable. Age uses token creation time with first pool time as fallback. Older saved unrestricted filters migrate once without clearing paper holds or cash.
+
 Jupiter Tokens V2 provides trending, top traded and organic categories for 5m, 1h, 6h and 24h, plus recent pools and token search. Server scans run every minute. This is REST polling, not a streaming feed. Feed errors and timestamps appear under Feeds.
 
 Server chart observations persist for up to 24 hours in `DATA_DIR/market-history.json`. Signals ranks current multiples against the first retained observation and shows peak multiples and the starting time. It does not claim launch returns or trading profits. Each signal and hold has a token address, Copy CA and Dex Screener link.
@@ -12,7 +14,7 @@ Server chart observations persist for up to 24 hours in `DATA_DIR/market-history
 
 Default buys spend $1.00 before the configurable simulated network fee. Manual and auto buys use the same fill logic and filters. Sell $1 sells up to $1 of the position before the fee; Sell all closes it. Price impact and fees are simulation settings, not executable quotes. SOL input amounts depend on the observed USD price; real exactly-$1 execution is not guaranteed.
 
-Auto source is adjustable. An optional multiple target above 1 triggers one $1 paper sale per hold, using the same sale logic; 0 disables it. Auto is off after reload and runs only while the page is open. Paper balances, holds and settings save in this browser. Server market scanning and charts continue when it closes.
+Auto source follows the selected launch tab and interval. Radar, Signals and auto buys use the same launch filters; token search respects those filters but does not change the auto source. An optional multiple target above 1 triggers one $1 paper sale per hold, using the same sale logic; 0 disables it. Auto is off after reload and runs only while the page is open. Paper balances, holds and settings save in this browser. Server market scanning and charts continue when it closes.
 
 Buys need recent Tokens V2 and SOL marks. Sells need a recent Jupiter Price V3 mark; omitted prices remain unavailable and cannot produce fills. Price refreshes cover all holds in batches. Last known marks can still appear in estimated portfolio values and are labeled stale.
 

@@ -45,7 +45,7 @@ function marketRows(feeds) {
       row.holders = positive(token.holderCount) ?? row.holders;
       const score = metric(token.organicScore);
       if (score != null && score >= 0 && score <= 100) row.organicScore = score;
-      row.createdAt = token.firstPool?.createdAt || token.createdAt || row.createdAt;
+      row.createdAt = token.createdAt || token.firstPool?.createdAt || row.createdAt;
       row.launchpad = token.launchpad || row.launchpad;
       row.isVerified ||= token.isVerified === true;
       row.isSus ||= Object.hasOwn(token.audit || {}, "isSus");

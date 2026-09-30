@@ -29,15 +29,16 @@ test("paper buys use SOL cash, survive radar exit, and sell without a live reque
     confirm:()=>true
   });
   vm.runInContext(script,context);
+  vm.runInContext(`var eligible={priceUsd:.01,marketCap:50000,liquidityUsd:5000,createdAt:new Date(Date.now()-600000).toISOString(),observedAt:Date.now()};radarUi.tab="trending";`,context);
   const mint="So11111111111111111111111111111111111111112";
   vm.runInContext("paper.settings.minOrganicScore=70",context);
-  assert.equal(vm.runInContext("passes({organicScore:65})",context),false);
-  assert.equal(vm.runInContext("passes({organicScore:75})",context),true);
+  assert.equal(vm.runInContext("passes({...eligible,organicScore:65})",context),false);
+  assert.equal(vm.runInContext("passes({...eligible,organicScore:75})",context),true);
   vm.runInContext("paper.settings.minOrganicScore=0",context);
   vm.runInContext(`sampleRadar({lastScanAt:new Date(Date.now()-300000).toISOString(),radar:[{mint:"${mint}",priceUsd:.009}]});sampleRadar({lastScanAt:new Date().toISOString(),radar:[{mint:"${mint}",priceUsd:.01}]});`,context);
   assert.equal(vm.runInContext(`trail.points["${mint}"].length`,context),2);
   assert.equal(vm.runInContext(`sparkline("${mint}").children[0].children[0].tagName`,context),"polyline");
-  vm.runInContext(`snapshot={solUsd:200,solPriceAt:Date.now(),radar:[{mint:"${mint}",symbol:"TEST",name:"Test",priceUsd:.01,observedAt:Date.now(),feeds:["trending:5m"],ranks:{"trending:5m":1}}]};buy(snapshot.radar[0]);`,context);
+  vm.runInContext(`snapshot={solUsd:200,solPriceAt:Date.now(),radar:[{mint:"${mint}",symbol:"TEST",name:"Test",...eligible,priceUsd:.01,observedAt:Date.now(),feeds:["trending:5m"],ranks:{"trending:5m":1}}]};buy(snapshot.radar[0]);`,context);
   assert.equal(elements.get("radar").children.length,1);
   assert.equal(vm.runInContext("paperReady({priceUsd:1,observedAt:Date.now()-180001})",context),false);
   vm.runInContext("paper.settings.maxCap=100",context);
@@ -61,12 +62,36 @@ test("paper buys use SOL cash, survive radar exit, and sell without a live reque
   assert.ok(storage.get("becsPaperV1").includes("TEST"));
   // Automatic orders share dollar accounting and buy-once behavior.
   vm.runInContext(`paper=fresh();paper.auto=true;runAutoBuys();`,context);
-  vm.runInContext(`snapshot.radar=[{mint:"${mint}",symbol:"TEST",name:"Test",priceUsd:.01,observedAt:Date.now(),feeds:["trending:5m"]}];runAutoBuys();runAutoBuys();`,context);
+  vm.runInContext(`snapshot.radar=[{mint:"${mint}",symbol:"TEST",name:"Test",...eligible,priceUsd:.01,observedAt:Date.now(),feeds:["trending:5m"]}];runAutoBuys();runAutoBuys();`,context);
   assert.equal(vm.runInContext("paper.activity.length",context),1);
   assert.equal(vm.runInContext(`paper.holds["${mint}"].qty`,context),100);
   vm.runInContext(`paper.settings.exitMultiple=2;prices["${mint}"]={priceUsd:.02,source:"jupiter-v3"};priceTimes["${mint}"]=Date.now();runAutoExits();runAutoExits();`,context);
   assert.equal(vm.runInContext(`paper.holds["${mint}"].qty`,context),50);
   assert.equal(vm.runInContext("paper.activity.length",context),2);
+  // Discovery, signals and automation share strict fresh-launch eligibility.
+  vm.runInContext('paper=fresh();radarUi.tab="recent";',context);
+  for(const rejected of [
+    '{marketCap:1000001}', '{marketCap:null}', '{createdAt:null}',
+    '{createdAt:new Date(Date.now()-86400001).toISOString()}',
+    '{createdAt:new Date(Date.now()+60000).toISOString()}',
+    '{liquidityUsd:1999}', '{liquidityUsd:null}', '{isSus:true}',
+    '{observedAt:Date.now()-180001}', '{priceUsd:null}'
+  ])assert.equal(vm.runInContext('passes({...eligible,...'+rejected+'})',context),false,rejected);
+  assert.equal(vm.runInContext('passes({...eligible,marketCap:1000000,liquidityUsd:2000})',context),true);
+  vm.runInContext(`var launch={...eligible,mint:"${mint}",symbol:"NEW",name:"New",feeds:["recent"]};var mature={...launch,mint:"large",marketCap:50000000};snapshot={solUsd:200,solPriceAt:Date.now(),radar:[launch,mature],signals:[mature,{...launch,multiple:1.1,peakMultiple:1.2,firstSeenAt:Date.now()}]};render();`,context);
+  assert.equal(elements.get('radar').children.length,1);
+  assert.equal(elements.get('signals').children.length,1);
+  assert.equal(vm.runInContext('launchRows(snapshot.radar).length',context),1);
+  vm.runInContext('paper.auto=true;runAutoBuys();',context);
+  assert.equal(vm.runInContext('Object.keys(paper.holds).length',context),1);
+  vm.runInContext('radarUi.tab="trending";render();',context);
+  assert.equal(vm.runInContext('launchRows(snapshot.radar).length',context),0);
+  assert.equal(elements.get('signals').children[0].tagName,'p');
+  storage.set('becsPaperV1',JSON.stringify({cashSol:7,holds:{saved:{symbol:'Keep'}},bought:{saved:true},settings:{maxCap:0,maxAge:0,minLiquidity:0}}));
+  assert.equal(vm.runInContext('loadPaper().settings.maxCap',context),1000000);
+  assert.equal(vm.runInContext('loadPaper().settings.maxAge',context),1440);
+  assert.equal(vm.runInContext('loadPaper().cashSol',context),7);
+  assert.equal(vm.runInContext('loadPaper().holds.saved.symbol',context),'Keep');
   // Every hold gets refreshed, including those beyond the first hundred.
   context.batches=[];
   context.fetch=async(_url,request)=>{const mints=JSON.parse(request.body).mints;context.batches.push(mints.length);return {ok:true,json:async()=>({prices:Object.fromEntries(mints.map(m=>[m,{priceUsd:.01,observedAt:Date.now()}]))})};};
