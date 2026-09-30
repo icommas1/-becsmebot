@@ -4,7 +4,13 @@ All notable repository-level changes are recorded here. Product strategy and pro
 
 ## Unreleased
 
-- Continue operational, security and reliability review of the public paper terminal.
+- Added security, contribution and operations guidance plus explicit data-source-of-truth documentation.
+- Added safe handling for explicit unavailable Price V3 marks and deterministic duplicate-feed normalization.
+- Expanded Playwright coverage to six desktop/mobile/tablet projects and all terminal navigation panels.
+- Added browser security headers, generic provider-facing failures and a production dependency audit in CI.
+- Separated process-health smoke checks from optional strict provider-readiness checks.
+- Limited full history pruning to the scan interval instead of every browser snapshot read.
+- Added validated runtime configuration, graceful shutdown and production-runtime integration coverage.
 
 ## 2026-09-30
 
