@@ -12,8 +12,7 @@ function element(tag) {
 }
 
 test("paper buys use SOL cash, survive radar exit, and sell without a live request", async () => {
-  const html = fs.readFileSync(require.resolve("../../src/web/dashboard.html"), "utf8");
-  const script = html.match(/<script>([\s\S]*?)<\/script>/)[1]
+  const script = fs.readFileSync(require.resolve("../../src/web/assets/js/dashboard.mjs"), "utf8")
     .replace(/render\(\);refresh\(\);setInterval\(refresh,10000\);\s*$/, "");
   const elements = new Map(), storage = new Map();
   const context = vm.createContext({

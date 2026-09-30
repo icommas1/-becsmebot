@@ -8,7 +8,7 @@ function createApp(market) {
   app.use(express.json({limit:"20kb"}));
   app.use((_req,res,next)=>{res.set({
     "Cache-Control":"no-store",
-    "Content-Security-Policy":"default-src 'none'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; connect-src 'self'; font-src 'self'; base-uri 'none'; form-action 'none'; frame-ancestors 'none'; object-src 'none'",
+    "Content-Security-Policy":"default-src 'none'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; connect-src 'self'; font-src 'self'; base-uri 'none'; form-action 'none'; frame-ancestors 'none'; object-src 'none'",
     "Cross-Origin-Resource-Policy":"same-origin",
     "Permissions-Policy":"camera=(), geolocation=(), microphone=(), payment=()",
     "Referrer-Policy":"no-referrer",

@@ -1,0 +1,359 @@
+const STORE = "becsPaperV1";
+const RADAR_UI_STORE = "becsRadarUiV1", TRAIL_STORE = "becsRadarTrailV1";
+const launchDefaults={minLiquidity:2000,minCap:0,maxCap:1000000,minAge:0,maxAge:1440,minHolders:0,minOrganicScore:0,minVolume:0};
+const defaults = { betUsd:1, reserveSol:.02, feeSol:.000005, impactPct:0, ...launchDefaults, radarVersion:2, exitMultiple:0 };
+function saved(key,fallback) { try { return JSON.parse(localStorage.getItem(key)) || fallback; } catch (_) { return fallback; } }
+let radarUi={tab:"recent",source:"5m",sort:"age",direction:"asc",size:"regular",pageSize:20,...saved(RADAR_UI_STORE,{})};
+if(radarUi.launchVersion!==2){radarUi={...radarUi,tab:"recent",sort:"age",direction:"asc",launchVersion:2};}
+if(!["trending","traded","organic","recent"].includes(radarUi.tab)) radarUi.tab="recent";
+if(!["5m","1h","6h","24h"].includes(radarUi.source)) radarUi.source="5m";
+let trail=saved(TRAIL_STORE,{scan:null,points:{}}), radarPage=0;
+if (!trail || typeof trail.points!=="object" || !trail.points) trail={scan:null,points:{}};
+function fresh() { return { cashSol:.4, settings:{...defaults}, holds:{}, bought:{}, activity:[], realizedUsd:0, auto:false }; }
+function loadPaper() {
+  try {
+    const old = JSON.parse(localStorage.getItem(STORE));
+    if (!old || !Number.isFinite(old.cashSol) || old.cashSol < 0 || !old.holds || !old.bought) return fresh();
+    const settings={...defaults,...old.settings};
+    if(old.settings?.radarVersion!==2)Object.assign(settings,launchDefaults,{radarVersion:2});
+    delete settings.autoFeed;
+    for(const [key,value] of Object.entries(defaults))if(typeof value==="number"&&(!Number.isFinite(settings[key])||settings[key]<0))settings[key]=value;
+    if(settings.betUsd<=0)settings.betUsd=1;if(settings.impactPct>50)settings.impactPct=0;if(settings.minOrganicScore>100)settings.minOrganicScore=0;
+    return { ...fresh(), ...old, settings, activity:Array.isArray(old.activity)?old.activity:[],realizedUsd:Number.isFinite(old.realizedUsd)?old.realizedUsd:0,auto:false };
+  } catch (_) { return fresh(); }
+}
+let paper = loadPaper();
+let snapshot = null, prices = {}, priceTimes = {}, refreshing = false;
+let searchRows=[], searchTimer=null, searchStatus="";
+const $ = (id) => document.getElementById(id);
+const usd = (n) => Number.isFinite(n) ? "$" + n.toLocaleString(undefined,{maximumFractionDigits:2,minimumFractionDigits:2}) : "—";
+const tokenPrice = (n) => Number.isFinite(n) && n>0 ? "$"+n.toLocaleString(undefined,{maximumSignificantDigits:6}) : "—";
+const short = (n) => Number.isFinite(n) ? n.toLocaleString(undefined,{maximumSignificantDigits:5}) : "—";
+function save() { try { localStorage.setItem(STORE, JSON.stringify(paper)); } catch (_) { message("Phone storage is full; paper trades may not persist."); } }
+function saveRadar() { try { localStorage.setItem(RADAR_UI_STORE,JSON.stringify(radarUi)); } catch (_) {} }
+function sampleRadar(s) {
+  if(s.trails) {for(const [mint,points] of Object.entries(s.trails)) trail.points[mint]=points;return;}
+  if(!s.lastScanAt||s.lastScanAt===trail.scan)return;
+  trail.scan=s.lastScanAt;const at=Date.parse(s.lastScanAt);
+  for(const row of s.radar||[]) if(num(row.priceUsd)) {const points=trail.points[row.mint]||[];points.push([at,row.priceUsd]);trail.points[row.mint]=points.slice(-1440);}
+}
+let toastTimer;
+function message(value) {
+  $("message").textContent=value;$("toast").textContent=value;
+  clearTimeout(toastTimer);toastTimer=setTimeout(()=>{$("toast").textContent="";},4500);
+}
+function num(value) { const n=Number(value); return Number.isFinite(n) && n>0 ? n : null; }
+function node(tag, className, value) { const el=document.createElement(tag); if(className)el.className=className; if(value!=null)el.textContent=value; return el; }
+async function call(url, options={}) {
+  const response=await fetch(url,{...options,credentials:"same-origin"});
+  if (!response.ok) { const body=await response.json().catch(()=>({}));throw Error(body.error || "Request failed: " + response.status); }
+  return response.json();
+}
+function options() { return {method:"POST",headers:{"Content-Type":"application/json"}}; }
+function recentMark(at, maxAge) { const age=Date.now()-at;return Number.isFinite(at)&&at>0&&age>=0&&age<=maxAge; }
+function solUsd() { return recentMark(snapshot?.solPriceAt,180000)?num(snapshot?.solUsd):null; }
+function paperReady(row) { return Boolean(num(row?.priceUsd) && !row.isSus && recentMark(row.observedAt,180000)); }
+function passes(row) {
+  const s=paper.settings, age=(Date.now()-Date.parse(row.createdAt))/60000;
+  if(!paperReady(row)||!Number.isFinite(age)||age<0||!num(row.marketCap))return false;
+  if(s.minLiquidity && (!Number.isFinite(row.liquidityUsd)||row.liquidityUsd<s.minLiquidity))return false;
+  if(s.minCap && row.marketCap<s.minCap)return false;
+  if(s.maxCap && row.marketCap>s.maxCap)return false;
+  if(s.minHolders && (!Number.isFinite(row.holders)||row.holders<s.minHolders))return false;
+  if(s.minOrganicScore && (!Number.isFinite(row.organicScore)||row.organicScore<s.minOrganicScore))return false;
+  if(s.minVolume && (!Number.isFinite(row.volume5m)||row.volume5m<s.minVolume))return false;
+  if(s.minAge && age<s.minAge || s.maxAge && age>s.maxAge)return false;
+  return true;
+}
+function selectedFeed(){return radarUi.tab==="recent"?"recent":radarUi.tab+":"+radarUi.source;}
+function matchesTopic(row){return (row.feeds||[]).includes(selectedFeed());}
+function launchRows(rows){return rows.filter(row=>passes(row)&&matchesTopic(row));}
+function renderFilterSummary(){
+  const s=paper.settings;$("filter-summary").textContent=(s.maxAge?"≤"+short(s.maxAge/60)+"h":"Any age")+" · MC "+(s.maxCap?"≤"+usd(s.maxCap):"any")+" · liquidity ≥"+usd(s.minLiquidity);
+}
+function record(kind,text,details={}) { paper.activity.unshift({at:new Date().toISOString(),kind,text,...details});paper.activity.length=Math.min(paper.activity.length,500); }
+function buy(row, automatic=false, amount=paper.settings.betUsd) {
+  if(!Number.isFinite(amount)||amount<=0)return message("Enter a positive paper trade amount.");
+  const rate=solUsd(), price=num(row.priceUsd), s={...paper.settings,betUsd:amount};
+  if (row.isSus) return message("Jupiter flagged this token as suspicious.");
+  if (!passes(row)) return message("This token is outside your paper filters.");
+  if (paper.bought[row.mint]) return message("Already paper bought this mint once.");
+  if (!rate || !price || !paperReady(row)) return message("Need a current SOL and token price for a paper buy.");
+  const solCost=s.betUsd/rate, total=solCost+s.feeSol;
+  if (paper.cashSol+1e-10<total+s.reserveSol) return message("Paper cash would fall below your SOL reserve.");
+  const entry=price*(1+s.impactPct/100);
+  paper.cashSol=Math.max(0,paper.cashSol-total);
+  paper.holds[row.mint]={mint:row.mint,symbol:row.symbol,qty:s.betUsd/entry,entryPrice:entry,entryCap:row.marketCap,
+    investedUsd:s.betUsd,feesUsd:s.feeSol*rate,boughtAt:new Date().toISOString(),lastPrice:price};
+  paper.bought[row.mint]={...row};
+  prices[row.mint]={priceUsd:price,source:"tokens",marketCap:row.marketCap,liquidityUsd:row.liquidityUsd};
+  record("buy",(automatic?"Auto ":"")+"paper buy " + row.symbol + " " + usd(s.betUsd),{mint:row.mint,symbol:row.symbol,sizeUsd:s.betUsd,marketCap:row.marketCap,source:automatic?selectedFeed():"manual"});save();render();
+  if (!automatic) message("Paper bought " + row.symbol + " for " + usd(s.betUsd) + ".");
+}
+function sellPaper(mint,pct,dollars=null,automatic=false) {
+  const hold=paper.holds[mint], rate=solUsd();
+  const price=num(prices[mint]?.priceUsd);
+  if (!hold || !rate || !price || prices[mint]?.source!=="jupiter-v3" || !recentMark(priceTimes[mint],120000))
+    return message("Need a recent Jupiter Price V3 mark for a paper sale.");
+  const unit=price*(1-paper.settings.impactPct/100);
+  const fraction=dollars==null?pct/100:Math.min(1,dollars/(hold.qty*unit)), gross=hold.qty*fraction*unit;
+  if(!Number.isFinite(fraction)||fraction<=0||fraction>1)return message("Invalid sale amount.");
+  const fee=paper.settings.feeSol*rate, net=gross-fee;
+  if (net<=0) return message("Paper sale amount is smaller than the estimated fee.");
+  const basis=hold.investedUsd*fraction+hold.feesUsd*fraction;
+  paper.cashSol+=net/rate;paper.realizedUsd+=net-basis;
+  hold.qty*=1-fraction;hold.investedUsd*=1-fraction;hold.feesUsd*=1-fraction;
+  if (fraction===1 || hold.qty<1e-12) delete paper.holds[mint];
+  record("sell",(automatic?"Auto ":"")+"Paper sold " + usd(gross) + " " + hold.symbol + " · " + usd(net) + " after fee",{mint,symbol:hold.symbol,sizeUsd:gross,marketCap:currentToken()?.mint===mint?currentToken().marketCap:null,source:automatic?"auto target":"manual"});save();render();
+  message("Paper sold " + usd(gross) + " of " + hold.symbol + ".");
+}
+function renderWallet() {
+  const holds=Object.values(paper.holds), rate=solUsd();
+  const value=holds.reduce((sum,h)=>sum+h.qty*(num(prices[h.mint]?.priceUsd)||num(h.lastPrice)||0),0);
+  const unrealized=holds.reduce((sum,h)=>sum+h.qty*(num(prices[h.mint]?.priceUsd)||num(h.lastPrice)||0)-h.investedUsd-h.feesUsd,0);
+  $("hud-cash").textContent="CASH "+short(paper.cashSol)+" SOL";$("hud-pnl").textContent="P/L "+usd(paper.realizedUsd+unrealized);
+  $("cash").textContent=short(paper.cashSol)+" SOL";$("open-value").textContent=usd(value)+(holds.some(h=>!recentMark(priceTimes[h.mint],120000))?" · estimated":"");
+  const pnl=paper.realizedUsd+unrealized;$("profit").textContent=usd(pnl);$("profit").className=pnl>=0?"good":"bad";
+  $("hold-count").textContent=String(holds.length);
+  $("sol-rate").textContent=rate?"SOL "+usd(rate):"SOL price pending";
+  $("auto").textContent=paper.auto?"Stop auto paper":"Start auto paper";
+  $("auto-label").textContent="Auto paper: "+(paper.auto?"on":"off");
+  $("auto-label").className="pill "+(paper.auto?"paper":"");
+}
+function sparkline(mint) {
+  const points=trail.points[mint]||[], wrap=node("span","spark");
+  const svg=document.createElementNS("http://www.w3.org/2000/svg","svg");
+  svg.setAttribute("viewBox","0 0 112 38");svg.setAttribute("width","112");svg.setAttribute("height","38");
+  svg.setAttribute("role","img");svg.setAttribute("aria-label",points.length>1?"Observed price trail from "+points.length+" scans":"Collecting price history");
+  if (points.length>1) {
+    const values=points.map((p)=>p[1]), low=Math.min(...values), high=Math.max(...values), span=high-low||high*.01||1;
+    const duration=points.at(-1)[0]-points[0][0]||1;
+    const xy=values.map((v,i)=>(3+(points[i][0]-points[0][0])*106/duration).toFixed(1)+","+(35-(v-low)/span*32).toFixed(1)).join(" ");
+    const line=document.createElementNS("http://www.w3.org/2000/svg","polyline");
+    line.setAttribute("points",xy);line.setAttribute("fill","none");line.setAttribute("stroke",values.at(-1)>=values[0]?"#59d6a2":"#ff8585");
+    line.setAttribute("stroke-width","2");line.setAttribute("stroke-linejoin","round");svg.append(line);
+  } else {
+    const dot=document.createElementNS("http://www.w3.org/2000/svg","circle");
+    dot.setAttribute("cx","56");dot.setAttribute("cy","19");dot.setAttribute("r","3");dot.setAttribute("fill","#70b8ff");svg.append(dot);
+  }
+  wrap.append(svg);return wrap;
+}
+function ageMinutes(row) { const time=Date.parse(row.createdAt);return Number.isFinite(time)?Math.max(0,(Date.now()-time)/60000):null; }
+function ageText(row) {const age=ageMinutes(row);return age==null?"age —":age<60?Math.floor(age)+"m":age<1440?Math.floor(age/60)+"h":Math.floor(age/1440)+"d";}
+function sortValue(row) {
+  const interval=radarUi.source, feed=radarUi.tab+":"+interval;
+  switch(radarUi.sort) {
+    case "rank":return -(row.ranks?.[radarUi.tab==="recent"?"recent":feed]||999);
+    case "change":return row["change"+interval];
+    case "volume":return row["volume"+interval];
+    case "age":return ageMinutes(row);
+    default:return row[radarUi.sort];
+  }
+}
+function renderRadar() {
+  const box=$("radar");box.replaceChildren();
+  const query=$("radar-search").value.trim().toLowerCase();
+  const feed=selectedFeed();
+  const allRows=query?[...new Map([...(snapshot?.radar||[]),...searchRows].map(row=>[row.mint,row])).values()]:(snapshot?.radar||[]);
+  const candidates=allRows.filter(row=>query?(row.symbol.toLowerCase().includes(query)||row.name.toLowerCase().includes(query)||row.mint.toLowerCase().includes(query)):matchesTopic(row));
+  let rows=candidates.filter(passes);
+  rows.sort((a,b)=>{
+    const x=sortValue(a),y=sortValue(b);
+    if(x==null)return y==null?0:1;if(y==null)return -1;
+    return (x-y)*(radarUi.direction==="desc"?-1:1);
+  });
+  const size=[10,20,50].includes(Number(radarUi.pageSize))?Number(radarUi.pageSize):20;
+  const pages=Math.max(1,Math.ceil(rows.length/size));radarPage=Math.min(radarPage,pages-1);
+  const feedInfo=snapshot?.feeds?.[feed];
+  $("radar-count").textContent=rows.length+" matches · "+(candidates.length-rows.length)+" filtered out"+(feedInfo?.error?" · feed delayed":"");
+  $("page-label").textContent="Page "+(radarPage+1)+" of "+pages;
+  $("previous").disabled=radarPage===0;$("next").disabled=radarPage>=pages-1;
+  for(const row of rows.slice(radarPage*size,(radarPage+1)*size))box.append(tokenCard(row));
+  if(!rows.length)box.append(node("p","empty-state",query&&searchStatus==="Searching Jupiter…"?searchStatus:feedInfo?.error?"Feed delayed: "+feedInfo.error:"No fresh launches match these filters. Adjust Launch filters above."));
+  renderInstrument(rows.slice(0,40));
+  for(const b of $("radar-tabs").children) {b.className=b.dataset.tab===radarUi.tab?"selected":"";b.setAttribute("aria-pressed",String(b.dataset.tab===radarUi.tab));}
+  $("sort-direction").textContent=radarUi.sort==="age"?(radarUi.direction==="asc"?"Newest first":"Oldest first"):(radarUi.direction==="desc"?"Highest first ↓":"Lowest first ↑");
+}
+function renderHolds() {
+  const box=$("paper-holds");box.replaceChildren();const holds=Object.values(paper.holds);
+  for (const h of holds) {
+    const mark=num(prices[h.mint]?.priceUsd)||num(h.lastPrice);
+    const value=h.qty*(mark||0), pnl=value-h.investedUsd-h.feesUsd;
+    const row=node("div","item");row.append(node("div","name",h.symbol+" · "+short(h.qty)+" tokens"));
+    row.append(node("div","meta","Entry "+tokenPrice(h.entryPrice)+" · now "+tokenPrice(mark)+" · entry cap "+usd(h.entryCap)+" · now cap "+usd(prices[h.mint]?.marketCap)+" · liquidity "+usd(prices[h.mint]?.liquidityUsd)));
+    row.append(node("div",pnl>=0?"good":"bad","Value "+usd(value)+" · P/L "+usd(pnl)+" ("+(h.investedUsd?short(pnl/(h.investedUsd+h.feesUsd)*100):"—")+"%)"));
+    if (!recentMark(priceTimes[h.mint],120000)) row.append(node("small","bad","Price may be stale"));
+    const actions=node("div","actionbar");for(const [label,amount] of [["Sell $1",1],["Sell all",null]]) { const b=node("button","secondary",label);b.onclick=()=>sellPaper(h.mint,100,amount);actions.append(b); }
+    row.append(actions);infoLinks(row,h.mint);box.append(row);
+  }
+  if (!holds.length) box.append(node("p","","No paper holds yet."));
+  const activity=$("activity");activity.replaceChildren();for(const entry of paper.activity.slice(0,100)) activity.append(node("div","item",new Date(entry.at).toLocaleString()+" · "+entry.text));
+  if (!paper.activity.length) activity.append(node("p","","No paper activity yet."));
+}
+function render() { renderFilterSummary();renderWallet();renderRadar();renderHolds();renderSignals(); }
+let marking=false,lastMarkAt=0;
+async function refreshPrices(force=false) {
+  const mints=Object.keys(paper.holds);if(!mints.length||marking||!force&&Date.now()-lastMarkAt<30000)return;
+  marking=true;
+  try {
+    for(let i=0;i<mints.length;i+=100) {
+      const chunk=mints.slice(i,i+100),result=await call("/api/paper/prices",{...options(),body:JSON.stringify({mints:chunk})});
+      for(const mint of chunk) {if(!paper.holds[mint])continue;const data=result.prices[mint];
+        if(num(data?.priceUsd)){prices[mint]={...data,source:"jupiter-v3"};priceTimes[mint]=data.observedAt;paper.holds[mint].lastPrice=data.priceUsd;}
+        else {delete prices[mint];delete priceTimes[mint];}
+      }
+    }
+    lastMarkAt=Date.now();runAutoExits();save();render();
+  }catch(error){message("Paper price update: "+error.message);}
+  finally{marking=false;}
+}
+function runAutoBuys() {if(paper.auto)for(const row of launchRows(snapshot?.radar||[]))if(!paper.bought[row.mint])buy(row,true);}
+function runAutoExits() {
+  if(!paper.auto||paper.settings.exitMultiple<=1)return;
+  for(const h of Object.values(paper.holds))if(num(prices[h.mint]?.priceUsd)/h.entryPrice>=paper.settings.exitMultiple&&!h.autoExited) {
+    const before=h.qty;sellPaper(h.mint,100,1,true);
+    if(h.qty<before&&paper.holds[h.mint])paper.holds[h.mint].autoExited=true;
+  }
+}
+function infoLinks(box,mint) {
+  box.append(node("small","mono",mint));const actions=node("div","actionbar"),copy=node("button","secondary","Copy CA"),link=node("a","link","Dex Screener");
+  copy.onclick=async()=>{try{await navigator.clipboard.writeText(mint);message("Token address copied.");}catch(_){message("Copy this address: "+mint);}};
+  link.href="https://dexscreener.com/solana/"+mint;link.target="_blank";link.rel="noopener noreferrer";actions.append(copy,link);box.append(actions);
+}
+function renderSignals() {
+  const box=$("signals");box.replaceChildren();$("signal-scope").textContent=selectedFeed()+" / launch filters";
+  for(const signal of launchRows(snapshot?.signals||[]).slice(0,100)) {
+    const item=node("button","rail-contact");item.type="button";item.onclick=()=>selectToken(signal);
+    const state=signalState(signal);item.append(node("span","state state-"+state.toLowerCase(),stateIcon(state)+" "+state),node("strong","",signal.symbol),node("span","rail-multiple",short(signal.multiple)+"×"),node("small","",ageText(signal)+" · MC "+compactUsd(signal.marketCap)),sparkline(signal.mint));box.append(item);
+  }
+  if(!box.children.length)box.append(node("p","empty-state","No launches match this source and filters."));
+  const feeds=$("feeds");feeds.replaceChildren();for(const [name,status] of Object.entries(snapshot?.feeds||{}))feeds.append(node("div","item",name+" · "+(status.count??0)+" tokens · "+(status.error||status.at||"pending")));
+  renderDock();renderTape();
+}
+async function refresh() {
+  if (refreshing) return;refreshing=true;
+  try {
+    const s=await call("/api/basket");snapshot=s;sampleRadar(s);
+    const scanned=s.lastScanAt?new Date(s.lastScanAt).toLocaleTimeString():"pending";
+    $("status").textContent=(s.paused?"Scans paused":s.running?"Scanning":"Updated")+" · "+scanned+(s.lastError?" · "+s.lastError:"");
+    $("market-status").textContent="Jupiter scan "+scanned+(s.lastError?" · Some data delayed":" · 5m / 1h / 6h / 24h feeds");
+    document.body.dataset.scanning=String(!!s.running);$("scan-state").textContent=s.running?"SCANNING":s.lastError?"DELAYED":"REST / 60s";
+    observeContacts(s);runAutoBuys();render();await refreshPrices();
+  } catch(error) { $("status").textContent=error.message;message(error.message); }
+  finally { refreshing=false; }
+}
+let selectedMint=null,selectedFallback=null,dockAmount=1;
+const seenContacts=new Set(),contactTape=[];
+function compactUsd(value){return Number.isFinite(value)?'$'+Intl.NumberFormat(undefined,{notation:'compact',maximumFractionDigits:1}).format(value):'—';}
+function signalState(row){
+ if(paper.holds[row.mint]?.autoExited)return 'EXIT';
+ const change=row.change5m;if(Number.isFinite(change)&&change<0)return 'COOLING';
+ if(Number.isFinite(change)&&change>=5)return 'HEATING';
+ if(ageMinutes(row)!=null&&ageMinutes(row)<5)return 'NEW';
+ return (row.feeds||[]).some(feed=>feed.startsWith('trending:'))||change>0?'TRENDING':'NEW';
+}
+function stateIcon(state){return {NEW:'◇',HEATING:'↗',TRENDING:'◆',COOLING:'↘',EXIT:'⊗'}[state];}
+function signalStrength(row){const organic=Number.isFinite(row.organicScore)?row.organicScore:0,change=Number.isFinite(row.change5m)?Math.max(0,row.change5m):0,volume=Number.isFinite(row.volume5m)?row.volume5m:0;return Math.min(5,Math.max(1,Math.ceil((organic+Math.min(30,change)+Math.min(30,Math.log10(volume+1)*6))/25)));}
+function strengthBars(row){const wrap=node('span','strength');wrap.setAttribute('aria-label','Observed activity '+signalStrength(row)+' of 5; heuristic, not wallet score');for(let i=1;i<=5;i++)wrap.append(node('i',i<=signalStrength(row)?'lit':''));return wrap;}
+function tokenCard(row){
+ const card=node('article','token-contact'+(selectedMint===row.mint?' selected':'')),state=signalState(row);
+ const head=node('div','contact-head'),select=node('button','contact-select',row.symbol);select.type='button';select.onclick=()=>selectToken(row);head.append(select,node('span','state state-'+state.toLowerCase(),stateIcon(state)+' '+state),strengthBars(row));card.append(head);
+ const meta=node('div','contact-meta',ageText(row)+' · '+(row.launchpad||'Jupiter')+' · '+(row.isVerified?'Verified':'Unverified'));card.append(meta);
+ const stats=node('div','contact-stats');for(const [label,value] of [['MC',compactUsd(row.marketCap)],['LIQ',compactUsd(row.liquidityUsd)],['VOL '+radarUi.source,compactUsd(row['volume'+radarUi.source])],['ORGANIC',row.organicScore==null?'—':short(row.organicScore)+'/100']]){const cell=node('span');cell.append(node('small','',label),node('b','',value));stats.append(cell);}card.append(stats);
+ const bottom=node('div','contact-bottom'),mark=node('span','',tokenPrice(row.priceUsd));bottom.append(mark,sparkline(row.mint));card.append(bottom);
+ const actions=node('div','actionbar'),buyButton=node('button','',paper.bought[row.mint]?'BOUGHT':'BUY $1'),sellButton=node('button','secondary','SELL $1'),inspect=node('button','secondary','DETAILS');
+ buyButton.disabled=!passes(row)||!!paper.bought[row.mint]||!solUsd();buyButton.onclick=()=>{selectedMint=row.mint;selectedFallback=row;buy(row,false,1);refreshPrices(true);};sellButton.disabled=!canSell(row.mint);sellButton.onclick=()=>sellPaper(row.mint,100,1);inspect.onclick=()=>selectToken(row);actions.append(buyButton,sellButton,inspect);card.append(actions);return card;
+}
+function canSell(mint){return Boolean(paper.holds[mint]&&solUsd()&&prices[mint]?.source==='jupiter-v3'&&num(prices[mint]?.priceUsd)&&recentMark(priceTimes[mint],120000));}
+function currentToken(){return (snapshot?.radar||[]).find(row=>row.mint===selectedMint)||searchRows.find(row=>row.mint===selectedMint)||selectedFallback;}
+function selectToken(row,forceSheet=false){selectedMint=row.mint;selectedFallback=row;renderDock();renderSheet();if(forceSheet||typeof matchMedia==='undefined'||matchMedia('(max-width:800px)').matches)$('token-sheet').showModal?.();}
+function renderDock(){
+ const row=currentToken();const context=$('execution-context');context.replaceChildren();if(row){context.append(node('div','contact-head',row.symbol+' / '+stateIcon(signalState(row))+' '+signalState(row)),node('p','contact-meta',ageText(row)+' · '+(row.launchpad||'Jupiter')+' · '+(row.isVerified?'Verified':'Unverified')),node('p','',tokenPrice(row.priceUsd)),node('p','contact-meta','MC '+compactUsd(row.marketCap)+' · LIQ '+compactUsd(row.liquidityUsd)+' · VOL '+compactUsd(row.volume5m)),sparkline(row.mint));infoLinks(context,row.mint);}else context.append(node('p','micro-note','Select a blip or token. The paper execution dock follows your selection.'));
+ $('dock-token').textContent=row?row.symbol+' · '+compactUsd(row.marketCap):'SELECT TOKEN';
+ $('dock-buy').textContent='BUY $'+short(dockAmount);$('dock-sell').textContent='SELL $'+short(dockAmount);
+ $('dock-buy').disabled=!row||!passes(row)||!!paper.bought[row.mint]||!solUsd();$('dock-sell').disabled=!row||!canSell(row.mint);
+ $('dock-status').textContent=!row?'Select a launch · real trading off':!paperReady(row)?'Price stale · paper buy unavailable':paper.bought[row.mint]?'Bought once · sells need fresh V3 marks':'Simulated fill · fee extra';
+ for(const button of $('dock-sizes').children)button.className=Number(button.dataset.amount)===dockAmount?'selected':'';
+ if($('token-sheet').open)renderSheet();
+}
+function renderSheet(){const row=currentToken();if(!row)return;$('sheet-title').textContent=row.symbol+' / '+stateIcon(signalState(row))+' '+signalState(row);const box=$('sheet-content');box.replaceChildren();box.append(node('p','',row.name||row.symbol),node('p','contact-meta',ageText(row)+' · '+(row.launchpad||'Jupiter')+' · '+(row.isVerified?'Verified':'Unverified')),node('p','',tokenPrice(row.priceUsd)+' · MC '+compactUsd(row.marketCap)+' · liquidity '+compactUsd(row.liquidityUsd)),sparkline(row.mint),node('p','micro-note','Momentum uses observed 5m change. Activity bars use organic score, volume and momentum; wallet scoring is unavailable. Unverified does not mean safe.'),node('p','micro-note','Feeds: '+(row.feeds||[]).join(' / ')));infoLinks(box,row.mint);$('sheet-buy').disabled=$('dock-buy').disabled;$('sheet-sell').disabled=$('dock-sell').disabled;$('sheet-buy').textContent='Paper buy $'+short(dockAmount);$('sheet-sell').textContent='Paper sell $'+short(dockAmount);}
+function executeBuy(){const row=currentToken();if(!row)return;buy(row,false,dockAmount);refreshPrices(true);renderDock();}
+function executeSell(){if(selectedMint)sellPaper(selectedMint,100,dockAmount);renderDock();}
+for(const amount of [1,5,10]){const button=node('button','','$'+amount);button.dataset.amount=String(amount);button.onclick=()=>{dockAmount=amount;$('dock-amount').value=amount;renderDock();};$('dock-sizes').append(button);}
+$('dock-amount').onchange=()=>{const amount=Number($('dock-amount').value);if(!Number.isFinite(amount)||amount<=0){$('dock-amount').value=dockAmount;return message('Enter a positive dollar amount.');}dockAmount=amount;renderDock();};
+$('dock-token').onclick=()=>{const row=currentToken();if(row)selectToken(row,true);else setTerminalView('radar');};$('dock-buy').onclick=executeBuy;$('dock-sell').onclick=executeSell;$('sheet-buy').onclick=executeBuy;$('sheet-sell').onclick=executeSell;$('sheet-close').onclick=()=>$('token-sheet').close?.();
+function renderInstrument(rows){
+ const box=$('radar-map');box.replaceChildren();const svg=document.createElementNS('http://www.w3.org/2000/svg','svg');svg.setAttribute('viewBox','0 0 600 300');svg.setAttribute('preserveAspectRatio','none');svg.setAttribute('aria-hidden','true');
+ const add=(tag,attrs)=>{const element=document.createElementNS('http://www.w3.org/2000/svg',tag);for(const [key,value] of Object.entries(attrs))element.setAttribute(key,String(value));svg.append(element);return element;};
+ for(const r of [48,88,128])add('ellipse',{cx:300,cy:150,rx:r*1.7,ry:r,fill:'none',stroke:'#1e4144','stroke-width':1});
+ add('line',{x1:65,y1:150,x2:535,y2:150,stroke:'#1e4144'});add('line',{x1:300,y1:15,x2:300,y2:285,stroke:'#1e4144'});add('circle',{cx:300,cy:150,r:4,fill:'#b8fa52'});box.append(svg);
+ rows.forEach(row=>{let hash=0;for(const character of row.mint)hash=(hash*31+character.charCodeAt(0))>>>0;const angle=(hash%360)*Math.PI/180,age=ageMinutes(row)||0,radius=45+(hash%18)+Math.min(1,age/(paper.settings.maxAge||1440))*65;
+ const dot=node('button','radar-blip state-'+signalState(row).toLowerCase());dot.type='button';dot.style.left=(50+Math.cos(angle)*radius*1.7/6)+'%';dot.style.top=(50+Math.sin(angle)*radius/3)+'%';dot.style.setProperty('--blip',8+signalStrength(row)*2+'px');dot.setAttribute('aria-label',row.symbol+' '+signalState(row)+' '+ageText(row)+' market cap '+compactUsd(row.marketCap));dot.title=row.symbol+' · '+signalState(row);dot.onclick=()=>selectToken(row);dot.append(node('span','',row.symbol.slice(0,10)));box.append(dot);
+ });
+ if(!rows.length)box.append(node('div','radar-empty','WAITING FOR ELIGIBLE CONTACTS'));else box.append(node('span','radar-total',rows.length+' CONTACTS'));
+}
+function observeContacts(s){for(const row of launchRows(s.radar||[])){if(seenContacts.has(row.mint))continue;seenContacts.add(row.mint);contactTape.unshift({at:new Date().toISOString(),text:'DETECTED → '+row.symbol+' · MC '+compactUsd(row.marketCap)+' · '+selectedFeed()});}contactTape.length=Math.min(contactTape.length,50);if(seenContacts.size>5000)seenContacts.clear();}
+function renderTape(){const tape=$('trade-tape');tape.replaceChildren();const entries=[...contactTape,...paper.activity.slice(0,20)].sort((a,b)=>Date.parse(b.at)-Date.parse(a.at)).slice(0,30);for(const entry of entries)tape.append(node('span','tape-entry',new Date(entry.at).toLocaleTimeString()+' / '+entry.text+(entry.source?' · MC '+compactUsd(entry.marketCap)+' · '+entry.source:'')));if(!entries.length)tape.append(node('span','tape-entry','Awaiting detections · Jupiter REST scans every 60s · paper activity only'));
+}
+
+for(const input of document.querySelectorAll("[data-setting]")) {
+  const name=input.dataset.setting;input.value=paper.settings[name];input.addEventListener("change",()=>{
+    const value=Number(input.value);if (!Number.isFinite(value)||value<0||(name==="betUsd"&&value<=0)||(name==="impactPct"&&value>50)||(name==="minOrganicScore"&&value>100)) {input.value=paper.settings[name];return message("Enter a valid value for this setting.");}
+    const next={...paper.settings,[name]:value};if(next.maxCap&&next.minCap>next.maxCap||next.maxAge&&next.minAge>next.maxAge){input.value=paper.settings[name];return message("Minimum cannot exceed maximum.");}paper.settings=next;radarPage=0;save();render();message("Shared settings saved.");
+  });
+}
+$("cash-input").value=paper.cashSol;
+$("set-cash").onclick=()=>{const value=Number($("cash-input").value);if(!Number.isFinite(value)||value<0) return message("Enter a valid SOL amount.");paper.cashSol=value;record("adjust","Set paper cash to "+short(value)+" SOL");save();render();message("Paper cash updated.");};
+$("reset-paper").onclick=()=>{if(!confirm("Reset paper holds, history, and bought-once list?"))return;const cash=Number($("cash-input").value);const settings=paper.settings;paper={...fresh(),cashSol:Number.isFinite(cash)&&cash>=0?cash:.4,settings};prices={};priceTimes={};save();render();message("Paper wallet reset.");};
+$("fresh-preset").onclick=()=>{Object.assign(paper.settings,launchDefaults);radarUi.tab="recent";radarUi.sort="age";radarUi.direction="asc";$("radar-sort").value="age";radarPage=0;for(const input of document.querySelectorAll("[data-setting]"))input.value=paper.settings[input.dataset.setting];save();saveRadar();render();message("Fresh-launch filters restored.");};
+$("auto").onclick=()=>{paper.auto=!paper.auto;save();render();message(paper.auto?"Auto paper on while this page is open.":"Auto paper off.");runAutoBuys();};
+for(const [tab,label] of [["recent","New launches"],["trending","Trending launches"],["traded","Active launches"],["organic","Organic launches"]]) {
+  const b=node("button","",label);b.dataset.tab=tab;b.onclick=()=>{radarUi.tab=tab;radarPage=0;saveRadar();render();};$("radar-tabs").append(b);
+}
+$("radar-search").oninput=()=>{
+  radarPage=0;clearTimeout(searchTimer);
+  const query=$("radar-search").value.trim();
+  searchRows=[];searchStatus=query.length<2?"Enter at least 2 characters":"Searching Jupiter…";renderRadar();
+  if(query.length<2)return;
+  searchTimer=setTimeout(async()=>{
+    try {
+      const result=await call("/api/search?q="+encodeURIComponent(query));
+      if($("radar-search").value.trim()!==query)return;
+      searchRows=result.rows;searchStatus=result.rows.length+" Jupiter search results";renderRadar();
+    } catch(error) {if($("radar-search").value.trim()===query){searchStatus="Search: "+error.message;renderRadar();}}
+  },450);
+};
+$("radar-source").value=radarUi.source;$("radar-source").onchange=()=>{radarUi.source=$("radar-source").value;radarPage=0;saveRadar();render();};
+$("radar-sort").value=radarUi.sort;$("radar-sort").onchange=()=>{radarUi.sort=$("radar-sort").value;radarPage=0;saveRadar();render();};
+$("sort-direction").onclick=()=>{radarUi.direction=radarUi.direction==="desc"?"asc":"desc";radarPage=0;saveRadar();render();};
+for(const button of document.querySelectorAll("[data-sort]")) button.onclick=()=>{
+  radarUi.sort=button.dataset.sort;$("radar-sort").value=radarUi.sort;radarPage=0;saveRadar();render();
+};
+$("text-size").value=radarUi.size;
+function applyTextSize() {document.documentElement.style.setProperty("--scale",{small:.9,regular:1,large:1.2}[radarUi.size]||1);}
+saveRadar();applyTextSize();$("text-size").onchange=()=>{radarUi.size=$("text-size").value;applyTextSize();saveRadar();};
+$("page-size").value=String(radarUi.pageSize);$("page-size").onchange=()=>{radarUi.pageSize=Number($("page-size").value);radarPage=0;saveRadar();render();};
+$("previous").onclick=()=>{radarPage=Math.max(0,radarPage-1);renderRadar();};
+$("next").onclick=()=>{radarPage++;renderRadar();};
+$("refresh").onclick=refresh;
+$("brand-logo").onclick=()=>$("brand-sheet").showModal();
+$("brand-close").onclick=()=>$("brand-sheet").close();
+function setTerminalView(view) {
+  const valid=["radar","paper","activity","settings","signals","connections"];
+  view=valid.includes(view)?view:"radar";
+  document.body.dataset.view=view;
+  $("mode-label").textContent="PAPER MODE";
+  $("mode-label").className="pill paper";
+  for(const button of document.querySelectorAll(".view-nav [data-view]")) {
+    button.className=button.dataset.view===view?"selected":"";
+    button.setAttribute("aria-current",button.dataset.view===view?"page":"false");
+  }
+  const dock=view==="radar"||view==="signals"?"paper":view;
+  for(const panel of document.querySelectorAll("[data-view-panel]")) panel.className=
+    panel.dataset.viewPanel===dock?"dock-panel active":"dock-panel";
+  try { localStorage.setItem("becsTerminalView",view); } catch (_) {}
+}
+for(const button of document.querySelectorAll(".view-nav [data-view]"))
+  button.onclick=()=>setTerminalView(button.dataset.view);
+setTerminalView(localStorage.getItem("becsTerminalView")||"radar");
+render();refresh();setInterval(refresh,10000);

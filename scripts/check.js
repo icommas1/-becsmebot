@@ -8,7 +8,7 @@ function check(dir){for(const entry of fs.readdirSync(dir,{withFileTypes:true}))
 for(const dir of ["src","scripts","test"])check(dir);
 new vm.Script(fs.readFileSync("playwright.config.js","utf8"),{filename:"playwright.config.js"});
 const html=fs.readFileSync("src/web/dashboard.html","utf8");
-new vm.Script(html.match(/<script>([\s\S]*?)<\/script>/)[1],{filename:"dashboard inline script"});
+if(!html.includes('<script type="module" src="/assets/js/dashboard.mjs"></script>'))throw Error("Dashboard module entry point is missing");
 const ids=[...html.matchAll(/\bid="([^"]+)"/g)].map(m=>m[1]);
 if(new Set(ids).size!==ids.length)throw Error("Duplicate terminal element ID");
 require("../src/api/validation");
