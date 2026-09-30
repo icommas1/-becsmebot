@@ -13,7 +13,7 @@ const SCAN_MS = 5 * 60 * 1000;
 // Automatic live trading is deliberately disabled.
 const TRADING_ENABLED = false;
 const PRICE_CACHE_MS = 20000;
-const JUPITER_GAP_MS = 1100;
+const JUPITER_GAP_MS = 2200;
 
 const apiKey = process.env.JUPITER_API_KEY;
 const dashboardKey = process.env.DASHBOARD_KEY;
@@ -85,16 +85,26 @@ async function paperPrices(mints) {
 async function jupiter(url) {
   // A single queue covers scans, searches, and paper price updates on the Free tier.
   const request = jupiterQueue.catch(() => {}).then(async () => {
-    const delay = Math.max(0, nextJupiterAt - Date.now());
-    if (delay) await new Promise((resolve) => setTimeout(resolve, delay));
-    nextJupiterAt = Date.now() + JUPITER_GAP_MS;
-    const response = await fetch("https://api.jup.ag" + url, {
-      headers: { "x-api-key": apiKey }, signal: AbortSignal.timeout(10000)
-    });
-    const data = await response.json();
-    if (!response.ok) throw new Error("Jupiter " + response.status + ": " +
-      (data.error || data.message || "request failed"));
-    return data;
+    for (let attempt = 0; attempt < 2; attempt++) {
+      const delay = Math.max(0, nextJupiterAt - Date.now());
+      if (delay) await new Promise((resolve) => setTimeout(resolve, delay));
+      nextJupiterAt = Date.now() + JUPITER_GAP_MS;
+      const response = await fetch("https://api.jup.ag" + url, {
+        headers: { "x-api-key": apiKey }, signal: AbortSignal.timeout(10000)
+      });
+      const data = await response.json();
+      if (response.ok) return data;
+      if (response.status === 429 && attempt === 0) {
+        const reset = Number(response.headers.get("x-ratelimit-reset"));
+        const wait = Number.isFinite(reset) && reset > 0
+          ? Math.max(JUPITER_GAP_MS, reset * 1000 - Date.now() + 250)
+          : 5000;
+        nextJupiterAt = Date.now() + Math.min(wait, 60000);
+        continue;
+      }
+      throw new Error("Jupiter " + response.status + ": " +
+        (data.error || data.message || "request failed"));
+    }
   });
   jupiterQueue = request.catch(() => {});
   return request;
@@ -105,6 +115,10 @@ async function scan() {
   state.running = true;
   try {
     const feeds = {}, errors = [];
+    try {
+      const prices = await jupiter("/price/v3?ids=" + SOL);
+      state.solUsd = positive(prices[SOL]?.usdPrice) ?? state.solUsd;
+    } catch (error) { errors.push("SOL price: " + error.message); }
     for (const [name, url] of FEEDS) {
       try {
         const tokens = await jupiter(url);
@@ -131,10 +145,6 @@ async function scan() {
       }
       state.radar = rows;
     }
-    try {
-      const prices = await jupiter("/price/v3?ids=" + SOL);
-      state.solUsd = positive(prices[SOL]?.usdPrice) ?? state.solUsd;
-    } catch (error) { errors.push("SOL price: " + error.message); }
     try { state.walletSol = await connection.getBalance(wallet) / LAMPORTS_PER_SOL; }
     catch (error) { errors.push("wallet balance: " + error.message); }
     state.lastError = errors.length ? errors.join("; ") : null;

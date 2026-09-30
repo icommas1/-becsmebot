@@ -87,11 +87,11 @@ section.side-section { margin:16px 0 0; padding:15px; border-radius:10px; backgr
   <button id="refresh" class="secondary" aria-label="Refresh data">↻ Refresh</button>
 </header>
 <nav class="view-nav" aria-label="Terminal panels">
-  <button data-view="radar" class="selected">Radar</button><button data-view="paper">Paper wallet</button><button data-view="activity">Activity</button><button data-view="settings">Settings</button><button data-view="live">Live wallet</button>
+  <button data-view="radar" class="selected">Markets</button><button data-view="paper">Paper wallet</button><button data-view="activity">Activity</button><button data-view="settings">Settings</button><button data-view="live">Live wallet</button>
 </nav>
 <main id="terminal-grid" class="terminal-grid">
 <section id="radar-panel" class="radar-panel">
-  <div class="rowhead"><div><h2>Jupiter markets</h2><small>Trending · traded · organic · new pools</small></div><span id="radar-count" class="pill">Loading</span></div>
+  <div class="rowhead"><div><h2>Jupiter markets</h2><small id="market-status">Trending · traded · organic · new pools</small></div><span id="radar-count" class="pill">Loading</span></div>
   <nav class="tabs" id="radar-tabs" aria-label="Radar topics"></nav>
   <div class="radar-tools"><label>Find any Jupiter token<input id="radar-search" type="search" placeholder="Name, symbol, or mint"></label><label>Interval<select id="radar-source"><option value="5m">5 minutes</option><option value="1h">1 hour</option></select></label><label>Sort<select id="radar-sort"><option value="rank">Jupiter rank</option><option value="change">Price change</option><option value="organicScore">Organic score</option><option value="marketCap">Market cap</option><option value="volume">Volume</option><option value="liquidityUsd">Liquidity</option><option value="holders">Holders</option><option value="age">Age</option><option value="priceUsd">Price</option></select></label></div>
   <div class="radar-actions"><button id="sort-direction" class="secondary">Highest first</button><small>Swipe table → for observed chart</small></div>
@@ -357,7 +357,9 @@ async function refresh() {
   if (refreshing) return;refreshing=true;
   try {
     const s=await call("/api/basket");snapshot=s;sampleRadar(s);
-    $("status").textContent=(s.paused?"Scans paused":s.running?"Scanning":"Scanning")+" · last scan "+(s.lastScanAt?new Date(s.lastScanAt).toLocaleTimeString():"pending")+" · wallet "+(s.walletSol==null?"—":short(s.walletSol))+" SOL"+(s.lastError?" · "+s.lastError:"");
+    const scanned=s.lastScanAt?new Date(s.lastScanAt).toLocaleTimeString():"pending";
+    $("status").textContent=(s.paused?"Scans paused":s.running?"Scanning":"Updated")+" · "+scanned+" · wallet "+(s.walletSol==null?"—":short(s.walletSol))+" SOL"+(s.lastError?" · "+s.lastError:"");
+    $("market-status").textContent="Jupiter scan "+scanned+(s.lastError?" · Some data delayed":" · 5m and 1h feeds");
     $("stop").textContent=s.paused?"Resume scans":"Pause scans";
     $("setup").textContent="Market: Jupiter Tokens V2 and Price V3. Live manual sells: Jupiter Swap V2. Automatic live buys are off.";
     $("sell-status").textContent=s.manualSell.enabled?"Manual sell ready · proceeds in SOL":"Manual sell unavailable until wallet signer and sell switch are ready";
