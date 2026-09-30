@@ -2,7 +2,6 @@ const test=require('node:test'),assert=require('node:assert/strict');
 const fs=require('node:fs'),os=require('node:os'),path=require('node:path');
 const {createApp,createMarket}=require('../../src/basket');
 const {createPriceHistory}=require('../../src/market/history');
-const {createJupiterClient}=require('../../src/market/client');
 const {rankSignals}=require('../../src/market/signals');
 const SOL='So11111111111111111111111111111111111111112';
 test('persisted charts prune invalid marks and rank observed multiples correctly',()=>{

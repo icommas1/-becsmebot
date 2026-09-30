@@ -1,10 +1,5 @@
-const test=require('node:test'),assert=require('node:assert/strict');
-const fs=require('node:fs'),os=require('node:os'),path=require('node:path');
-const {createApp,createMarket}=require('../../src/basket');
-const {createPriceHistory}=require('../../src/market/history');
-const {createJupiterClient}=require('../../src/market/client');
-const {rankSignals}=require('../../src/market/signals');
-const SOL='So11111111111111111111111111111111111111112';
+const test=require("node:test"),assert=require("node:assert/strict");
+const {createJupiterClient}=require("../../src/market/client");
 test('serialized Jupiter queue respects reset, recovers errors and rejects overflow',async()=>{
  let time=100000,active=0,max=0,calls=0;const starts=[];
  const request=createJupiterClient({apiKey:'fixture',now:()=>time,wait:async ms=>{time+=ms;},maxPending:2,

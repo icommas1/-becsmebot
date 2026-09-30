@@ -54,6 +54,11 @@ test("paper buys use SOL cash, survive radar exit, and sell without a live reque
   assert.equal(vm.runInContext('paperReady({priceUsd:.01,isSus:true})',context),false);
   assert.equal(vm.runInContext("paper.cashSol",context),.4-(1/200+.000005));
   assert.equal(vm.runInContext(`paper.holds["${mint}"].qty`,context),100);
+  vm.runInContext(`prices["${mint}"]={priceUsd:.02,source:"jupiter-v3"};priceTimes["${mint}"]=Date.now()+60000;`,context);
+  assert.equal(vm.runInContext(`canSell("${mint}")`,context),false);
+  vm.runInContext(`sellPaper("${mint}",100,1)`,context);
+  assert.equal(vm.runInContext(`paper.holds["${mint}"].qty`,context),100);
+
   vm.runInContext("snapshot.radar=[];render();",context);
   assert.equal(elements.get("paper-holds").children.length,1);
   vm.runInContext(`buy({mint:"${mint}",symbol:"TEST",priceUsd:.01});`,context);

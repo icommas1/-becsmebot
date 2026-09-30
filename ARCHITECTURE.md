@@ -11,6 +11,7 @@ BecsBot is a single Node/Express service serving a vanilla HTML/CSS/JavaScript t
 | `src/api/schemas.json` | Draft-07 request, response and upstream contracts |
 | `src/api/validation.js` | Strict Ajv validators and canonical Solana mint checks |
 | `src/market/client.js` | Serialized Jupiter queue, timeout and bounded 429 retry |
+| `src/market/mint.js` | Canonical base58 mint validation without a wallet SDK |
 | `src/market/tokens.js` | Feed definitions and token normalization |
 | `src/market/market.js` | Scans, caches, single-flight requests and snapshots |
 | `src/market/history.js` | Bounded 24-hour chart persistence |

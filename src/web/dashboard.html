@@ -42,7 +42,7 @@ label { display:block; color:var(--muted); font-size:.8em } label input, label s
 .pagebar button { min-width:92px }.scroll-hint { display:block; text-align:right; padding:5px 0 }
 @media(max-width:650px) { .metrics { grid-template-columns:repeat(2,minmax(0,1fr)) } .settings { grid-template-columns:repeat(2,minmax(0,1fr)) } .radar-tools { grid-template-columns:repeat(2,minmax(0,1fr)) } .metric b { font-size:1.07em } }
 html,body { height:100%; overscroll-behavior:none }
-body { height:100vh; height:100dvh; display:grid; grid-template-areas:"head" "nav" "main"; grid-template-rows:auto auto minmax(0,1fr); overflow:hidden; background:#080e16 }
+body { height:100vh; height:100dvh; display:grid; grid-template-areas:"head" "nav" "main"; grid-template-rows:auto auto minmax(0,1fr); grid-template-columns:minmax(0,1fr); overflow:hidden; background:#080e16 }
 .terminal-header { grid-area:head; display:flex; align-items:center; gap:16px; justify-content:space-between; min-height:66px; padding:9px 18px; border-bottom:1px solid var(--line); background:#101925 }
 .brand { display:flex; align-items:center; gap:10px; min-width:0; white-space:nowrap }.brand-mark { display:grid; place-items:center; width:38px; height:38px; border:1px solid #407b71; background:#12352f; color:var(--good); border-radius:10px; font-size:21px; font-weight:900 }
 .brand h1 { font-size:1.13em; letter-spacing:.02em }.brand small { display:block; white-space:nowrap }.brand-terminal { font-size:.7em; letter-spacing:.14em; color:var(--good) }
@@ -277,7 +277,7 @@ function renderWallet() {
   const value=holds.reduce((sum,h)=>sum+h.qty*(num(prices[h.mint]?.priceUsd)||num(h.lastPrice)||0),0);
   const unrealized=holds.reduce((sum,h)=>sum+h.qty*(num(prices[h.mint]?.priceUsd)||num(h.lastPrice)||0)-h.investedUsd-h.feesUsd,0);
   $("hud-cash").textContent="CASH "+short(paper.cashSol)+" SOL";$("hud-pnl").textContent="P/L "+usd(paper.realizedUsd+unrealized);
-  $("cash").textContent=short(paper.cashSol)+" SOL";$("open-value").textContent=usd(value)+(holds.some(h=>!priceTimes[h.mint]||Date.now()-priceTimes[h.mint]>120000)?" · estimated":"");
+  $("cash").textContent=short(paper.cashSol)+" SOL";$("open-value").textContent=usd(value)+(holds.some(h=>!recentMark(priceTimes[h.mint],120000))?" · estimated":"");
   const pnl=paper.realizedUsd+unrealized;$("profit").textContent=usd(pnl);$("profit").className=pnl>=0?"good":"bad";
   $("hold-count").textContent=String(holds.length);
   $("sol-rate").textContent=rate?"SOL "+usd(rate):"SOL price pending";
@@ -347,7 +347,7 @@ function renderHolds() {
     const row=node("div","item");row.append(node("div","name",h.symbol+" · "+short(h.qty)+" tokens"));
     row.append(node("div","meta","Entry "+tokenPrice(h.entryPrice)+" · now "+tokenPrice(mark)+" · entry cap "+usd(h.entryCap)+" · now cap "+usd(prices[h.mint]?.marketCap)+" · liquidity "+usd(prices[h.mint]?.liquidityUsd)));
     row.append(node("div",pnl>=0?"good":"bad","Value "+usd(value)+" · P/L "+usd(pnl)+" ("+(h.investedUsd?short(pnl/(h.investedUsd+h.feesUsd)*100):"—")+"%)"));
-    if (!priceTimes[h.mint] || Date.now()-priceTimes[h.mint]>120000) row.append(node("small","bad","Price may be stale"));
+    if (!recentMark(priceTimes[h.mint],120000)) row.append(node("small","bad","Price may be stale"));
     const actions=node("div","actionbar");for(const [label,amount] of [["Sell $1",1],["Sell all",null]]) { const b=node("button","secondary",label);b.onclick=()=>sellPaper(h.mint,100,amount);actions.append(b); }
     row.append(actions);infoLinks(row,h.mint);box.append(row);
   }

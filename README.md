@@ -26,7 +26,7 @@ Buys need recent Tokens V2 and SOL marks. Sells need a recent Jupiter Price V3 m
 
 ## Run
 
-Node 20+, `npm ci`, `npm test`, `npm start`. Set `JUPITER_API_KEY`; optionally set `PORT` and persistent `DATA_DIR`. API keys remain server-side. No paid plan is purchased by this project.
+Node 22+, `npm ci`, `npm test`, `npm start`. Set `JUPITER_API_KEY`; optionally set `PORT` and persistent `DATA_DIR`. API keys remain server-side. No paid plan is purchased by this project.
 
 Jupiter calls are serialized, spaced 2.2 seconds apart, cached and bounded. One 429 retry uses the reset header. Public search and price endpoints validate inputs and rate limit requests.
 
