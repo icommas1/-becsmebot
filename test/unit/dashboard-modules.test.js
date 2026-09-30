@@ -4,7 +4,9 @@ const assert=require("node:assert/strict");
 const modules=Promise.all([
   import("../../src/web/assets/js/core.mjs"),
   import("../../src/web/assets/js/filters.mjs"),
-  import("../../src/web/assets/js/paper-wallet.mjs")
+  import("../../src/web/assets/js/paper-wallet.mjs"),
+  import("../../src/web/assets/js/api-client.mjs"),
+  import("../../src/web/assets/js/dom.mjs")
 ]);
 const mint="So11111111111111111111111111111111111111112";
 
@@ -50,4 +52,28 @@ test("paper accounting buys and sells the correct position without I/O",async()=
   const sold=sellPaper({paper,mint,pct:100,dollars:1,solRate:200,mark:{priceUsd:.02,source:"jupiter-v3"},markAt:now,now});
   assert.equal(sold.ok,true);assert.equal(paper.holds[mint].qty,50);
   assert.equal(paper.activity[0].mint,mint);assert.equal(paper.activity[0].kind,"sell");
+});
+
+test("dashboard API client uses only read and paper-price contracts",async()=>{
+  const [,,, {createApiClient}]=await modules,calls=[];
+  const client=createApiClient(async(url,options)=>{
+    calls.push({url,options});
+    return {ok:true,json:async()=>url==="/api/basket"?{radar:[]}:url.startsWith("/api/search")?{rows:[]}:{prices:{}}};
+  });
+  await client.basket();await client.search("A B");await client.paperPrices([mint]);
+  assert.deepEqual(calls.map(call=>call.url),["/api/basket","/api/search?q=A%20B","/api/paper/prices"]);
+  assert.equal(calls[0].options.credentials,"same-origin");
+  assert.equal(calls[2].options.method,"POST");
+  assert.deepEqual(JSON.parse(calls[2].options.body),{mints:[mint]});
+  assert.equal(calls.some(call=>call.url.includes("/api/sell")),false);
+});
+
+test("sparkline presentation receives and maps the supplied observation data",async()=>{
+  const [,,,,{sparkline}]=await modules;
+  function element(tag){return {tagName:tag,children:[],append(...children){this.children.push(...children);},setAttribute(name,value){this[name]=String(value);}};}
+  const document={createElement:element,createElementNS:(_namespace,tag)=>element(tag)};
+  const chart=sparkline(document,[[100,2],[200,4],[300,3]]).children[0];
+  assert.equal(chart.children[0].points,"3.0,35.0 56.0,3.0 109.0,19.0");
+  assert.equal(chart.children[0].stroke,"#59d6a2");
+  assert.equal(chart["aria-label"],"Observed price trail from 3 scans");
 });
