@@ -19,12 +19,13 @@ test("paper buys use SOL cash, survive radar exit, and sell without a live reque
     document: {
       getElementById(id) { if (!elements.has(id)) elements.set(id,element()); return elements.get(id); },
       createElement: element, createElementNS: (_namespace,tag) => element(tag), querySelectorAll: () => [],
-      documentElement: {style:{setProperty() {}}}
+      documentElement: {style:{setProperty() {}}}, body:{dataset:{}}
     },
     localStorage: {getItem:k=>storage.get(k)||null,setItem:(k,v)=>storage.set(k,v)},
     sessionStorage: {getItem:()=>null,setItem() {},removeItem() {}},
     fetch() { throw Error("paper operations must not send requests"); },
     console, Date, Math, Number, String, JSON, Intl, Set, Object, Array, Error,
+    setTimeout:()=>0, clearTimeout() {},
     confirm:()=>true
   });
   vm.runInContext(script,context);
