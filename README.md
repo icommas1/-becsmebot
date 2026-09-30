@@ -67,6 +67,11 @@ columns, page controls, adjustable text size and row count, and a sideways
 scrolling table on phones. Its rightmost mini chart is an observed price trail
 from this browser's successive scans, retained for up to 24 hours; it starts
 with a dot and is not a historical 24-hour chart from an exchange.
+The Jupiter Tokens V2 payload also supplies an organic score (0–100). The
+radar shows and sorts it, and an optional minimum score filters manual and
+automatic paper buys. Missing scores fail a positive minimum; a default
+minimum of zero leaves existing behavior intact. The score describes
+activity quality and is not a token safety guarantee.
 The full-screen terminal keeps the scan bar and navigation in view. On a wide
 screen, the radar fills the left pane and the selected paper, activity,
 settings, or live wallet panel fills the right pane. On a phone, the bottom

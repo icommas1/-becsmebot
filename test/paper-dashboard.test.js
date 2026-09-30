@@ -32,6 +32,10 @@ test("paper buys use SOL cash, survive radar exit, and sell without a live reque
   await vm.runInContext("refresh()",context);
   assert.equal(elements.get("auth-gate").hidden,false);
   const mint="So11111111111111111111111111111111111111112";
+  vm.runInContext("paper.settings.minOrganicScore=70",context);
+  assert.equal(vm.runInContext("passes({organicScore:65})",context),false);
+  assert.equal(vm.runInContext("passes({organicScore:75})",context),true);
+  vm.runInContext("paper.settings.minOrganicScore=0",context);
   vm.runInContext(`sampleRadar({lastScanAt:new Date(Date.now()-300000).toISOString(),radar:[{mint:"${mint}",priceUsd:.009}]});sampleRadar({lastScanAt:new Date().toISOString(),radar:[{mint:"${mint}",priceUsd:.01}]});`,context);
   assert.equal(vm.runInContext(`trail.points["${mint}"].length`,context),2);
   assert.equal(vm.runInContext(`sparkline("${mint}").children[0].children[0].tagName`,context),"polyline");

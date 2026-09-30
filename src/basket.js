@@ -91,7 +91,7 @@ function trendRows(five, hour) {
         mint: token.id, symbol: String(token.symbol || "?").slice(0, 32),
         name: String(token.name || "").slice(0, 100), sources: [],
         priceUsd: null, marketCap: null, liquidityUsd: null,
-        holders: null, createdAt: null, launchpad: null,
+        holders: null, organicScore: null, createdAt: null, launchpad: null,
         rank5m: null, rank1h: null, change5m: null, change1h: null,
         volume5m: null, volume1h: null
       };
@@ -101,6 +101,11 @@ function trendRows(five, hour) {
       row.marketCap ||= finitePositive(token.mcap);
       row.liquidityUsd ||= finitePositive(token.liquidity);
       row.holders ||= finitePositive(token.holderCount);
+      const organicScore = Number(token.organicScore);
+      if (row.organicScore == null && token.organicScore != null &&
+          Number.isFinite(organicScore) && organicScore >= 0 && organicScore <= 100) {
+        row.organicScore = organicScore;
+      }
       row.createdAt ||= token.firstPool?.createdAt || token.createdAt || null;
       row.launchpad ||= token.launchpad || null;
       const stats = source === "5m" ? token.stats5m : token.stats1h;

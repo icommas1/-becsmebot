@@ -28,7 +28,7 @@ label { display:block; color:var(--muted); font-size:.8em } label input, label s
 .tabs button.selected { color:#09251b; background:var(--good); border-color:var(--good) }
 .radar-tools { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:9px; align-items:end; margin:4px 0 12px }
 .radar-scroll { overflow-x:auto; overflow-y:hidden; -webkit-overflow-scrolling:touch; scrollbar-color:#6684a2 #101a28; scrollbar-width:thin; border:1px solid var(--line); border-radius:11px }
-.radar-table { min-width:1040px; width:100%; border-collapse:collapse; table-layout:fixed }
+.radar-table { min-width:1140px; width:100%; border-collapse:collapse; table-layout:fixed }
 .radar-table th { text-align:right; font-size:.78em; color:var(--muted); background:#101a28; padding:11px 8px; white-space:nowrap }
 .radar-table th:first-child,.radar-table td:first-child { text-align:left; width:190px }
 .radar-table th:last-child,.radar-table td:last-child { width:144px }
@@ -93,11 +93,11 @@ section.side-section { margin:16px 0 0; padding:15px; border-radius:10px; backgr
 <section id="radar-panel" class="radar-panel">
   <div class="rowhead"><div><h2>Market radar</h2><small>Jupiter 5m and 1h trends · verified Pump curves marked</small></div><span id="radar-count" class="pill">Loading</span></div>
   <nav class="tabs" id="radar-tabs" aria-label="Radar topics"></nav>
-  <div class="radar-tools"><label>Find token<input id="radar-search" type="search" placeholder="Name or mint"></label><label>Source<select id="radar-source"><option value="any">5m + 1h</option><option value="5m">5m list</option><option value="1h">1h list</option><option value="both">On both lists</option></select></label><label>Sort<select id="radar-sort"><option value="rank">Trend rank</option><option value="change">Price change</option><option value="marketCap">Market cap</option><option value="volume">Volume</option><option value="liquidityUsd">Liquidity</option><option value="holders">Holders</option><option value="age">Age</option><option value="priceUsd">Price</option></select></label></div>
+  <div class="radar-tools"><label>Find token<input id="radar-search" type="search" placeholder="Name or mint"></label><label>Source<select id="radar-source"><option value="any">5m + 1h</option><option value="5m">5m list</option><option value="1h">1h list</option><option value="both">On both lists</option></select></label><label>Sort<select id="radar-sort"><option value="rank">Trend rank</option><option value="change">Price change</option><option value="organicScore">Organic score</option><option value="marketCap">Market cap</option><option value="volume">Volume</option><option value="liquidityUsd">Liquidity</option><option value="holders">Holders</option><option value="age">Age</option><option value="priceUsd">Price</option></select></label></div>
   <div class="radar-actions"><button id="sort-direction" class="secondary">Highest first</button><small>Swipe table → for observed chart</small></div>
-  <div class="radar-scroll" id="radar-scroll"><table class="radar-table"><thead><tr><th>Token / age</th><th>Price / change</th><th><button data-sort="marketCap">Market cap</button></th><th><button data-sort="volume">Volume</button></th><th><button data-sort="liquidityUsd">Liquidity</button></th><th><button data-sort="holders">Holders</button></th><th>Paper</th><th>Observed price trail</th></tr></thead><tbody id="radar"></tbody></table></div>
+  <div class="radar-scroll" id="radar-scroll"><table class="radar-table"><thead><tr><th>Token / age</th><th>Price / change</th><th><button data-sort="organicScore">Organic</button></th><th><button data-sort="marketCap">Market cap</button></th><th><button data-sort="volume">Volume</button></th><th><button data-sort="liquidityUsd">Liquidity</button></th><th><button data-sort="holders">Holders</button></th><th>Paper</th><th>Observed price trail</th></tr></thead><tbody id="radar"></tbody></table></div>
   <div class="pagebar"><button id="previous" class="secondary">← Previous</button><span id="page-label" class="pill">Page 1</span><button id="next" class="secondary">Next →</button></div>
-  <p class="panel-note"><small>Only active verified Pump SOL curves allow paper buys. Mini charts use prices this browser observed during scans and fill in over time.</small></p>
+  <p class="panel-note"><small>Only active verified Pump SOL curves allow paper buys. Organic is Jupiter’s 0–100 activity score, not a safety guarantee. Mini charts fill in as this browser observes prices.</small></p>
 </section>
 <div class="terminal-side">
   <div class="dock-panel active" data-view-panel="paper">
@@ -121,6 +121,7 @@ section.side-section { margin:16px 0 0; padding:15px; border-radius:10px; backgr
       <label>Min age (minutes)<input data-setting="minAge" type="number" min="0" step="1"></label>
       <label>Max age (minutes, 0 = any)<input data-setting="maxAge" type="number" min="0" step="1"></label>
       <label>Min holders<input data-setting="minHolders" type="number" min="0" step="1"></label>
+      <label>Min organic score (0–100)<input data-setting="minOrganicScore" type="number" min="0" max="100" step="1"></label>
       <label>Text size<select id="text-size"><option value="small">Small</option><option value="regular">Regular</option><option value="large">Large</option></select></label>
       <label>Rows per page<select id="page-size"><option value="10">10</option><option value="20">20</option><option value="50">50</option></select></label>
       <label>Cash balance (SOL)<input id="cash-input" type="number" min="0" step="0.001"></label>
@@ -145,7 +146,7 @@ section.side-section { margin:16px 0 0; padding:15px; border-radius:10px; backgr
 <script>
 const STORE = "becsPaperV1";
 const RADAR_UI_STORE = "becsRadarUiV1", TRAIL_STORE = "becsRadarTrailV1";
-const defaults = { betUsd:1, reserveSol:.02, feeSol:.000005, impactPct:0, minLiquidity:0, minCap:0, maxCap:0, minAge:0, maxAge:0, minHolders:0 };
+const defaults = { betUsd:1, reserveSol:.02, feeSol:.000005, impactPct:0, minLiquidity:0, minCap:0, maxCap:0, minAge:0, maxAge:0, minHolders:0, minOrganicScore:0 };
 function saved(key,fallback) { try { return JSON.parse(localStorage.getItem(key)) || fallback; } catch (_) { return fallback; } }
 let radarUi={tab:"eligible",source:"any",sort:"rank",direction:"desc",size:"regular",pageSize:20,...saved(RADAR_UI_STORE,{})};
 let trail=saved(TRAIL_STORE,{scan:null,points:{}}), radarPage=0;
@@ -207,6 +208,7 @@ function passes(row) {
   if (s.minCap && (!(row.marketCap>=s.minCap))) return false;
   if (s.maxCap && (!(row.marketCap<=s.maxCap))) return false;
   if (s.minHolders && (!(row.holders>=s.minHolders))) return false;
+  if (s.minOrganicScore && (!(row.organicScore>=s.minOrganicScore))) return false;
   if (s.minAge && (!Number.isFinite(age) || (now-age)/60000<s.minAge)) return false;
   if (s.maxAge && (!Number.isFinite(age) || (now-age)/60000>s.maxAge)) return false;
   return true;
@@ -312,10 +314,10 @@ function renderRadar() {
     button.disabled=!eligible(row)||Boolean(paper.bought[row.mint])||!num(row.priceUsd)||!solUsd();button.onclick=()=>buy(row);
     paperCell.append(button);
     const chart=node("td");chart.append(sparkline(row.mint));
-    tr.append(token,price,node("td","",usd(row.marketCap)),node("td","",usd(row.volume5m??row.volume1h)),
+    tr.append(token,price,node("td","",row.organicScore==null?"—":short(row.organicScore)+" / 100"),node("td","",usd(row.marketCap)),node("td","",usd(row.volume5m??row.volume1h)),
       node("td","",usd(row.liquidityUsd)),node("td","",row.holders==null?"—":short(row.holders)),paperCell,chart);box.append(tr);
   }
-  if(!rows.length) {const tr=node("tr"),td=node("td","","No trends match this view right now.");td.colSpan=8;tr.append(td);box.append(tr);}
+  if(!rows.length) {const tr=node("tr"),td=node("td","","No trends match this view right now.");td.colSpan=9;tr.append(td);box.append(tr);}
   for(const b of $("radar-tabs").children) {b.className=b.dataset.tab===radarUi.tab?"selected":"";b.setAttribute("aria-pressed",String(b.dataset.tab===radarUi.tab));}
   $("sort-direction").textContent=radarUi.direction==="desc"?"Highest first ↓":"Lowest first ↑";
 }
@@ -378,7 +380,7 @@ async function sellLive(mint,percent,button) {
 }
 for(const input of document.querySelectorAll("[data-setting]")) {
   const name=input.dataset.setting;input.value=paper.settings[name];input.addEventListener("change",()=>{
-    const value=Number(input.value);if (!Number.isFinite(value)||value<0||(name==="betUsd"&&value<=0)||(name==="impactPct"&&value>50)) {input.value=paper.settings[name];return message("Enter a valid nonnegative value.");}
+    const value=Number(input.value);if (!Number.isFinite(value)||value<0||(name==="betUsd"&&value<=0)||(name==="impactPct"&&value>50)||(name==="minOrganicScore"&&value>100)) {input.value=paper.settings[name];return message("Enter a valid value for this setting.");}
     paper.settings[name]=value;save();render();message("Paper settings saved.");
   });
 }
