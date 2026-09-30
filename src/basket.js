@@ -84,22 +84,33 @@ function finitePositive(value) {
 function trendRows(five, hour) {
   const rows = new Map();
   for (const [source, tokens] of [["5m", five], ["1h", hour]]) {
-    for (const token of tokens) {
+    for (const [rank, token] of tokens.entries()) {
       if (!token?.id) continue;
       try { new PublicKey(token.id); } catch (_) { continue; }
       const row = rows.get(token.id) || {
         mint: token.id, symbol: String(token.symbol || "?").slice(0, 32),
         name: String(token.name || "").slice(0, 100), sources: [],
         priceUsd: null, marketCap: null, liquidityUsd: null,
-        holders: null, createdAt: null, launchpad: null
+        holders: null, createdAt: null, launchpad: null,
+        rank5m: null, rank1h: null, change5m: null, change1h: null,
+        volume5m: null, volume1h: null
       };
       row.sources.push(source);
+      row[source === "5m" ? "rank5m" : "rank1h"] = rank + 1;
       row.priceUsd ||= finitePositive(token.usdPrice);
       row.marketCap ||= finitePositive(token.mcap);
       row.liquidityUsd ||= finitePositive(token.liquidity);
       row.holders ||= finitePositive(token.holderCount);
       row.createdAt ||= token.firstPool?.createdAt || token.createdAt || null;
       row.launchpad ||= token.launchpad || null;
+      const stats = source === "5m" ? token.stats5m : token.stats1h;
+      const change = stats?.priceChange == null ? NaN : Number(stats.priceChange);
+      const volume = stats?.buyVolume == null || stats?.sellVolume == null ? NaN :
+        Number(stats.buyVolume) + Number(stats.sellVolume);
+      row[source === "5m" ? "change5m" : "change1h"] =
+        Number.isFinite(change) ? change : null;
+      row[source === "5m" ? "volume5m" : "volume1h"] =
+        Number.isFinite(volume) ? volume : null;
       rows.set(token.id, row);
     }
   }

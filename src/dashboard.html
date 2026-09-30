@@ -5,13 +5,13 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>BecsBot · Paper desk</title>
 <style>
-:root { color-scheme: dark; --bg:#0b1019; --card:#172231; --line:#34445b; --muted:#b4c2d3; --good:#59d6a2; --bad:#ff8585; --accent:#70b8ff }
+:root { color-scheme: dark; --bg:#0b1019; --card:#172231; --line:#34445b; --muted:#b4c2d3; --good:#59d6a2; --bad:#ff8585; --accent:#70b8ff; --scale:1 }
 * { box-sizing:border-box } body { margin:0; background:var(--bg); color:#f5f8ff; font:15px -apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif }
-main { max-width:940px; margin:auto; padding:18px 14px 50px } h1 { margin:0; font-size:27px } h2 { margin:0 0 10px; font-size:19px } h3 { margin:0 0 6px; font-size:16px }
-p, small { color:var(--muted); line-height:1.4 } p { margin:8px 0 12px } small { font-size:12px } .sub { margin:4px 0 18px }
+main { max-width:1120px; margin:auto; padding:18px 14px 50px; font-size:calc(15px * var(--scale)) } h1 { margin:0; font-size:1.8em } h2 { margin:0 0 10px; font-size:1.27em } h3 { margin:0 0 6px; font-size:1.07em }
+p, small { color:var(--muted); line-height:1.4 } p { margin:8px 0 12px } small { font-size:.8em } .sub { margin:4px 0 18px }
 section { background:var(--card); border:1px solid var(--line); border-radius:16px; padding:16px; margin:13px 0 }
 .topline,.rowhead,.actions,.pillrow { display:flex; gap:9px; align-items:center; justify-content:space-between; flex-wrap:wrap }
-.pill { display:inline-block; border:1px solid var(--line); border-radius:99px; padding:5px 9px; font-size:12px; color:var(--muted) }
+.pill { display:inline-block; border:1px solid var(--line); border-radius:99px; padding:5px 9px; font-size:.8em; color:var(--muted) }
 .paper { color:var(--good); border-color:#33755d } .live { color:#ffc077; border-color:#855b31 } .bad { color:var(--bad) } .good { color:var(--good) }
 .metrics { display:grid; grid-template-columns:repeat(4,minmax(0,1fr)); gap:10px; margin:14px 0 }
 .metric { background:#101a28; border:1px solid #2d3c51; border-radius:12px; padding:12px; min-width:0 }
@@ -19,11 +19,26 @@ section { background:var(--card); border:1px solid var(--line); border-radius:16
 button { background:#316b9c; border:1px solid #4f93ca; border-radius:9px; color:white; padding:9px 12px; font:inherit; font-weight:650; min-height:38px; cursor:pointer }
 button:disabled { opacity:.42; cursor:default } button.secondary { background:#25344a; border-color:#455a76 } button.danger { background:#843d43; border-color:#b4555e }
 input,select { background:#0d1826; color:white; border:1px solid #64738d; border-radius:8px; padding:9px; min-height:38px; font:inherit; width:100%; min-width:0 }
-label { display:block; color:var(--muted); font-size:12px } label input, label select { display:block; margin-top:5px }
+label { display:block; color:var(--muted); font-size:.8em } label input, label select { display:block; margin-top:5px }
 .settings { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:10px; margin:12px 0 } details summary { cursor:pointer; font-weight:650; padding:3px 0 }
 .item { border-top:1px solid #34445b; padding:12px 0; overflow-wrap:anywhere } .item:first-child { border-top:0 } .item .name { font-weight:750; font-size:16px } .meta { color:var(--muted); font-size:12px; margin:5px 0; line-height:1.45 } .actionbar { display:flex; gap:7px; flex-wrap:wrap; margin-top:8px }
-#message { min-height:18px; color:var(--accent); font-size:13px } #status { font-size:13px; color:var(--muted) } .link { color:#9accff } .mono { font-family:ui-monospace,SFMono-Regular,monospace; font-size:11px; overflow-wrap:anywhere }
-@media(max-width:650px) { .metrics { grid-template-columns:repeat(2,minmax(0,1fr)) } .settings { grid-template-columns:repeat(2,minmax(0,1fr)) } .metric b { font-size:16px } }
+#message { min-height:18px; color:var(--accent); font-size:.87em } #status { font-size:.87em; color:var(--muted) } .link { color:#9accff } .mono { font-family:ui-monospace,SFMono-Regular,monospace; font-size:.73em; overflow-wrap:anywhere }
+.tabs { display:flex; gap:7px; overflow-x:auto; scrollbar-width:thin; padding:4px 0 10px; -webkit-overflow-scrolling:touch }
+.tabs button { flex:none; white-space:nowrap; background:#25344a; border-color:#455a76 }
+.tabs button.selected { color:#09251b; background:var(--good); border-color:var(--good) }
+.radar-tools { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:9px; align-items:end; margin:4px 0 12px }
+.radar-scroll { overflow-x:auto; overflow-y:hidden; -webkit-overflow-scrolling:touch; scrollbar-color:#6684a2 #101a28; scrollbar-width:thin; border:1px solid var(--line); border-radius:11px }
+.radar-table { min-width:1040px; width:100%; border-collapse:collapse; table-layout:fixed }
+.radar-table th { text-align:right; font-size:.78em; color:var(--muted); background:#101a28; padding:11px 8px; white-space:nowrap }
+.radar-table th:first-child,.radar-table td:first-child { text-align:left; width:190px }
+.radar-table th:last-child,.radar-table td:last-child { width:144px }
+.radar-table th button { min-height:0; padding:3px 2px; border:0; background:transparent; color:inherit; font-size:inherit }
+.radar-table td { border-top:1px solid #2d3c51; padding:10px 8px; text-align:right; vertical-align:middle; white-space:nowrap }
+.radar-table .token { font-weight:750 } .radar-table .subline { display:block; color:var(--muted); font-size:.78em; font-weight:400; margin-top:3px }
+.spark { display:inline-block; width:112px; height:38px; vertical-align:middle }
+.pagebar { display:flex; justify-content:space-between; gap:8px; align-items:center; margin:10px 0 }
+.pagebar button { min-width:92px }.scroll-hint { display:block; text-align:right; padding:5px 0 }
+@media(max-width:650px) { .metrics { grid-template-columns:repeat(2,minmax(0,1fr)) } .settings { grid-template-columns:repeat(2,minmax(0,1fr)) } .radar-tools { grid-template-columns:repeat(2,minmax(0,1fr)) } .metric b { font-size:1.07em } }
 </style>
 </head>
 <body><main>
@@ -47,15 +62,21 @@ label { display:block; color:var(--muted); font-size:12px } label input, label s
     <label>Min age (minutes)<input data-setting="minAge" type="number" min="0" step="1"></label>
     <label>Max age (minutes, 0 = any)<input data-setting="maxAge" type="number" min="0" step="1"></label>
     <label>Min holders<input data-setting="minHolders" type="number" min="0" step="1"></label>
+    <label>Text size<select id="text-size"><option value="small">Small</option><option value="regular">Regular</option><option value="large">Large</option></select></label>
+    <label>Rows per page<select id="page-size"><option value="10">10</option><option value="20">20</option><option value="50">50</option></select></label>
     <label>Cash balance (SOL)<input id="cash-input" type="number" min="0" step="0.001"></label>
   </div>
   <div class="actionbar"><button id="set-cash" class="secondary">Set paper cash</button><button id="reset-paper" class="danger">Reset paper wallet</button></div>
   <p><small>Changing cash keeps existing holds. Reset clears paper holds, history, and the buy-once list. Settings and trades are saved in this browser on this phone.</small></p>
 </details></section>
 <section><div class="rowhead"><h2>Trend radar</h2><span id="radar-count" class="pill">Loading</span></div>
-  <p><small>Jupiter 5m and 1h trends. Only rows marked “Pump curve active” can make paper buys. Filters hide rows with missing required data. Prices are estimates.</small></p>
-  <div class="actions"><label style="min-width:150px">Show<select id="radar-view"><option value="eligible">Active Pump curves</option><option value="all">All trends</option></select></label><button id="refresh" class="secondary">Refresh</button></div>
-  <div id="radar"></div>
+  <nav class="tabs" id="radar-tabs" aria-label="Radar topics"></nav>
+  <div class="radar-tools"><label>Find token<input id="radar-search" type="search" placeholder="Name or mint"></label><label>Source<select id="radar-source"><option value="any">5m + 1h</option><option value="5m">5m list</option><option value="1h">1h list</option><option value="both">On both lists</option></select></label><label>Sort<select id="radar-sort"><option value="rank">Trend rank</option><option value="change">Price change</option><option value="marketCap">Market cap</option><option value="volume">Volume</option><option value="liquidityUsd">Liquidity</option><option value="holders">Holders</option><option value="age">Age</option><option value="priceUsd">Price</option></select></label></div>
+  <div class="actions"><button id="sort-direction" class="secondary">Highest first</button><button id="refresh" class="secondary">Refresh</button></div>
+  <small class="scroll-hint">Swipe the table sideways to see the price trail →</small>
+  <div class="radar-scroll" id="radar-scroll"><table class="radar-table"><thead><tr><th>Token / age</th><th>Price / change</th><th><button data-sort="marketCap">Market cap</button></th><th><button data-sort="volume">Volume</button></th><th><button data-sort="liquidityUsd">Liquidity</button></th><th><button data-sort="holders">Holders</button></th><th>Paper</th><th>Observed price trail</th></tr></thead><tbody id="radar"></tbody></table></div>
+  <div class="pagebar"><button id="previous" class="secondary">← Previous</button><span id="page-label" class="pill">Page 1</span><button id="next" class="secondary">Next →</button></div>
+  <p><small>Only active verified Pump SOL curves can make paper buys. The mini chart plots prices observed by this phone during scans; it fills in over time. Filters hide rows missing required data.</small></p>
 </section>
 <section><h2>Paper holds</h2><p><small>Holds stay here after leaving the radar. Current prices refresh separately; if unavailable, the last known price is labeled stale.</small></p><div id="paper-holds"></div></section>
 <section><details><summary>Paper activity</summary><div id="activity"></div></details></section>
@@ -70,7 +91,12 @@ label { display:block; color:var(--muted); font-size:12px } label input, label s
 </main>
 <script>
 const STORE = "becsPaperV1";
+const RADAR_UI_STORE = "becsRadarUiV1", TRAIL_STORE = "becsRadarTrailV1";
 const defaults = { betUsd:1, reserveSol:.02, feeSol:.000005, impactPct:0, minLiquidity:0, minCap:0, maxCap:0, minAge:0, maxAge:0, minHolders:0 };
+function saved(key,fallback) { try { return JSON.parse(localStorage.getItem(key)) || fallback; } catch (_) { return fallback; } }
+let radarUi={tab:"eligible",source:"any",sort:"rank",direction:"desc",size:"regular",pageSize:20,...saved(RADAR_UI_STORE,{})};
+let trail=saved(TRAIL_STORE,{scan:null,points:{}}), radarPage=0;
+if (!trail || typeof trail.points!=="object" || !trail.points) trail={scan:null,points:{}};
 function fresh() { return { cashSol:.4, settings:{...defaults}, holds:{}, bought:{}, activity:[], realizedUsd:0, auto:false }; }
 function loadPaper() {
   try {
@@ -84,8 +110,27 @@ let snapshot = null, prices = {}, priceTimes = {}, refreshing = false;
 let key = sessionStorage.getItem("becsKey") || "";
 const $ = (id) => document.getElementById(id);
 const usd = (n) => Number.isFinite(n) ? "$" + n.toLocaleString(undefined,{maximumFractionDigits:2,minimumFractionDigits:2}) : "—";
+const tokenPrice = (n) => Number.isFinite(n) && n>0 ? "$"+n.toLocaleString(undefined,{maximumSignificantDigits:6}) : "—";
 const short = (n) => Number.isFinite(n) ? n.toLocaleString(undefined,{maximumSignificantDigits:5}) : "—";
 function save() { try { localStorage.setItem(STORE, JSON.stringify(paper)); } catch (_) { message("Phone storage is full; paper trades may not persist."); } }
+function saveRadar() { try { localStorage.setItem(RADAR_UI_STORE,JSON.stringify(radarUi)); } catch (_) {} }
+function sampleRadar(s) {
+  if (!s.lastScanAt || s.lastScanAt===trail.scan) return;
+  trail.scan=s.lastScanAt;
+  const at=Date.parse(s.lastScanAt), cutoff=Date.now()-86400000;
+  if (!Number.isFinite(at)) return;
+  for(const row of s.radar||[]) {
+    const price=num(row.priceUsd);if(!price)continue;
+    const points=Array.isArray(trail.points[row.mint])?trail.points[row.mint]:[];
+    points.push([at,price]);
+    trail.points[row.mint]=points.filter((p)=>Array.isArray(p)&&p[0]>=cutoff&&num(p[1])).slice(-288);
+  }
+  for(const mint of Object.keys(trail.points)) {
+    trail.points[mint]=trail.points[mint].filter((p)=>p[0]>=cutoff);
+    if(!trail.points[mint].length)delete trail.points[mint];
+  }
+  try { localStorage.setItem(TRAIL_STORE,JSON.stringify(trail)); } catch (_) {}
+}
 function message(value) { $("message").textContent = value; }
 function num(value) { const n=Number(value); return Number.isFinite(n) && n>0 ? n : null; }
 function node(tag, className, value) { const el=document.createElement(tag); if(className)el.className=className; if(value!=null)el.textContent=value; return el; }
@@ -154,20 +199,69 @@ function renderWallet() {
   $("auto-label").textContent="Auto paper: "+(paper.auto?"on":"off");
   $("auto-label").className="pill "+(paper.auto?"paper":"");
 }
+function sparkline(mint) {
+  const points=trail.points[mint]||[], wrap=node("span","spark");
+  const svg=document.createElementNS("http://www.w3.org/2000/svg","svg");
+  svg.setAttribute("viewBox","0 0 112 38");svg.setAttribute("width","112");svg.setAttribute("height","38");
+  svg.setAttribute("role","img");svg.setAttribute("aria-label",points.length>1?"Observed price trail from "+points.length+" scans":"Collecting price history");
+  if (points.length>1) {
+    const values=points.map((p)=>p[1]), low=Math.min(...values), high=Math.max(...values), span=high-low||high*.01||1;
+    const xy=values.map((v,i)=>(3+i*106/(values.length-1)).toFixed(1)+","+(35-(v-low)/span*32).toFixed(1)).join(" ");
+    const line=document.createElementNS("http://www.w3.org/2000/svg","polyline");
+    line.setAttribute("points",xy);line.setAttribute("fill","none");line.setAttribute("stroke",values.at(-1)>=values[0]?"#59d6a2":"#ff8585");
+    line.setAttribute("stroke-width","2");line.setAttribute("stroke-linejoin","round");svg.append(line);
+  } else {
+    const dot=document.createElementNS("http://www.w3.org/2000/svg","circle");
+    dot.setAttribute("cx","56");dot.setAttribute("cy","19");dot.setAttribute("r","3");dot.setAttribute("fill","#70b8ff");svg.append(dot);
+  }
+  wrap.append(svg);return wrap;
+}
+function ageMinutes(row) { const time=Date.parse(row.createdAt);return Number.isFinite(time)?Math.max(0,(Date.now()-time)/60000):null; }
+function ageText(row) {const age=ageMinutes(row);return age==null?"age —":age<60?Math.floor(age)+"m":age<1440?Math.floor(age/60)+"h":Math.floor(age/1440)+"d";}
+function sortValue(row) {
+  switch(radarUi.sort) {
+    case "rank":return -(row.rank5m||row.rank1h||999);
+    case "change":return row.change5m??row.change1h;
+    case "volume":return row.volume5m??row.volume1h;
+    case "age":return ageMinutes(row);
+    default:return row[radarUi.sort];
+  }
+}
 function renderRadar() {
   const box=$("radar");box.replaceChildren();
-  let rows=(snapshot?.radar||[]).filter(passes);
-  if ($("radar-view").value==="eligible") rows=rows.filter(eligible);
-  $("radar-count").textContent=rows.length+" shown / "+(snapshot?.radar?.length||0)+" trending";
-  for (const row of rows.slice(0,60)) {
-    const card=node("div","item");const head=node("div","rowhead");
-    head.append(node("span","name",row.symbol+" · "+(eligible(row)?"Pump curve active":"Watch only")),node("span","pill",row.sources.join(" + ")));
-    card.append(head,node("div","meta",usd(row.priceUsd)+" per token · cap "+usd(row.marketCap)+" · liquidity "+usd(row.liquidityUsd)+" · holders "+(row.holders??"—")+" · age "+(row.createdAt?Math.max(0,Math.floor((Date.now()-Date.parse(row.createdAt))/60000))+"m":"—")));
-    const actions=node("div","actionbar"), button=node("button","",paper.bought[row.mint]?"Bought once":"Paper buy "+usd(paper.settings.betUsd));
+  const query=$("radar-search").value.trim().toLowerCase();
+  let rows=(snapshot?.radar||[]).filter((row)=>passes(row) &&
+    (!query || row.symbol.toLowerCase().includes(query) || row.name.toLowerCase().includes(query) || row.mint.toLowerCase().includes(query)) &&
+    (radarUi.source==="any" || (radarUi.source==="both"?row.sources.length===2:row.sources.includes(radarUi.source))) &&
+    (radarUi.tab==="all" || radarUi.tab==="eligible"&&eligible(row) ||
+      radarUi.tab==="held"&&paper.holds[row.mint] || radarUi.tab==="bought"&&paper.bought[row.mint]));
+  rows.sort((a,b)=>{
+    const x=sortValue(a),y=sortValue(b);
+    if(x==null)return y==null?0:1;if(y==null)return -1;
+    return (x-y)*(radarUi.direction==="desc"?-1:1);
+  });
+  const size=[10,20,50].includes(Number(radarUi.pageSize))?Number(radarUi.pageSize):20;
+  const pages=Math.max(1,Math.ceil(rows.length/size));radarPage=Math.min(radarPage,pages-1);
+  $("radar-count").textContent=rows.length+" matches · "+(snapshot?.radar?.length||0)+" trending";
+  $("page-label").textContent="Page "+(radarPage+1)+" of "+pages;
+  $("previous").disabled=radarPage===0;$("next").disabled=radarPage>=pages-1;
+  for(const row of rows.slice(radarPage*size,(radarPage+1)*size)) {
+    const tr=node("tr"), token=node("td"), link=node("a","token link",row.symbol);
+    link.href="https://jup.ag/tokens/"+row.mint;link.target="_blank";link.rel="noopener noreferrer";
+    token.append(link,node("span","subline",ageText(row)+" · "+(eligible(row)?"Pump curve":"Watch only")+" · "+row.sources.join("+")));
+    const change=row.change5m??row.change1h;
+    const price=node("td","",tokenPrice(row.priceUsd));
+    if(change!=null) price.append(node("span","subline "+(change>=0?"good":"bad"),(change>=0?"+":"")+short(change)+"%"));
+    const paperCell=node("td"), button=node("button","",paper.bought[row.mint]?"Bought":eligible(row)?"Paper "+usd(paper.settings.betUsd):"Watch");
     button.disabled=!eligible(row)||Boolean(paper.bought[row.mint])||!num(row.priceUsd)||!solUsd();button.onclick=()=>buy(row);
-    actions.append(button,node("small","mono",row.mint));card.append(actions);box.append(card);
+    paperCell.append(button);
+    const chart=node("td");chart.append(sparkline(row.mint));
+    tr.append(token,price,node("td","",usd(row.marketCap)),node("td","",usd(row.volume5m??row.volume1h)),
+      node("td","",usd(row.liquidityUsd)),node("td","",row.holders==null?"—":short(row.holders)),paperCell,chart);box.append(tr);
   }
-  if (!rows.length) box.append(node("p","","No trends match these filters right now."));
+  if(!rows.length) {const tr=node("tr"),td=node("td","","No trends match this view right now.");td.colSpan=8;tr.append(td);box.append(tr);}
+  for(const b of $("radar-tabs").children) {b.className=b.dataset.tab===radarUi.tab?"selected":"";b.setAttribute("aria-pressed",String(b.dataset.tab===radarUi.tab));}
+  $("sort-direction").textContent=radarUi.direction==="desc"?"Highest first ↓":"Lowest first ↑";
 }
 function renderHolds() {
   const box=$("paper-holds");box.replaceChildren();const holds=Object.values(paper.holds);
@@ -175,7 +269,7 @@ function renderHolds() {
     const mark=num(prices[h.mint]?.priceUsd)||num(h.lastPrice);
     const value=h.qty*(mark||0), pnl=value-h.investedUsd-h.feesUsd;
     const row=node("div","item");row.append(node("div","name",h.symbol+" · "+short(h.qty)+" tokens"));
-    row.append(node("div","meta","Entry "+usd(h.entryPrice)+" · now "+usd(mark)+" · entry cap "+usd(h.entryCap)+" · now cap "+usd(prices[h.mint]?.marketCap)+" · liquidity "+usd(prices[h.mint]?.liquidityUsd)));
+    row.append(node("div","meta","Entry "+tokenPrice(h.entryPrice)+" · now "+tokenPrice(mark)+" · entry cap "+usd(h.entryCap)+" · now cap "+usd(prices[h.mint]?.marketCap)+" · liquidity "+usd(prices[h.mint]?.liquidityUsd)));
     row.append(node("div",pnl>=0?"good":"bad","Value "+usd(value)+" · P/L "+usd(pnl)+" ("+(h.investedUsd?short(pnl/(h.investedUsd+h.feesUsd)*100):"—")+"%)"));
     if (!priceTimes[h.mint] || Date.now()-priceTimes[h.mint]>120000) row.append(node("small","bad","Price may be stale"));
     const actions=node("div","actionbar");for(const pct of [25,50,100]) { const b=node("button","secondary","Paper sell "+pct+"%");b.onclick=()=>sellPaper(h.mint,pct);actions.append(b); }
@@ -197,7 +291,7 @@ async function refreshPrices() {
 async function refresh() {
   if (refreshing) return;refreshing=true;
   try {
-    const s=await call("/api/basket");snapshot=s;
+    const s=await call("/api/basket");snapshot=s;sampleRadar(s);
     $("status").textContent=(s.paused?"Scans paused":s.running?"Scanning":"Scanning")+" · last scan "+(s.lastScanAt?new Date(s.lastScanAt).toLocaleTimeString():"pending")+" · wallet "+(s.walletSol==null?"—":short(s.walletSol))+" SOL"+(s.lastError?" · "+s.lastError:"");
     $("stop").textContent=s.paused?"Resume scans":"Pause scans";
     $("setup").textContent="Pump volume account: "+(s.pumpVolumeReady===null?"checking":s.pumpVolumeReady?"ready":"needed on first buy")+". Existing token accounts are reused after a sale.";
@@ -235,7 +329,23 @@ $("cash-input").value=paper.cashSol;
 $("set-cash").onclick=()=>{const value=Number($("cash-input").value);if(!Number.isFinite(value)||value<0) return message("Enter a valid SOL amount.");paper.cashSol=value;record("adjust","Set paper cash to "+short(value)+" SOL");save();render();message("Paper cash updated.");};
 $("reset-paper").onclick=()=>{if(!confirm("Reset paper holds, history, and bought-once list?"))return;const cash=Number($("cash-input").value);const settings=paper.settings;paper={...fresh(),cashSol:Number.isFinite(cash)&&cash>=0?cash:.4,settings};prices={};priceTimes={};save();render();message("Paper wallet reset.");};
 $("auto").onclick=()=>{paper.auto=!paper.auto;save();render();message(paper.auto?"Auto paper on while this page is open. Eligible trends will be paper bought once as scans update.":"Auto paper off.");if(paper.auto&&snapshot) { for(const row of snapshot.radar||[]) if(eligible(row)&&passes(row)&&!paper.bought[row.mint]) buy(row,true); } };
-$("radar-view").onchange=renderRadar;$("refresh").onclick=refresh;
+for(const [tab,label] of [["eligible","Pump curves"],["all","All trends"],["held","Paper holds"],["bought","Bought once"]]) {
+  const b=node("button","",label);b.dataset.tab=tab;b.onclick=()=>{radarUi.tab=tab;radarPage=0;saveRadar();renderRadar();};$("radar-tabs").append(b);
+}
+$("radar-search").oninput=()=>{radarPage=0;renderRadar();};
+$("radar-source").value=radarUi.source;$("radar-source").onchange=()=>{radarUi.source=$("radar-source").value;radarPage=0;saveRadar();renderRadar();};
+$("radar-sort").value=radarUi.sort;$("radar-sort").onchange=()=>{radarUi.sort=$("radar-sort").value;radarPage=0;saveRadar();renderRadar();};
+$("sort-direction").onclick=()=>{radarUi.direction=radarUi.direction==="desc"?"asc":"desc";radarPage=0;saveRadar();renderRadar();};
+for(const button of document.querySelectorAll("[data-sort]")) button.onclick=()=>{
+  radarUi.sort=button.dataset.sort;$("radar-sort").value=radarUi.sort;radarPage=0;saveRadar();renderRadar();
+};
+$("text-size").value=radarUi.size;
+function applyTextSize() {document.documentElement.style.setProperty("--scale",{small:.9,regular:1,large:1.2}[radarUi.size]||1);}
+applyTextSize();$("text-size").onchange=()=>{radarUi.size=$("text-size").value;applyTextSize();saveRadar();};
+$("page-size").value=String(radarUi.pageSize);$("page-size").onchange=()=>{radarUi.pageSize=Number($("page-size").value);radarPage=0;saveRadar();renderRadar();};
+$("previous").onclick=()=>{radarPage=Math.max(0,radarPage-1);renderRadar();};
+$("next").onclick=()=>{radarPage++;renderRadar();};
+$("refresh").onclick=refresh;
 $("stop").onclick=async()=>{try{await call("/api/pause",{method:"POST"});await refresh();}catch(error){message(error.message);}};
 render();refresh();setInterval(refresh,10000);
 </script>

@@ -59,9 +59,14 @@ that browser's local storage and remain after leaving the radar. A separate
 Dex Screener token-pair price lookup (with Jupiter price fallback) marks
 paper holds, including 25%, 50%, and 100% paper sells. Paper fills use a
 price estimate and configurable fee and impact, not a transaction quote.
-They do not send orders or change the real wallet. Clearing site data or
-changing phones loses this local paper record; Railway does not run paper
+Paper trades do not send orders or change the real wallet. Clearing site data
+or changing phones loses this local paper record; Railway does not run paper
 auto buys when the dashboard is closed.
+The radar has topic tabs, source and sort controls, token search, sortable
+columns, page controls, adjustable text size and row count, and a sideways
+scrolling table on phones. Its rightmost mini chart is an observed price trail
+from this browser's successive scans, retained for up to 24 hours; it starts
+with a dot and is not a historical 24-hour chart from an exchange.
 
 The dashboard lists nonzero balances in this wallet's canonical token accounts
 for both Token and Token-2022. Its 25%, 50%, and 100% sell buttons request a

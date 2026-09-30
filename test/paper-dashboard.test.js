@@ -3,11 +3,11 @@ const assert = require("node:assert/strict");
 const fs = require("node:fs");
 const vm = require("node:vm");
 
-function element() {
-  return { value:"", textContent:"", className:"", children:[],
+function element(tag) {
+  return { tagName:tag, value:"", textContent:"", className:"", children:[], dataset:{},
     append(...children) { this.children.push(...children); },
     replaceChildren(...children) { this.children=children; },
-    addEventListener() {} };
+    addEventListener() {}, setAttribute() {} };
 }
 
 test("paper buys use SOL cash, survive radar exit, and sell without a live request", () => {
@@ -18,7 +18,8 @@ test("paper buys use SOL cash, survive radar exit, and sell without a live reque
   const context = vm.createContext({
     document: {
       getElementById(id) { if (!elements.has(id)) elements.set(id,element()); return elements.get(id); },
-      createElement: element, querySelectorAll: () => []
+      createElement: element, createElementNS: (_namespace,tag) => element(tag), querySelectorAll: () => [],
+      documentElement: {style:{setProperty() {}}}
     },
     localStorage: {getItem:k=>storage.get(k)||null,setItem:(k,v)=>storage.set(k,v)},
     sessionStorage: {getItem:()=>null,setItem() {},removeItem() {}},
@@ -28,6 +29,9 @@ test("paper buys use SOL cash, survive radar exit, and sell without a live reque
   });
   vm.runInContext(script,context);
   const mint="So11111111111111111111111111111111111111112";
+  vm.runInContext(`sampleRadar({lastScanAt:new Date(Date.now()-300000).toISOString(),radar:[{mint:"${mint}",priceUsd:.009}]});sampleRadar({lastScanAt:new Date().toISOString(),radar:[{mint:"${mint}",priceUsd:.01}]});`,context);
+  assert.equal(vm.runInContext(`trail.points["${mint}"].length`,context),2);
+  assert.equal(vm.runInContext(`sparkline("${mint}").children[0].children[0].tagName`,context),"polyline");
   vm.runInContext(`snapshot={solUsd:200,candidates:[{mint:"${mint}"}],radar:[{mint:"${mint}",symbol:"TEST",priceUsd:.01,sources:["5m"]}]};buy(snapshot.radar[0]);`,context);
   assert.equal(vm.runInContext("paper.cashSol",context),.4-(1/200+.000005));
   assert.equal(vm.runInContext(`paper.holds["${mint}"].qty`,context),100);
