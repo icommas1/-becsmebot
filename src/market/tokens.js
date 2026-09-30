@@ -1,4 +1,4 @@
-const { PublicKey } = require("@solana/web3.js");
+const { isCanonicalMint } = require("./mint");
 
 const INTERVALS = ["5m", "1h", "6h", "24h"];
 const FEEDS = [
@@ -26,8 +26,7 @@ function marketRows(feeds) {
     if (!Array.isArray(tokens)) continue;
     for (const [index, token] of tokens.entries()) {
       if (!token?.id) continue;
-      try { if (new PublicKey(token.id).toBase58() !== token.id) continue; }
-      catch (_) { continue; }
+      if(!isCanonicalMint(token.id))continue;
       const row = rows.get(token.id) || {
         mint: token.id, symbol: "?", name: "", feeds: [], ranks: {},
         priceUsd: null, marketCap: null, liquidityUsd: null, holders: null,

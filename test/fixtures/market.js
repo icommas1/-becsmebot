@@ -1,7 +1,7 @@
-const { PublicKey } = require("@solana/web3.js");
+const bs58 = require("bs58").default;
 const { createMarket } = require("../../src/market/market");
 const SOL = "So11111111111111111111111111111111111111112";
-const MINTS = [2,3,4,5,6].map(byte => new PublicKey(new Uint8Array(32).fill(byte)).toBase58());
+const MINTS = [2,3,4,5,6].map(byte => bs58.encode(new Uint8Array(32).fill(byte)));
 async function fixtureMarket() {
   const tokens = MINTS.map((id, i) => ({ id, symbol:["FRESH","HEAT","LARGE","OLD","RISK"][i],
     name:"Fixture " + i, usdPrice:.01, mcap:i===2?5000000:50000,

@@ -2,6 +2,11 @@ const test=require("node:test"),assert=require("node:assert/strict");
 const {isValid,assertSchema}=require("../../src/api/validation");
 const {rankSignals}=require("../../src/market/signals");
 const {SOL}=require("../fixtures/market");
+const {isCanonicalMint}=require("../../src/market/mint");
+test("mint validation requires an exact canonical 32-byte base58 encoding",()=>{
+  assert.ok(isCanonicalMint(SOL));assert.ok(isCanonicalMint("1".repeat(32)));
+  for(const mint of [null,"1".repeat(31),"1".repeat(33),"0".repeat(32)," "+SOL,SOL+"1"])assert.equal(isCanonicalMint(mint),false);
+});
 test("strict price request rejects unknown fields, invalid mints and oversized batches",()=>{
   assert.ok(isValid("priceRequest",{mints:[SOL]}));
   assert.ok(isValid("priceRequest",{mints:[]}));

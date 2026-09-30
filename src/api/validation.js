@@ -1,10 +1,8 @@
 const Ajv = require("ajv");
-const { PublicKey } = require("@solana/web3.js");
+const { isCanonicalMint } = require("../market/mint");
 const schemas = require("./schemas.json");
 const ajv = new Ajv({ strict: true, allErrors: false });
-ajv.addFormat("solana-mint", value => {
-  try { return new PublicKey(value).toBase58() === value; } catch { return false; }
-});
+ajv.addFormat("solana-mint", isCanonicalMint);
 ajv.addFormat("date-time", value => /^\d{4}-\d{2}-\d{2}T/.test(value) && Number.isFinite(Date.parse(value)));
 const validators = Object.fromEntries(Object.keys(schemas.definitions).map(name => [name,
   ajv.compile({ ...schemas, $ref: "#/definitions/" + name })]));
