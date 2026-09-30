@@ -4,6 +4,7 @@ const path = require("node:path");
 const express = require("express");
 const { Connection, PublicKey, LAMPORTS_PER_SOL } = require("@solana/web3.js");
 const { createManualSell } = require("./manual-sell");
+const { createPasscodeAuth } = require("./passcode-auth");
 const { FEEDS, marketRows, positive } = require("./jupiter-market");
 
 const SOL = "So11111111111111111111111111111111111111112";
@@ -16,11 +17,10 @@ const PRICE_CACHE_MS = 20000;
 const JUPITER_GAP_MS = 2200;
 
 const apiKey = process.env.JUPITER_API_KEY;
-const dashboardKey = process.env.DASHBOARD_KEY;
 const rpcUrl = process.env.HELIUS_RPC_URL;
 const dataDir = process.env.DATA_DIR;
-if (!apiKey || !dashboardKey || !rpcUrl) {
-  throw new Error("HELIUS_RPC_URL, JUPITER_API_KEY and DASHBOARD_KEY are required");
+if (!apiKey || !rpcUrl) {
+  throw new Error("HELIUS_RPC_URL and JUPITER_API_KEY are required");
 }
 
 const wallet = new PublicKey(WALLET);
@@ -158,9 +158,10 @@ async function scan() {
 }
 
 const app = express();
+app.set("trust proxy", 1);
 app.use(express.json({ limit: "20kb" }));
 app.use("/api", (_req, res, next) => { res.set("Cache-Control", "no-store"); next(); });
-app.get("/", (_req, res) => res.sendFile(path.join(__dirname, "dashboard.html")));
+app.get("/", (_req, res) => { res.set("Cache-Control", "no-store"); res.set("Referrer-Policy", "no-referrer"); res.sendFile(path.join(__dirname, "dashboard.html")); });
 app.get("/health", (_req, res) => res.json({
   ok: true, tradingEnabled: TRADING_ENABLED,
   manualSell: manualSell.status(),
@@ -168,13 +169,12 @@ app.get("/health", (_req, res) => res.json({
   running: state.running, paused: state.paused,
   feeds: state.feedStatus
 }));
-function requireKey(req, res, next) {
-  if (req.get("x-dashboard-key") !== dashboardKey) {
-    return res.status(401).json({ error: "Unauthorized" });
-  }
-  next();
-}
-app.get("/api/basket", requireKey, (_req, res) => res.json({
+const auth = createPasscodeAuth({ dataDir,
+  setupToken: process.env.DASHBOARD_SETUP_TOKEN,
+  setupExpires: process.env.DASHBOARD_SETUP_EXPIRES });
+auth.mount(app);
+const requireAuth = auth.requireAuth;
+app.get("/api/basket", requireAuth, (_req, res) => res.json({
   betUsd: BET_USD, wallet: WALLET,
   tradingEnabled: TRADING_ENABLED, paused: state.paused,
   manualSell: manualSell.status(),
@@ -183,7 +183,7 @@ app.get("/api/basket", requireKey, (_req, res) => res.json({
   lastError: state.lastError, radar: state.radar, feeds: state.feedStatus,
   purchases: state.ledger
 }));
-app.get("/api/search", requireKey, async (req, res) => {
+app.get("/api/search", requireAuth, async (req, res) => {
   const query = String(req.query.q || "").trim();
   if (query.length < 2 || query.length > 80) return res.status(400).json({ error: "Enter 2–80 characters" });
   try {
@@ -197,7 +197,7 @@ app.get("/api/search", requireKey, async (req, res) => {
     res.json({ rows });
   } catch (error) { res.status(503).json({ error: error.message }); }
 });
-app.post("/api/paper/prices", requireKey, async (req, res) => {
+app.post("/api/paper/prices", requireAuth, async (req, res) => {
   const input = req.body?.mints;
   if (!Array.isArray(input) || input.length > 100 ||
       input.some((mint) => {
@@ -208,19 +208,19 @@ app.post("/api/paper/prices", requireKey, async (req, res) => {
   try { res.json({ prices: await paperPrices([...new Set(input)]) }); }
   catch (_) { res.status(503).json({ error: "Market prices unavailable" }); }
 });
-app.get("/api/holdings", requireKey, async (_req, res) => {
+app.get("/api/holdings", requireAuth, async (_req, res) => {
   try { res.json({ holdings: await manualSell.holdings() }); }
   catch (_) { res.status(503).json({ error: "Wallet holdings unavailable" }); }
 });
-app.post("/api/sell/quote", requireKey, async (req, res) => {
+app.post("/api/sell/quote", requireAuth, async (req, res) => {
   try { res.json(await manualSell.quote(req.body)); }
   catch (error) { res.status(400).json({ error: error.message }); }
 });
-app.post("/api/sell", requireKey, async (req, res) => {
+app.post("/api/sell", requireAuth, async (req, res) => {
   try { res.json(await manualSell.sell(req.body?.quoteId)); }
   catch (error) { res.status(400).json({ error: error.message }); }
 });
-app.post("/api/pause", requireKey, (_req, res) => {
+app.post("/api/pause", requireAuth, (_req, res) => {
   state.paused = !state.paused;
   if (ledgerPath) persist();
   if (!state.paused) {

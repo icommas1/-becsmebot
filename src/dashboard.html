@@ -61,9 +61,17 @@ section.side-section { margin:16px 0 0; padding:15px; border-radius:10px; backgr
 .dock-panel .actionbar button { flex:1 }.dock-panel .item button { font-size:.83em; padding:7px 8px }
 .panel-note { margin-top:12px } #toast:not(:empty) { position:fixed; bottom:16px; left:50%; transform:translateX(-50%); z-index:10; max-width:min(94vw,560px); padding:10px 14px; border:1px solid #42799e; border-radius:9px; background:#1b354a; color:#e4f4ff; box-shadow:0 12px 36px #000a; text-align:center }
 [hidden] { display:none!important }
-.auth-gate { position:fixed; inset:0; z-index:20; display:grid; place-items:center; padding:18px; background:#070d17e8; backdrop-filter:blur(7px) }
-.auth-card { width:min(100%,390px); padding:24px; background:#172334; border:1px solid #41607b; border-radius:14px; box-shadow:0 24px 70px #000b }
-.auth-card h2 { color:#f5f8ff }.auth-card label { margin:14px 0 }.auth-card button { width:100% }.auth-error { min-height:20px; color:var(--bad); margin-top:10px }
+ .auth-gate { position:fixed; inset:0; z-index:20; display:flex; align-items:center; justify-content:center; overflow-y:auto; padding:20px; background:radial-gradient(ellipse at 100% 25%,#16355c 0,transparent 55%),radial-gradient(ellipse at 0 90%,#135049 0,transparent 60%),#060d20 }
+.auth-card { width:min(100%,350px); text-align:center; padding:12px 8px; color:#fff }
+.auth-lock { width:24px; height:28px; margin:0 auto 20px; color:#c7d7e8 }.auth-brand { font-size:.8em; letter-spacing:.18em; color:#b7ccd9; margin-bottom:20px }
+.auth-card h2 { font-size:1.55em; font-weight:400; margin:0 0 22px }.passcode-dots { display:flex; justify-content:center; gap:19px; margin:0 0 20px }
+.passcode-dot { width:13px; height:13px; border:2px solid #e5efff; border-radius:50% }.passcode-dot.filled { background:#e5efff }
+.auth-error { min-height:42px; color:#ffc1c1; font-size:.85em; margin:10px 0 }.auth-help { min-height:36px; font-size:.8em; margin:10px 0 }
+.passcode-pad { display:grid; grid-template-columns:repeat(3,1fr); justify-items:center; gap:18px 12px }
+.passcode-pad button { width:78px; height:78px; border-radius:50%; border:1px solid #e1efff38; background:#bddcff22; font-size:34px; font-weight:400; padding:8px; display:flex; flex-direction:column; justify-content:center; align-items:center; color:#fff }
+.passcode-pad button:active { background:#c9e2ff66 }.passcode-pad small { font-size:9px; letter-spacing:.2em; color:#fff; min-height:12px }
+.passcode-pad .passcode-delete { border:0; background:transparent; font-size:15px }.auth-reset { margin:20px 0 0; border:0; background:transparent; color:#d8e6fa; font-size:.9em }
+@media(max-height:650px) { .auth-lock,.auth-brand { margin-bottom:8px }.auth-card h2 { margin-bottom:14px }.passcode-pad { gap:9px }.passcode-pad button { width:64px; height:64px }.auth-reset { margin-top:8px } }
 @media(max-width:800px) {
   body { grid-template-areas:"head" "main" "nav"; grid-template-rows:auto minmax(0,1fr) auto }
   .terminal-header { padding:9px 12px; min-height:55px; gap:8px }.brand-mark { width:32px; height:32px; font-size:17px }.brand h1 { font-size:1em }.brand small,.brand-terminal,.header-data #status { display:none }
@@ -128,6 +136,7 @@ section.side-section { margin:16px 0 0; padding:15px; border-radius:10px; backgr
     </div>
     <div class="actionbar"><button id="set-cash" class="secondary">Set paper cash</button><button id="reset-paper" class="danger">Reset paper wallet</button></div>
     <p><small>Changing cash keeps holds. Reset clears paper holds, activity, and the buy-once list.</small></p>
+    <div class="actionbar"><button id="change-passcode" class="secondary">Change passcode</button><button id="lock-terminal" class="secondary">Lock terminal</button></div>
   </section></div>
   <div class="dock-panel" data-view-panel="live"><section class="side-section"><div class="rowhead"><h2>Real wallet</h2><span class="pill live">LIVE SELLS</span></div>
     <p><small>Automatic buying is off. Selling a token here sends a real transaction after your confirmation.</small></p>
@@ -138,11 +147,14 @@ section.side-section { margin:16px 0 0; padding:15px; border-radius:10px; backgr
 </div>
 </main>
 <div id="toast" role="status" aria-live="polite"></div>
-<div id="auth-gate" class="auth-gate" hidden><form id="auth-form" class="auth-card">
-  <h2>Unlock BecsBot</h2><p>Enter your dashboard key to load the terminal.</p>
-  <label>Dashboard key<input id="auth-key" type="password" autocomplete="off" required></label>
-  <button type="submit">Open terminal</button><div id="auth-error" class="auth-error" role="alert"></div>
-</form></div>
+<div id="auth-gate" class="auth-gate" hidden><div class="auth-card" role="dialog" aria-modal="true" aria-labelledby="auth-title">
+  <svg class="auth-lock" viewBox="0 0 24 28" fill="currentColor" aria-hidden="true"><path d="M5 12V8a7 7 0 0 1 14 0v4h1a2 2 0 0 1 2 2v11a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V14a2 2 0 0 1 2-2h1zm3 0h8V8a4 4 0 0 0-8 0v4z"/></svg>
+  <div class="auth-brand">BECSBOT TERMINAL</div><h2 id="auth-title">Enter Passcode</h2>
+  <div id="passcode-dots" class="passcode-dots" aria-label="Six digit passcode"></div>
+  <div id="auth-error" class="auth-error" role="alert"></div>
+  <div id="passcode-pad" class="passcode-pad" aria-label="Passcode keypad"></div>
+  <p id="auth-help" class="auth-help">Your six-digit BecsBot passcode</p><button id="auth-reset" class="auth-reset">Clear</button>
+</div></div>
 <script>
 const STORE = "becsPaperV1";
 const RADAR_UI_STORE = "becsRadarUiV1", TRAIL_STORE = "becsRadarTrailV1";
@@ -164,7 +176,13 @@ function loadPaper() {
 let paper = loadPaper();
 let snapshot = null, prices = {}, priceTimes = {}, refreshing = false;
 let searchRows=[], searchTimer=null, searchStatus="";
-let key = sessionStorage.getItem("becsKey") || "";
+let unlocked=false, setupToken=null;
+let authFlow="login", authPhase="login", pinDraft="", pendingPin="", currentPin="", authBusy=false;
+sessionStorage.removeItem("becsKey");
+if(typeof location!=="undefined") {
+  setupToken=new URLSearchParams(location.hash.slice(1)).get("setup");
+  if(setupToken) history.replaceState(null,"",location.pathname+location.search);
+}
 const $ = (id) => document.getElementById(id);
 const usd = (n) => Number.isFinite(n) ? "$" + n.toLocaleString(undefined,{maximumFractionDigits:2,minimumFractionDigits:2}) : "—";
 const tokenPrice = (n) => Number.isFinite(n) && n>0 ? "$"+n.toLocaleString(undefined,{maximumSignificantDigits:6}) : "—";
@@ -196,9 +214,9 @@ function message(value) {
 function num(value) { const n=Number(value); return Number.isFinite(n) && n>0 ? n : null; }
 function node(tag, className, value) { const el=document.createElement(tag); if(className)el.className=className; if(value!=null)el.textContent=value; return el; }
 async function call(url, options={}) {
-  if (!key) throw Error("Enter your dashboard key");
-  const response=await fetch(url,{...options,headers:{...options.headers,"x-dashboard-key":key}});
-  if (response.status===401) { key="";sessionStorage.removeItem("becsKey");showLogin("Dashboard key rejected");throw Error("Dashboard key rejected"); }
+  if (!unlocked) throw Error("Enter your passcode");
+  const response=await fetch(url,{...options,credentials:"same-origin"});
+  if (response.status===401) { unlocked=false;showLogin("Enter your passcode to continue");throw Error("Session locked"); }
   if (!response.ok) { const body=await response.json().catch(()=>({}));throw Error(body.error || "Request failed: " + response.status); }
   return response.json();
 }
@@ -353,7 +371,7 @@ async function refreshPrices() {
   } catch (error) { message("Paper price update: "+error.message); }
 }
 async function refresh() {
-  if (!key) {showLogin();return;}
+  if (!unlocked) {return;}
   if (refreshing) return;refreshing=true;
   try {
     const s=await call("/api/basket");snapshot=s;sampleRadar(s);
@@ -441,19 +459,76 @@ function setTerminalView(view) {
     panel.dataset.viewPanel===dock?"dock-panel active":"dock-panel";
   try { localStorage.setItem("becsTerminalView",view); } catch (_) {}
 }
-function showLogin(error="") {$("auth-gate").hidden=false;$("auth-error").textContent=error;}
-$("auth-form").onsubmit=(event)=>{
-  event.preventDefault();
-  key=$("auth-key").value.trim();
-  if (!key) return;
-  sessionStorage.setItem("becsKey",key);
-  $("auth-key").value="";$("auth-gate").hidden=true;$("auth-error").textContent="";
-  refresh();
-};
+function drawPasscode() {
+  const dots=$("passcode-dots");dots.replaceChildren();
+  for(let i=0;i<6;i++)dots.append(node("span","passcode-dot"+(i<pinDraft.length?" filled":"")));
+  dots.setAttribute("aria-label",pinDraft.length+" of 6 digits entered");
+  $("auth-title").textContent={login:"Enter Passcode",current:"Current Passcode",new:"Choose Passcode",confirm:"Confirm Passcode"}[authPhase];
+  $("auth-help").textContent=authFlow==="setup"?"Choose a separate six-digit BecsBot passcode":authFlow==="change"?"Change your BecsBot passcode":"Your six-digit BecsBot passcode";
+  for(const button of $("passcode-pad").children)button.disabled=authBusy;
+}
+function showLogin(error="") {
+  authFlow="login";authPhase="login";pinDraft="";pendingPin="";currentPin="";
+  $("auth-gate").hidden=false;$("auth-error").textContent=error;drawPasscode();
+}
+async function authRequest(url,body) {
+  const response=await fetch(url,{...options(),credentials:"same-origin",body:JSON.stringify(body)});
+  const data=await response.json();if(!response.ok)throw Error(data.error||"Could not unlock");return data;
+}
+async function submitPasscode() {
+  const entered=pinDraft;pinDraft="";
+  if(authPhase==="current") {currentPin=entered;authPhase="new";drawPasscode();return;}
+  if(authPhase==="new") {pendingPin=entered;authPhase="confirm";drawPasscode();return;}
+  if(authPhase==="confirm"&&entered!==pendingPin) {pendingPin="";authPhase="new";$("auth-error").textContent="Passcodes did not match. Choose again.";drawPasscode();return;}
+  authBusy=true;drawPasscode();
+  try {
+    if(authFlow==="setup") await authRequest("/api/auth/setup",{token:setupToken,passcode:pendingPin,confirm:entered});
+    else if(authFlow==="change") await authRequest("/api/auth/passcode",{current:currentPin,passcode:pendingPin,confirm:entered});
+    else await authRequest("/api/auth/login",{passcode:entered});
+    unlocked=true;setupToken=null;pendingPin="";currentPin="";$("auth-gate").hidden=true;$("auth-error").textContent="";
+    await refresh();
+  } catch(error) {
+    $("auth-error").textContent=error.message;
+    authPhase=authFlow==="change"?"current":authFlow==="setup"?"new":"login";
+    pendingPin="";currentPin="";
+  } finally {authBusy=false;drawPasscode();}
+}
+function enterDigit(digit) {
+  if(authBusy||$("auth-gate").hidden||pinDraft.length>=6)return;
+  $("auth-error").textContent="";pinDraft+=digit;drawPasscode();if(pinDraft.length===6)submitPasscode();
+}
+for(const [digit,letters] of [["1",""],["2","ABC"],["3","DEF"],["4","GHI"],["5","JKL"],["6","MNO"],["7","PQRS"],["8","TUV"],["9","WXYZ"],["",""],["0",""],["delete",""]]) {
+  if(!digit){$("passcode-pad").append(node("span"));continue;}
+  const button=node("button",digit==="delete"?"passcode-delete":"",digit==="delete"?"Delete":digit);
+  button.type="button";button.setAttribute("aria-label",digit==="delete"?"Delete last digit":digit);
+  if(digit!=="delete")button.append(node("small","",letters));
+  button.onclick=()=>{if(digit==="delete"){pinDraft=pinDraft.slice(0,-1);drawPasscode();}else enterDigit(digit);};
+  $("passcode-pad").append(button);
+}
+$("auth-reset").onclick=()=>{if(authBusy)return;pinDraft="";pendingPin="";currentPin="";authPhase=authFlow==="change"?"current":authFlow==="setup"?"new":"login";$("auth-error").textContent="";drawPasscode();};
+document.addEventListener("keydown",(event)=>{
+  if($("auth-gate").hidden||authBusy)return;
+  if(/^[0-9]$/.test(event.key)){event.preventDefault();enterDigit(event.key);}
+  else if(event.key==="Backspace"){event.preventDefault();pinDraft=pinDraft.slice(0,-1);drawPasscode();}
+});
+$("lock-terminal").onclick=async()=>{try{await authRequest("/api/auth/logout",{});}finally{unlocked=false;showLogin();}};
+$("change-passcode").onclick=()=>{authFlow="change";authPhase="current";pinDraft="";$("auth-error").textContent="";$("auth-gate").hidden=false;drawPasscode();};
+async function initializeAuth() {
+  showLogin();authBusy=true;drawPasscode();
+  try {
+    const response=await fetch("/api/auth/status",{credentials:"same-origin"});if(!response.ok)throw Error("Unable to check login");
+    const status=await response.json();
+    if(status.authenticated){unlocked=true;$("auth-gate").hidden=true;await refresh();}
+    else if(!status.configured){
+      if(setupToken){authFlow="setup";authPhase="new";}
+      else $("auth-error").textContent="Open your private setup link to choose a passcode.";
+    }
+  }catch(error){$("auth-error").textContent=error.message;}
+  finally{authBusy=false;drawPasscode();}
+}
 for(const button of document.querySelectorAll(".view-nav [data-view]"))
   button.onclick=()=>setTerminalView(button.dataset.view);
 setTerminalView(localStorage.getItem("becsTerminalView")||"radar");
-if (!key) showLogin();
-render();refresh();setInterval(refresh,10000);
+render();initializeAuth();setInterval(refresh,10000);
 </script>
 </body></html>

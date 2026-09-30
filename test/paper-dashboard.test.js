@@ -13,13 +13,13 @@ function element(tag) {
 test("paper buys use SOL cash, survive radar exit, and sell without a live request", async () => {
   const html = fs.readFileSync(require.resolve("../src/dashboard.html"), "utf8");
   const script = html.match(/<script>([\s\S]*?)<\/script>/)[1]
-    .replace(/render\(\);refresh\(\);setInterval\(refresh,10000\);\s*$/, "");
+    .replace(/render\(\);initializeAuth\(\);setInterval\(refresh,10000\);\s*$/, "");
   const elements = new Map(), storage = new Map();
   const context = vm.createContext({
     document: {
       getElementById(id) { if (!elements.has(id)) elements.set(id,element()); return elements.get(id); },
       createElement: element, createElementNS: (_namespace,tag) => element(tag), querySelectorAll: () => [],
-      documentElement: {style:{setProperty() {}}}, body:{dataset:{}}
+      documentElement: {style:{setProperty() {}}}, body:{dataset:{}}, addEventListener() {}
     },
     localStorage: {getItem:k=>storage.get(k)||null,setItem:(k,v)=>storage.set(k,v)},
     sessionStorage: {getItem:()=>null,setItem() {},removeItem() {}},
@@ -29,8 +29,10 @@ test("paper buys use SOL cash, survive radar exit, and sell without a live reque
     confirm:()=>true
   });
   vm.runInContext(script,context);
+  vm.runInContext("showLogin()",context);
   await vm.runInContext("refresh()",context);
   assert.equal(elements.get("auth-gate").hidden,false);
+  assert.equal(elements.get("passcode-dots").children.length,6);
   const mint="So11111111111111111111111111111111111111112";
   vm.runInContext("paper.settings.minOrganicScore=70",context);
   assert.equal(vm.runInContext("passes({organicScore:65})",context),false);
@@ -55,4 +57,20 @@ test("paper buys use SOL cash, survive radar exit, and sell without a live reque
   assert.equal(vm.runInContext(`paper.bought["${mint}"]`,context),true);
   assert.ok(vm.runInContext("paper.realizedUsd",context)>0);
   assert.ok(storage.get("becsPaperV1").includes("TEST"));
+  context.authRequests=[];
+  vm.runInContext('authRequest=async(url,body)=>{authRequests.push({url,body});};refresh=async()=>{};setupToken="one-time";authFlow="setup";authPhase="new";pinDraft="027318";',context);
+  await vm.runInContext("submitPasscode()",context);
+  assert.equal(vm.runInContext("authPhase",context),"confirm");
+  vm.runInContext('pinDraft="027319"',context);
+  await vm.runInContext("submitPasscode()",context);
+  assert.equal(context.authRequests.length,0);
+  vm.runInContext('pinDraft="027318"',context);
+  await vm.runInContext("submitPasscode()",context);
+  vm.runInContext('pinDraft="027318"',context);
+  await vm.runInContext("submitPasscode()",context);
+  assert.equal(context.authRequests[0].url,"/api/auth/setup");
+  assert.equal(context.authRequests[0].body.passcode,"027318");
+  assert.equal(vm.runInContext("unlocked",context),true);
+  assert.equal(elements.get("auth-gate").hidden,true);
+  assert.equal([...storage.values()].some(value=>value.includes("027318")),false);
 });
