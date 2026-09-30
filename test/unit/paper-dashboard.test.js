@@ -8,7 +8,7 @@ function element(tag) {
     showModal() {this.open=true;},close() {this.open=false;},
     append(...children) { this.children.push(...children); },
     replaceChildren(...children) { this.children=children; },
-    addEventListener() {}, setAttribute() {} };
+    addEventListener() {}, setAttribute(name,value) {this[name]=String(value);} };
 }
 
 test("paper buys use SOL cash, survive radar exit, and sell without a live request", async () => {
@@ -45,6 +45,10 @@ test("paper buys use SOL cash, survive radar exit, and sell without a live reque
   vm.runInContext(`sampleRadar({lastScanAt:new Date(Date.now()-300000).toISOString(),radar:[{mint:"${mint}",priceUsd:.009}]});sampleRadar({lastScanAt:new Date().toISOString(),radar:[{mint:"${mint}",priceUsd:.01}]});`,context);
   assert.equal(vm.runInContext(`trail.points["${mint}"].length`,context),2);
   assert.equal(vm.runInContext(`sparkline("${mint}").children[0].children[0].tagName`,context),"polyline");
+  vm.runInContext(`trail.points["${mint}"]=[[100,2],[200,4],[300,3]];`,context);
+  const spark=vm.runInContext(`sparkline("${mint}").children[0]`,context);
+  assert.equal(spark.children[0].points,"3.0,35.0 56.0,3.0 109.0,19.0");
+  assert.equal(spark.children[0].stroke,"#59d6a2");
   vm.runInContext(`snapshot={solUsd:200,solPriceAt:Date.now(),radar:[{mint:"${mint}",symbol:"TEST",name:"Test",...eligible,priceUsd:.01,observedAt:Date.now(),feeds:["trending:5m"],ranks:{"trending:5m":1}}]};buy(snapshot.radar[0]);`,context);
   assert.equal(elements.get("radar").children.length,1);
   assert.equal(vm.runInContext("paperReady({priceUsd:1,observedAt:Date.now()-180001})",context),false);
@@ -67,6 +71,7 @@ test("paper buys use SOL cash, survive radar exit, and sell without a live reque
   assert.equal(vm.runInContext("Object.keys(paper.holds).length",context),1);
   vm.runInContext(`prices["${mint}"]={priceUsd:.02,source:"jupiter-v3"};priceTimes["${mint}"]=Date.now();sellPaper("${mint}",100,1);`,context);
   assert.equal(vm.runInContext(`paper.holds["${mint}"].qty`,context),50);
+  assert.match(elements.get("activity").children[0].textContent,/Paper sold \$1\.00 TEST/);
   vm.runInContext(`sellPaper("${mint}",100);`,context);
   assert.equal(vm.runInContext("Object.keys(paper.holds).length",context),0);
   assert.equal(vm.runInContext(`Boolean(paper.bought["${mint}"])`,context),true);

@@ -24,6 +24,16 @@ test("fresh filters, radar and responsive execution dock",async({page,isMobile})
     await expect(page.locator("#signals")).toContainText("FRESH");
   }
 });
+test("launch filters update Radar and Signals together",async({page})=>{
+  const liquidity=page.getByLabel("Min liquidity ($)");
+  await liquidity.fill("20000");
+  await liquidity.blur();
+  await expect(page.locator("#radar .token-contact")).toHaveCount(0);
+  await expect(page.locator("#signals .rail-contact")).toHaveCount(0);
+  await page.getByRole("button",{name:"Restore fresh-launch filters"}).click();
+  await expect(page.locator("#radar .token-contact")).toHaveCount(2);
+  await expect(page.locator("#signals .rail-contact")).toHaveCount(2);
+});
 test("all terminal navigation panels remain reachable",async({page})=>{
   for(const [button,view,content] of [
     ["Markets","radar","FRESH"],["Paper wallet","paper","Paper wallet"],
@@ -70,6 +80,8 @@ test("one dollar paper buy and sale survive a reload without real orders",async(
   expect(wallet.holds[MINTS[0]].qty).toBeCloseTo(50,8);
   expect(wallet.activity[0].sizeUsd).toBe(1);
   expect(wallet.auto).toBe(false);
+  await page.getByRole("button",{name:"Activity",exact:true}).click();
+  await expect(page.locator("#activity")).toContainText("Paper sold $1.00 FRESH");
   expect(realRequests).toEqual([]);
 });
 test("automatic paper uses the same fresh filters and buys each mint once",async({page})=>{
