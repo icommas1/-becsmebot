@@ -32,6 +32,10 @@ test('market merges 13 feeds, preserves delayed feed timestamps and omitted V3 m
  failed=true;await market.scan();const second=market.snapshot();assert.match(second.lastError,/fixture delay/);assert.equal(second.feeds['trending:5m'].at,first.feeds['trending:5m'].at);assert.equal(second.radar.length,1);
  const other='EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGkZwyTDt1v';const marks=await market.paperPrices([SOL,other]);assert.equal(marks[other],null);assert.equal(marks[SOL].blockId,42);
 });
+test('fresh metadata cannot refresh a cached older price',async()=>{
+ const market=createMarket({request:async url=>url.startsWith('/price')?{[SOL]:{usdPrice:200}}:url.includes('toptrending/5m')?[{id:SOL,symbol:'SOL',usdPrice:200}]:[{id:SOL,symbol:'SOL'}]});
+ await market.scan();const s=market.snapshot();assert.equal(s.radar[0].priceFeed,'trending:5m');assert.equal(s.radar[0].observedAt,Date.parse(s.feeds['trending:5m'].at));
+});
 test('public APIs reject signing, invalid inputs and excessive requests',async()=>{
  const app=createApp({snapshot:()=>({radar:[],feeds:{}}),search:async()=>[],paperPrices:async mints=>Object.fromEntries(mints.map(m=>[m,null]))});
  const server=app.listen(0,'127.0.0.1');await new Promise(r=>server.once('listening',r));const base='http://127.0.0.1:'+server.address().port;

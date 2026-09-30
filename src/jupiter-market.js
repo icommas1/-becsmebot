@@ -39,7 +39,7 @@ function marketRows(feeds) {
       row.ranks[feed] = index + 1;
       row.symbol = String(token.symbol || row.symbol).slice(0, 32);
       row.name = String(token.name || row.name).slice(0, 100);
-      row.priceUsd = positive(token.usdPrice) ?? row.priceUsd;
+      if (positive(token.usdPrice)) { row.priceUsd=positive(token.usdPrice);row.priceFeed=feed; }
       row.marketCap = positive(token.mcap) ?? row.marketCap;
       row.liquidityUsd = positive(token.liquidity) ?? row.liquidityUsd;
       row.holders = positive(token.holderCount) ?? row.holders;

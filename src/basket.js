@@ -84,7 +84,7 @@ function createMarket({ apiKey, dataDir, request }) {
       // Merge older feeds first so successful fresh metadata wins.
       const ordered=Object.fromEntries(Object.entries(feedTokens).sort(([a],[b])=>
         Date.parse(state.feeds[a]?.at||0)-Date.parse(state.feeds[b]?.at||0)));
-      state.radar=marketRows(ordered).map((row)=>({...row,observedAt:Math.max(...row.feeds.map((feed)=>Date.parse(state.feeds[feed]?.at||0)))}));
+      state.radar=marketRows(ordered).map((row)=>({...row,observedAt:Date.parse(state.feeds[row.priceFeed]?.at||0)}));
       history.sample(marketRows(successful));
       state.lastError=errors.length?errors.join("; "):null;
     }catch(error){state.lastError=error.message;}

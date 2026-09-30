@@ -14,6 +14,7 @@ test("merges Jupiter categories without Pump eligibility", () => {
   assert.equal(rows.length, 1);
   assert.deepEqual(rows[0].feeds, ["trending:5m", "traded:1h", "recent"]);
   assert.equal(rows[0].ranks["trending:5m"], 1);
+  assert.equal(rows[0].priceFeed,"trending:5m");
   assert.equal(rows[0].volume5m, 150);
   assert.equal(rows[0].change5m, 1.25);
   assert.equal(rows[0].isVerified, true);

@@ -300,7 +300,7 @@ function renderRadar() {
     const price=node("td","",tokenPrice(row.priceUsd));
     if(change!=null) price.append(node("span","subline "+(change>=0?"good":"bad"),(change>=0?"+":"")+short(change)+"%"));
     const paperCell=node("td"), button=node("button","",paper.bought[row.mint]?"Bought":row.isSus?"Flagged":"Paper "+usd(paper.settings.betUsd));
-    button.disabled=!paperReady(row)||Boolean(paper.bought[row.mint])||!solUsd();button.onclick=()=>buy(row);
+    button.disabled=!paperReady(row)||Boolean(paper.bought[row.mint])||!solUsd();button.onclick=()=>{buy(row);refreshPrices(true);};
     paperCell.append(button);
     const chart=node("td");chart.append(sparkline(row.mint));
     tr.append(token,price,node("td","",row.organicScore==null?"—":short(row.organicScore)+" / 100"),node("td","",usd(row.marketCap)),node("td","",usd(row["volume"+radarUi.source])),
@@ -358,7 +358,7 @@ function infoLinks(box,mint) {
 }
 function renderSignals() {
   const box=$("signals");box.replaceChildren();
-  for(const signal of snapshot?.signals||[]) {const item=node("div","item");item.append(node("div","name",signal.symbol+" · "+short(signal.multiple)+"×"),node("div","meta","Peak "+short(signal.peakMultiple)+"× · tracked from "+new Date(signal.firstSeenAt).toLocaleString()+" · "+(Date.now()-signal.observedAt>180000?"stale":"recent")));infoLinks(item,signal.mint);const b=node("button","","Paper buy "+usd(paper.settings.betUsd));b.disabled=!paperReady(signal)||!!paper.bought[signal.mint]||!solUsd();b.onclick=()=>buy(signal);item.append(b);box.append(item);}
+  for(const signal of snapshot?.signals||[]) {const item=node("div","item");item.append(node("div","name",signal.symbol+" · "+short(signal.multiple)+"×"),node("div","meta","Peak "+short(signal.peakMultiple)+"× · tracked from "+new Date(signal.firstSeenAt).toLocaleString()+" · "+(Date.now()-signal.observedAt>180000?"stale":"recent")));infoLinks(item,signal.mint);const b=node("button","","Paper buy "+usd(paper.settings.betUsd));b.disabled=!paperReady(signal)||!!paper.bought[signal.mint]||!solUsd();b.onclick=()=>{buy(signal);refreshPrices(true);};item.append(b);box.append(item);}
   if(!box.children.length)box.append(node("p","","Waiting for observed signals."));
   const feeds=$("feeds");feeds.replaceChildren();for(const [name,status] of Object.entries(snapshot?.feeds||{}))feeds.append(node("div","item",name+" · "+(status.count??0)+" tokens · "+(status.error||status.at||"pending")));
 }
