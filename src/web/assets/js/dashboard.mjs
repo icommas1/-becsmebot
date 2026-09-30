@@ -19,11 +19,13 @@ const api=createApiClient();
 const $=id=>document.getElementById(id);
 function save(){if(!savePaper(localStorage,paper))message("Phone storage is full; paper trades may not persist.");}
 function saveRadar() { try { localStorage.setItem(RADAR_UI_STORE,JSON.stringify(radarUi)); } catch (_) {} }
-function sampleRadar(s) {
-  if(s.trails) {for(const [mint,points] of Object.entries(s.trails)) trail.points[mint]=points;return;}
+async function loadRadarHistory(s) {
   if(!s.lastScanAt||s.lastScanAt===trail.scan)return;
-  trail.scan=s.lastScanAt;const at=Date.parse(s.lastScanAt);
-  for(const row of s.radar||[]) if(num(row.priceUsd)) {const points=trail.points[row.mint]||[];points.push([at,row.priceUsd]);trail.points[row.mint]=points.slice(-1440);}
+  try {
+    const history=await api.history();
+    trail={scan:s.lastScanAt,points:history.trails||{}};
+    try { localStorage.setItem(TRAIL_STORE,JSON.stringify(trail)); } catch (_) {}
+  } catch (_) { /* Keep the last usable chart while the separate history request is unavailable. */ }
 }
 let toastTimer;
 function message(value) {
@@ -77,7 +79,7 @@ function runAutoExits() {
 async function refresh() {
   if (refreshing) return;refreshing=true;
   try {
-    const s=await api.basket();snapshot=s;sampleRadar(s);
+    const s=await api.basket();snapshot=s;await loadRadarHistory(s);
     const scanned=s.lastScanAt?new Date(s.lastScanAt).toLocaleTimeString():"pending";
     $("status").textContent=(s.paused?"Scans paused":s.running?"Scanning":"Updated")+" · "+scanned+(s.lastError?" · "+s.lastError:"");
     $("market-status").textContent="Jupiter scan "+scanned+(s.lastError?" · Some data delayed":" · 5m / 1h / 6h / 24h feeds");
@@ -170,4 +172,4 @@ function setTerminalView(view) {
 for(const button of document.querySelectorAll(".view-nav [data-view]"))
   button.onclick=()=>setTerminalView(button.dataset.view);
 setTerminalView(localStorage.getItem("becsTerminalView")||"radar");
-render();refresh();setInterval(refresh,10000);
+render();refresh();setInterval(refresh,15000);

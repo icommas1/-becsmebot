@@ -14,6 +14,8 @@ function createMarket({ apiKey, dataDir, request }) {
     solPriceAt:null, radar:[], feeds:{}, scanIntervalMs:SCAN_MS };
   const feedTokens = {}, priceCache = new Map(), searchCache = new Map();
   const priceJobs = new Map(), searchJobs = new Map();
+  let apiRevision = 0, compactSignals = [];
+  const touch = () => { apiRevision++; };
 
   async function paperPrices(mints) {
     const result = {}, missing = [...new Set(mints)].sort().filter((mint) => {
@@ -60,7 +62,7 @@ function createMarket({ apiKey, dataDir, request }) {
 
   async function scan() {
     if(state.running)return;
-    state.running=true;
+    state.running=true;touch();
     const successful={},errors=[];
     try {
       try {
@@ -68,15 +70,15 @@ function createMarket({ apiKey, dataDir, request }) {
         assertSchema("upstreamPrices", prices);
         const price=positive(prices[SOL]?.usdPrice);
         if(!price)throw Error("SOL price unavailable");
-        state.solUsd=price;state.solPriceAt=Date.now();
+        state.solUsd=price;state.solPriceAt=Date.now();touch();
       }catch(error){errors.push("SOL: "+error.message);}
       for(const [name,url] of FEEDS) {
         try {
           const tokens=await jupiter(url);
           assertSchema("upstreamTokens", tokens);
           successful[name]=tokens;feedTokens[name]=tokens;
-          state.feeds[name]={count:tokens.length,at:new Date().toISOString()};
-        }catch(error){errors.push(name+": "+error.message);state.feeds[name]={...state.feeds[name],error:error.message};}
+          state.feeds[name]={count:tokens.length,at:new Date().toISOString()};touch();
+        }catch(error){errors.push(name+": "+error.message);state.feeds[name]={...state.feeds[name],error:error.message};touch();}
       }
       // Merge older feeds first so successful fresh metadata wins.
       const ordered=Object.fromEntries(Object.entries(feedTokens).sort(([a],[b])=>
@@ -85,13 +87,26 @@ function createMarket({ apiKey, dataDir, request }) {
       history.sample(marketRows(successful));
       state.lastError=errors.length?errors.join("; "):null;
     }catch(error){state.lastError=error.message;}
-    finally{state.lastScanAt=new Date().toISOString();state.running=false;}
+    finally{
+      state.lastScanAt=new Date().toISOString();state.running=false;
+      const trails=history.snapshot(state.radar.map(row=>row.mint));
+      compactSignals=rankSignals(state.radar,trails).map(({mint,firstSeenAt,observedAt,multiple,peakMultiple})=>
+        ({mint,firstSeenAt,observedAt,multiple,peakMultiple}));
+      touch();
+    }
   }
   function snapshot() {
     const trails=history.snapshot(state.radar.map(row=>row.mint));
     return {...state,tradingEnabled:false,manualSell:{enabled:false},trails,signals:rankSignals(state.radar,trails)};
   }
-  return {snapshot,scan,search,paperPrices};
+  function terminalSnapshot() {
+    return {...state,tradingEnabled:false,manualSell:{enabled:false},signals:compactSignals};
+  }
+  function chartHistory() {
+    return {scanAt:state.lastScanAt,trails:history.chartSnapshot(state.radar.map(row=>row.mint))};
+  }
+  return {snapshot,terminalSnapshot,chartHistory,snapshotRevision:()=>apiRevision,
+    historyRevision:()=>history.revision(),scan,search,paperPrices};
 }
 
 module.exports={createMarket,SCAN_MS};

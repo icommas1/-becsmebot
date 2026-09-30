@@ -11,14 +11,48 @@ test("all public response contracts and read-only smoke work against a real HTTP
   const market=await fixtureMarket(),base=await serve(t,market);
   const stylesheet=await fetch(base+"/assets/dashboard.css");
   assert.equal(stylesheet.status,200);assert.match(stylesheet.headers.get("content-type"),/^text\/css/);
-  for(const [route,schema]of [["/health","health"],["/api/basket","snapshot"],["/api/search?q=FRESH","searchResponse"]]){
+  for(const [route,schema]of [["/health","health"],["/api/basket","snapshot"],["/api/history","historyResponse"],["/api/search?q=FRESH","searchResponse"]]){
     const r=await fetch(base+route);assert.equal(r.status,200);assert.ok(isValid(schema,await r.json()));
   }
   const r=await fetch(base+"/api/paper/prices",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({mints:[SOL,MINTS[0]]})});
   assert.equal(r.status,200);assert.ok(isValid("priceResponse",await r.json()));
   const called=[];await smoke(base,{request:(url,options)=>{called.push({url,method:options.method||"GET"});return fetch(url,options);}});
-  assert.deepEqual(called.map(c=>c.method),["GET","GET","GET","GET"]);
-  assert.equal(called.length,4);
+  assert.deepEqual(called.map(c=>c.method),["GET","GET","GET","GET","GET"]);
+  assert.equal(called.length,5);
+});
+test("browser payloads preserve Radar and Signals while separating bounded chart history",async t=>{
+  const market=await fixtureMarket(),full=market.snapshot(),base=await serve(t,market);
+  const basketResponse=await fetch(base+"/api/basket"),basket=await basketResponse.json();
+  assert.equal("trails" in basket,false);
+  assert.deepEqual(basket.radar,full.radar);
+  assert.deepEqual(basket.signals.map(s=>s.mint),full.signals.map(s=>s.mint));
+  assert.ok(basket.signals.every(s=>Object.keys(s).sort().join(",")==="firstSeenAt,mint,multiple,observedAt,peakMultiple"));
+  const history=await(await fetch(base+"/api/history")).json();
+  assert.ok(isValid("historyResponse",history));
+  assert.ok(Object.values(history.trails).every(points=>points.length<=120));
+  const hydrated=basket.signals.map(signal=>({...basket.radar.find(row=>row.mint===signal.mint),...signal}));
+  assert.deepEqual(hydrated,full.signals);
+  assert.ok(Buffer.byteLength(JSON.stringify(basket))+Buffer.byteLength(JSON.stringify(history))<Buffer.byteLength(JSON.stringify(full))*2);
+  const unchanged=await fetch(base+"/api/basket",{headers:{"If-None-Match":basketResponse.headers.get("etag")}});
+  assert.equal(unchanged.status,304);
+  const historyResponse=await fetch(base+"/api/history");
+  assert.equal((await fetch(base+"/api/history",{headers:{"If-None-Match":historyResponse.headers.get("etag")}})).status,304);
+});
+test("ETags from a previous server instance cannot suppress changed market data after restart",async t=>{
+  const markets=[];
+  for(const price of [200,250]){
+    const market=createMarket({request:async url=>url.startsWith("/price")?{[SOL]:{usdPrice:price}}:[{id:SOL,symbol:"SOL",usdPrice:price}]});
+    await market.scan();markets.push(market);
+  }
+  const first=await serve(t,markets[0]),restarted=await serve(t,markets[1]);
+  for(const route of ["/api/basket","/api/history"]){
+    const original=await fetch(first+route);
+    const response=await fetch(restarted+route,{headers:{"If-None-Match":original.headers.get("etag")}});
+    assert.equal(response.status,200,route+" must invalidate the previous instance validator");
+    const value=await response.json();
+    if(route==="/api/basket")assert.equal(value.solUsd,250);
+    else assert.equal(value.trails[SOL].at(-1)[1],250);
+  }
 });
 test("response schema violations return 503 instead of exposing malformed data",async t=>{
   const market=await fixtureMarket();const base=await serve(t,{snapshot:market.snapshot,search:async()=>[{mint:"invalid"}],paperPrices:async()=>({[SOL]:{priceUsd:0,observedAt:Date.now()}})});
@@ -68,14 +102,16 @@ test("persisted corrupt, unsorted and future points cannot become a signal basel
 });
 test("smoke rejects stale scans and accidentally enabled real trading",async t=>{
   const market=await fixtureMarket();let mode="stale";
-  const base=await serve(t,{...market,snapshot:()=>({...market.snapshot(),...(mode==="stale"?{lastScanAt:new Date(Date.now()-600000).toISOString()}:{tradingEnabled:true})})});
+  const project=()=>({...market.snapshot(),...(mode==="stale"?{lastScanAt:new Date(Date.now()-600000).toISOString()}:{tradingEnabled:true})});
+  const base=await serve(t,{...market,snapshot:project,terminalSnapshot:project});
   await assert.rejects(smoke(base),/stale or missing/);mode="live";
-  await assert.rejects(smoke(base),/HTTP status/);
+  await assert.rejects(smoke(base),/Invalid snapshot data|HTTP status/);
 });
 test("smoke distinguishes service health from optional provider readiness",async t=>{
   const market=await fixtureMarket();
-  const degraded={...market,snapshot:()=>{const snapshot=market.snapshot();return {...snapshot,solUsd:null,solPriceAt:null,
-    feeds:Object.fromEntries(Object.entries(snapshot.feeds).map(([name,feed])=>[name,{...feed,error:"provider unavailable"}]))};}};
+  const project=()=>{const snapshot=market.snapshot();return {...snapshot,solUsd:null,solPriceAt:null,
+    feeds:Object.fromEntries(Object.entries(snapshot.feeds).map(([name,feed])=>[name,{...feed,error:"provider unavailable"}]))};};
+  const degraded={...market,snapshot:project,terminalSnapshot:project};
   const base=await serve(t,degraded);
   const result=await smoke(base);assert.equal(result.marketData.degraded,true);assert.equal(result.marketData.healthyFeeds,0);
   await assert.rejects(smoke(base,{requireMarketData:true}),/feed is delayed/);

@@ -13,6 +13,21 @@ test('persisted charts prune invalid marks and rank observed multiples correctly
  time+=86400001;assert.deepEqual(h.snapshot([SOL]),{});
  }finally{fs.rmSync(dir,{recursive:true,force:true});}
 });
+test('chart transport bounds trails, keeps endpoints and spikes, and leaves signal history intact',()=>{
+ let time=100000000;const h=createPriceHistory({now:()=>time});
+ for(let index=0;index<500;index++){
+  const price=index===237?100:index===0?1:index===499?2:1+index/1000;
+  h.sample([{mint:SOL,priceUsd:price}],time++);
+ }
+ const full=h.snapshot([SOL])[SOL],chart=h.chartSnapshot([SOL])[SOL];
+ assert.equal(full.length,500);assert.ok(chart.length<=120);assert.deepEqual(chart[0],full[0]);assert.deepEqual(chart.at(-1),full.at(-1));
+ assert.ok(chart.some(point=>point[1]===100));assert.ok(chart.every((point,index)=>index===0||point[0]>chart[index-1][0]));
+});
+test('chart revision changes when retained points expire',()=>{
+ let time=100000000;const h=createPriceHistory({now:()=>time});
+ h.sample([{mint:SOL,priceUsd:1}]);const revision=h.revision();
+ time+=86400001;assert.ok(h.revision()>revision);assert.deepEqual(h.snapshot([SOL]),{});
+});
 test('market merges 13 feeds, preserves delayed feed timestamps and omitted V3 marks',async()=>{
  let failed=false,calls=[];
  const market=createMarket({request:async url=>{calls.push(url);if(url.startsWith('/price'))return {[SOL]:{usdPrice:200,blockId:42}};
