@@ -13,12 +13,30 @@ test("fresh filters, radar and responsive execution dock",async({page,isMobile})
   if(isMobile){
     const dock=await page.locator("#dock-buy").boundingBox();
     expect(dock.height).toBeGreaterThanOrEqual(44);
+    expect(dock.x).toBeGreaterThanOrEqual(0);
+    expect(dock.x+dock.width).toBeLessThanOrEqual(page.viewportSize().width);
     const nav=await page.locator(".view-nav").boundingBox();
+    const execution=await page.locator(".execution-dock").boundingBox();
     expect(nav.y+nav.height).toBeGreaterThanOrEqual(page.viewportSize().height-2);
+    expect(execution.y+execution.height).toBeLessThanOrEqual(nav.y+1);
     expect(await page.locator("#radar").evaluate(el=>el.scrollWidth>el.clientWidth)).toBe(true);
     await page.getByRole("button",{name:"Signals",exact:true}).click();
     await expect(page.locator("#signals")).toContainText("FRESH");
   }
+});
+test("all terminal navigation panels remain reachable",async({page})=>{
+  for(const [button,view,content] of [
+    ["Markets","radar","FRESH"],["Paper wallet","paper","Paper wallet"],
+    ["Activity","activity","Paper activity"],["Settings","settings","Paper & display settings"],
+    ["Signals","signals","FRESH"],["Feeds","connections","Data feeds"]
+  ]){
+    await page.getByRole("button",{name:button,exact:true}).click();
+    await expect(page.locator("body")).toHaveAttribute("data-view",view);
+    if(view==="radar")await expect(page.locator("#radar")).toContainText(content);
+    else if(view==="signals")await expect(page.locator("#signals")).toContainText(content);
+    else await expect(page.locator(`[data-view-panel="${view}"]`)).toContainText(content);
+  }
+  expect(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth)).toBe(true);
 });
 test("token details expose the correct CA and dollar controls",async({page,isMobile})=>{
   await page.locator("#radar").getByRole("button",{name:"FRESH",exact:true}).click();
