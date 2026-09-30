@@ -25,6 +25,7 @@ test("fresh filters, radar and responsive execution dock",async({page,isMobile})
   }
 });
 test("launch filters update Radar and Signals together",async({page})=>{
+  await page.locator(".radar-filters summary").click();
   const liquidity=page.getByLabel("Min liquidity ($)");
   await liquidity.fill("20000");
   await liquidity.blur();
