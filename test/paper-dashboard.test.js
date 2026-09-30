@@ -4,7 +4,8 @@ const fs = require("node:fs");
 const vm = require("node:vm");
 
 function element(tag) {
-  return { tagName:tag, value:"", textContent:"", className:"", children:[], dataset:{},
+  return { tagName:tag, value:"", textContent:"", className:"", children:[], dataset:{}, style:{setProperty() {}}, open:false,
+    showModal() {this.open=true;},close() {this.open=false;},
     append(...children) { this.children.push(...children); },
     replaceChildren(...children) { this.children=children; },
     addEventListener() {}, setAttribute() {} };
@@ -92,6 +93,16 @@ test("paper buys use SOL cash, survive radar exit, and sell without a live reque
   assert.equal(vm.runInContext('loadPaper().settings.maxAge',context),1440);
   assert.equal(vm.runInContext('loadPaper().cashSol',context),7);
   assert.equal(vm.runInContext('loadPaper().holds.saved.symbol',context),'Keep');
+  vm.runInContext('paper=fresh();snapshot.radar=[launch];radarUi.tab="recent";selectToken(launch);',context);
+  assert.equal(elements.get('token-sheet').open,true);
+  assert.equal(elements.get('dock-buy').disabled,false);
+  vm.runInContext('dockAmount=5;buy(currentToken(),false,dockAmount);',context);
+  assert.equal(vm.runInContext('paper.holds[launch.mint].investedUsd',context),5);
+  assert.equal(vm.runInContext('paper.settings.betUsd',context),1);
+  vm.runInContext('paper=fresh();',context);
+  assert.equal(vm.runInContext('signalState({...launch,change5m:10})',context),'HEATING');
+  assert.equal(vm.runInContext('signalState({...launch,change5m:-1})',context),'COOLING');
+  assert.equal(vm.runInContext('signalStrength({...launch,organicScore:null,volume5m:null,change5m:null})',context),1);
   // Every hold gets refreshed, including those beyond the first hundred.
   context.batches=[];
   context.fetch=async(_url,request)=>{const mints=JSON.parse(request.body).mints;context.batches.push(mints.length);return {ok:true,json:async()=>({prices:Object.fromEntries(mints.map(m=>[m,{priceUsd:.01,observedAt:Date.now()}]))})};};

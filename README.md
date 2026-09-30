@@ -2,6 +2,12 @@
 
 Public full-page markets and paper trading dashboard. No login. Real transaction routes return 410; the runtime does not load a wallet signer or private key.
 
+## Terminal interface
+
+Desktop has a left signal rail, central SVG radar and compact token contacts, right paper wallet/execution module, an observed activity tape and persistent dollar execution dock. iPhone uses bottom navigation, horizontally swipeable cards, 44px trading buttons and native modal slide-up details. $1/$5/$10/custom sizing affects manual dock orders only; automatic buys retain their configured amount. Contact buttons always buy/sell $1.
+
+Radar positions encode age with a small deterministic spacing jitter; blip sizes encode a heuristic activity score from organic score, 5m volume and momentum. Labels appear on hover/focus, and every blip is keyboard selectable. States NEW/HEATING/TRENDING/COOLING use observed age/change/feed membership; EXIT means an auto target sale occurred on that hold. These are display labels, not predictions. No wallet score or external wallet-trade stream is invented. The tape combines newly observed eligible contacts and local paper executions. The sweep is visual instrumentation; scan status remains tied to the actual REST scan. Reduced-motion preferences disable animation.
+
 ## Markets and signals
 
 The terminal opens to New launches sorted newest first. Default shared launch filters are age ≤24 hours, market cap ≤$1 million and liquidity ≥$2,000. Missing age/cap, suspicious tokens and stale/unavailable prices are excluded. Launch filters live directly above the radar with a restore button; minimum/maximum age and cap, liquidity, holders, organic score and 5m volume remain adjustable. Age uses token creation time with first pool time as fallback. Older saved unrestricted filters migrate once without clearing paper holds or cash.
