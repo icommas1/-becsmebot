@@ -69,3 +69,11 @@ test("smoke rejects stale scans and accidentally enabled real trading",async t=>
   await assert.rejects(smoke(base),/stale or missing/);mode="live";
   await assert.rejects(smoke(base),/HTTP status/);
 });
+test("smoke distinguishes service health from optional provider readiness",async t=>{
+  const market=await fixtureMarket();
+  const degraded={...market,snapshot:()=>{const snapshot=market.snapshot();return {...snapshot,solUsd:null,solPriceAt:null,
+    feeds:Object.fromEntries(Object.entries(snapshot.feeds).map(([name,feed])=>[name,{...feed,error:"provider unavailable"}]))};}};
+  const base=await serve(t,degraded);
+  const result=await smoke(base);assert.equal(result.marketData.degraded,true);assert.equal(result.marketData.healthyFeeds,0);
+  await assert.rejects(smoke(base,{requireMarketData:true}),/feed is delayed/);
+});
