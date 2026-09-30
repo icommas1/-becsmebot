@@ -1,0 +1,53 @@
+const test=require("node:test");
+const assert=require("node:assert/strict");
+
+const modules=Promise.all([
+  import("../../src/web/assets/js/core.mjs"),
+  import("../../src/web/assets/js/filters.mjs"),
+  import("../../src/web/assets/js/paper-wallet.mjs")
+]);
+const mint="So11111111111111111111111111111111111111112";
+
+test("dashboard filters remain shared, strict and deterministic",async()=>{
+  const [core,filters,paperModule]=await modules;
+  const now=2_000_000_000_000,settings={...paperModule.paperDefaults};
+  const row={mint,symbol:"TEST",createdAt:new Date(now-600000).toISOString(),observedAt:now,
+    priceUsd:.01,marketCap:50000,liquidityUsd:5000,feeds:["recent","trending:5m"]};
+  const ui=filters.normalizeRadarUi({tab:"broken",source:"broken",launchVersion:1});
+  assert.equal(ui.tab,"recent");assert.equal(ui.source,"5m");
+  assert.equal(filters.passes(row,settings,now),true);
+  assert.equal(filters.launchRows([row],settings,ui,now).length,1);
+  for(const changed of [
+    {marketCap:null},{marketCap:1000001},{liquidityUsd:1999},{createdAt:null},{isSus:true},
+    {observedAt:now-180001},{observedAt:now+1},{priceUsd:null}
+  ])assert.equal(filters.passes({...row,...changed},settings,now),false,JSON.stringify(changed));
+  assert.equal(core.signalState({...row,change5m:8},{},now),"HEATING");
+  assert.equal(core.signalState({...row,change5m:-1},{},now),"COOLING");
+  assert.equal(core.signalStrength({...row,organicScore:null,volume5m:null,change5m:null}),1);
+});
+
+test("paper wallet migration preserves holdings and rejects unsafe settings",async()=>{
+  const [_core,_filters,{loadPaper,paperDefaults}]=await modules;
+  const stored={cashSol:7,holds:{saved:{symbol:"Keep"}},bought:{saved:true},settings:{maxCap:0,maxAge:0,impactPct:99,minOrganicScore:101}};
+  const paper=loadPaper({getItem:()=>JSON.stringify(stored)});
+  assert.equal(paper.cashSol,7);assert.equal(paper.holds.saved.symbol,"Keep");
+  assert.equal(paper.settings.maxCap,paperDefaults.maxCap);
+  assert.equal(paper.settings.maxAge,paperDefaults.maxAge);
+  assert.equal(paper.settings.impactPct,0);assert.equal(paper.settings.minOrganicScore,0);
+  assert.equal(paper.auto,false);
+});
+
+test("paper accounting buys and sells the correct position without I/O",async()=>{
+  const [_core,_filters,{freshPaper,buyPaper,sellPaper}]=await modules;
+  const now=2_000_000_000_000,paper=freshPaper();
+  const row={mint,symbol:"TEST",priceUsd:.01,marketCap:50000,liquidityUsd:5000};
+  const bought=buyPaper({paper,row,amount:1,solRate:200,eligible:true,feed:"recent",now});
+  assert.equal(bought.ok,true);assert.equal(paper.holds[mint].qty,100);
+  assert.equal(paper.cashSol,.4-(1/200+.000005));assert.equal(paper.activity[0].source,"manual");
+  assert.equal(buyPaper({paper,row,amount:1,solRate:200,eligible:true,feed:"recent",now}).ok,false);
+  const stale=sellPaper({paper,mint,pct:100,dollars:1,solRate:200,mark:{priceUsd:.02,source:"jupiter-v3"},markAt:now-120001,now});
+  assert.equal(stale.ok,false);assert.equal(paper.holds[mint].qty,100);
+  const sold=sellPaper({paper,mint,pct:100,dollars:1,solRate:200,mark:{priceUsd:.02,source:"jupiter-v3"},markAt:now,now});
+  assert.equal(sold.ok,true);assert.equal(paper.holds[mint].qty,50);
+  assert.equal(paper.activity[0].mint,mint);assert.equal(paper.activity[0].kind,"sell");
+});
