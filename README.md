@@ -71,7 +71,9 @@ The full-screen terminal keeps the scan bar and navigation in view. On a wide
 screen, the radar fills the left pane and the selected paper, activity,
 settings, or live wallet panel fills the right pane. On a phone, the bottom
 navigation opens one full-height panel at a time; each panel scrolls on its
-own and the radar table still supports sideways swipes.
+own and the radar table still supports sideways swipes. An in-page dashboard
+key form gates the terminal until the user enters the existing `DASHBOARD_KEY`;
+the key is kept only in that browser tab's session storage.
 
 The dashboard lists nonzero balances in this wallet's canonical token accounts
 for both Token and Token-2022. Its 25%, 50%, and 100% sell buttons request a

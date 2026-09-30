@@ -60,6 +60,10 @@ section.side-section { margin:16px 0 0; padding:15px; border-radius:10px; backgr
 .dock-panel .settings { grid-template-columns:repeat(2,minmax(0,1fr)) }.dock-panel .settings label { min-width:0 }
 .dock-panel .actionbar button { flex:1 }.dock-panel .item button { font-size:.83em; padding:7px 8px }
 .panel-note { margin-top:12px } #toast:not(:empty) { position:fixed; bottom:16px; left:50%; transform:translateX(-50%); z-index:10; max-width:min(94vw,560px); padding:10px 14px; border:1px solid #42799e; border-radius:9px; background:#1b354a; color:#e4f4ff; box-shadow:0 12px 36px #000a; text-align:center }
+[hidden] { display:none!important }
+.auth-gate { position:fixed; inset:0; z-index:20; display:grid; place-items:center; padding:18px; background:#070d17e8; backdrop-filter:blur(7px) }
+.auth-card { width:min(100%,390px); padding:24px; background:#172334; border:1px solid #41607b; border-radius:14px; box-shadow:0 24px 70px #000b }
+.auth-card h2 { color:#f5f8ff }.auth-card label { margin:14px 0 }.auth-card button { width:100% }.auth-error { min-height:20px; color:var(--bad); margin-top:10px }
 @media(max-width:800px) {
   body { grid-template-areas:"head" "main" "nav"; grid-template-rows:auto minmax(0,1fr) auto }
   .terminal-header { padding:9px 12px; min-height:55px; gap:8px }.brand-mark { width:32px; height:32px; font-size:17px }.brand h1 { font-size:1em }.brand small,.brand-terminal,.header-data #status { display:none }
@@ -133,6 +137,11 @@ section.side-section { margin:16px 0 0; padding:15px; border-radius:10px; backgr
 </div>
 </main>
 <div id="toast" role="status" aria-live="polite"></div>
+<div id="auth-gate" class="auth-gate" hidden><form id="auth-form" class="auth-card">
+  <h2>Unlock BecsBot</h2><p>Enter your dashboard key to load the terminal.</p>
+  <label>Dashboard key<input id="auth-key" type="password" autocomplete="off" required></label>
+  <button type="submit">Open terminal</button><div id="auth-error" class="auth-error" role="alert"></div>
+</form></div>
 <script>
 const STORE = "becsPaperV1";
 const RADAR_UI_STORE = "becsRadarUiV1", TRAIL_STORE = "becsRadarTrailV1";
@@ -183,10 +192,9 @@ function message(value) {
 function num(value) { const n=Number(value); return Number.isFinite(n) && n>0 ? n : null; }
 function node(tag, className, value) { const el=document.createElement(tag); if(className)el.className=className; if(value!=null)el.textContent=value; return el; }
 async function call(url, options={}) {
-  if (!key) key=prompt("BecsBot dashboard key") || "";
-  if (key) sessionStorage.setItem("becsKey",key);
+  if (!key) throw Error("Enter your dashboard key");
   const response=await fetch(url,{...options,headers:{...options.headers,"x-dashboard-key":key}});
-  if (response.status===401) { key="";sessionStorage.removeItem("becsKey");throw Error("Dashboard key rejected"); }
+  if (response.status===401) { key="";sessionStorage.removeItem("becsKey");showLogin("Dashboard key rejected");throw Error("Dashboard key rejected"); }
   if (!response.ok) { const body=await response.json().catch(()=>({}));throw Error(body.error || "Request failed: " + response.status); }
   return response.json();
 }
@@ -337,6 +345,7 @@ async function refreshPrices() {
   } catch (error) { message("Paper price update: "+error.message); }
 }
 async function refresh() {
+  if (!key) {showLogin();return;}
   if (refreshing) return;refreshing=true;
   try {
     const s=await call("/api/basket");snapshot=s;sampleRadar(s);
@@ -410,9 +419,19 @@ function setTerminalView(view) {
     panel.dataset.viewPanel===dock?"dock-panel active":"dock-panel";
   try { localStorage.setItem("becsTerminalView",view); } catch (_) {}
 }
+function showLogin(error="") {$("auth-gate").hidden=false;$("auth-error").textContent=error;}
+$("auth-form").onsubmit=(event)=>{
+  event.preventDefault();
+  key=$("auth-key").value.trim();
+  if (!key) return;
+  sessionStorage.setItem("becsKey",key);
+  $("auth-key").value="";$("auth-gate").hidden=true;$("auth-error").textContent="";
+  refresh();
+};
 for(const button of document.querySelectorAll(".view-nav [data-view]"))
   button.onclick=()=>setTerminalView(button.dataset.view);
 setTerminalView(localStorage.getItem("becsTerminalView")||"radar");
+if (!key) showLogin();
 render();refresh();setInterval(refresh,10000);
 </script>
 </body></html>

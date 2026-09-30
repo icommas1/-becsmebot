@@ -10,7 +10,7 @@ function element(tag) {
     addEventListener() {}, setAttribute() {} };
 }
 
-test("paper buys use SOL cash, survive radar exit, and sell without a live request", () => {
+test("paper buys use SOL cash, survive radar exit, and sell without a live request", async () => {
   const html = fs.readFileSync(require.resolve("../src/dashboard.html"), "utf8");
   const script = html.match(/<script>([\s\S]*?)<\/script>/)[1]
     .replace(/render\(\);refresh\(\);setInterval\(refresh,10000\);\s*$/, "");
@@ -29,6 +29,8 @@ test("paper buys use SOL cash, survive radar exit, and sell without a live reque
     confirm:()=>true
   });
   vm.runInContext(script,context);
+  await vm.runInContext("refresh()",context);
+  assert.equal(elements.get("auth-gate").hidden,false);
   const mint="So11111111111111111111111111111111111111112";
   vm.runInContext(`sampleRadar({lastScanAt:new Date(Date.now()-300000).toISOString(),radar:[{mint:"${mint}",priceUsd:.009}]});sampleRadar({lastScanAt:new Date().toISOString(),radar:[{mint:"${mint}",priceUsd:.01}]});`,context);
   assert.equal(vm.runInContext(`trail.points["${mint}"].length`,context),2);
