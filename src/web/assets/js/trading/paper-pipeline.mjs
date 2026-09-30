@@ -17,7 +17,7 @@ function executeDecision(paper,decision,market) {
 
 // Thin browser-ledger adapters; strategy and execution receive separate inputs.
 export function buyPaper({paper,row,amount,automatic=false,solRate,feed,now=Date.now()}) {
-  const decision=decideBuy({account:paper.account,row,amount,automatic,solRate,feed,
+  const decision=decideBuy({account:paper.account,row,amount,automatic,feed,
     settings:paper.settings,enteredAssets:paper.bought,now});
   return executeDecision(paper,decision,{row,solRate,now});
 }

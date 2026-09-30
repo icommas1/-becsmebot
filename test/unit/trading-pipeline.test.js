@@ -91,6 +91,7 @@ test("executor rechecks market data, reserve and disabled execution before mutat
   const intent=engine.decideBuy({account:paper.account,row,amount:1,settings:paper.settings,enteredAssets:paper.bought,solRate,now}).intents[0];
   const before=structuredClone(paper),exec=executor.createPaperExecutor({account:paper.account,paper});
   assert.equal(exec.execute(intent,{row,solRate,now:now+180001}).status,"rejected");
+  assert.equal(exec.execute(intent,{row,solRate:null,now}).message,"Need a current SOL and token price for a paper buy.");
   assert.equal(exec.execute(intent,{row:{...row,observedAt:now+1},solRate,now}).status,"rejected");
   assert.equal(exec.execute({...intent,transaction:{}},{row,solRate,now}).reason,"invalid-intent");
   assert.deepEqual(paper,before);

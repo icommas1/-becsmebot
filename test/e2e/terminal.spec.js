@@ -132,6 +132,7 @@ test("automatic target exits sell one dollar once and retain ownership on reload
   expect(await page.evaluate(()=>JSON.parse(localStorage.getItem("becsPaperV1")).activity.filter(a=>a.kind==="sell").length)).toBe(2);
   await page.reload();
   await expect(page.locator("#radar .token-contact")).toHaveCount(2);
+  await expect.poll(()=>page.evaluate(()=>JSON.parse(localStorage.getItem("becsPaperV1")).auto)).toBe(false);
   const reloaded=await page.evaluate(()=>JSON.parse(localStorage.getItem("becsPaperV1")));
   expect(reloaded.account).toEqual(wallet.account);expect(reloaded.auto).toBe(false);
   expect(Object.values(reloaded.holds).every(hold=>hold.autoExited)).toBe(true);

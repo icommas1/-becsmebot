@@ -5,13 +5,12 @@ import {createOrderIntent} from "./contracts.mjs";
 const noAction=message=>({intents:[],message});
 
 // All inputs are snapshots. Decisions never change a ledger or perform I/O.
-export function decideBuy({account,strategy,row,amount,settings,enteredAssets,solRate,
+export function decideBuy({account,strategy,row,amount,settings,enteredAssets,
   automatic=false,feed="recent",now=Date.now()}) {
   if(!Number.isFinite(amount)||amount<=0)return noAction("Enter a positive paper trade amount.");
   if(row.isSus)return noAction("Jupiter flagged this token as suspicious.");
   if(!passes(row,settings,now))return noAction("This token is outside your paper filters.");
   if(enteredAssets[row.mint])return noAction("Already paper bought this mint once.");
-  if(!solRate||!num(row.priceUsd))return noAction("Need a current SOL and token price for a paper buy.");
   return {intents:[createOrderIntent({account,strategy,asset:row.mint,side:"buy",
     quantity:{value:amount,mode:"quote",unit:"USD"},automatic,source:automatic?feed:"manual",
     reason:automatic?"matching-launch":"manual-buy",now})],message:null};
