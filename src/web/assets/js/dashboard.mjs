@@ -1,4 +1,4 @@
-import {num,recentMark,short,usd,tokenPrice} from "./core.mjs";
+import {compactUsd,num,recentMark,short,usd,tokenPrice} from "./core.mjs";
 import {launchDefaults,normalizeRadarUi,paperReady as rowPaperReady,passes as rowPasses,
   selectedFeed as currentFeed,launchRows as filterLaunchRows} from "./filters.mjs";
 import {freshPaper,loadPaper,recordActivity,savePaper,buyPaper as applyPaperBuy,

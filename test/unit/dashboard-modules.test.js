@@ -77,3 +77,14 @@ test("sparkline presentation receives and maps the supplied observation data",as
   assert.equal(chart.children[0].stroke,"#59d6a2");
   assert.equal(chart["aria-label"],"Observed price trail from 3 scans");
 });
+
+test("paper price client batches oversized hold sets without live execution routes",async()=>{
+  const [,,, {createApiClient}]=await modules,calls=[];
+  const client=createApiClient(async(_url,options)=>{
+    const mints=JSON.parse(options.body).mints;calls.push(mints.length);
+    return {ok:true,json:async()=>({prices:Object.fromEntries(mints.map(mint=>[mint,null]))})};
+  });
+  const result=await client.allPaperPrices(Array.from({length:205},(_,index)=>mint+index));
+  assert.deepEqual(calls,[100,100,5]);
+  assert.equal(Object.keys(result).length,205);
+});
