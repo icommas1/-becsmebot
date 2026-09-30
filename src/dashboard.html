@@ -12,7 +12,7 @@ p, small { color:var(--muted); line-height:1.4 } p { margin:8px 0 12px } small {
 section { background:var(--card); border:1px solid var(--line); border-radius:16px; padding:16px; margin:13px 0 }
 .topline,.rowhead,.actions,.pillrow { display:flex; gap:9px; align-items:center; justify-content:space-between; flex-wrap:wrap }
 .pill { display:inline-block; border:1px solid var(--line); border-radius:99px; padding:5px 9px; font-size:.8em; color:var(--muted) }
-.paper { color:var(--good); border-color:#33755d } .live { color:#ffc077; border-color:#855b31 } .bad { color:var(--bad) } .good { color:var(--good) }
+.paper { color:var(--good); border-color:#33755d } .bad { color:var(--bad) } .good { color:var(--good) }
 .metrics { display:grid; grid-template-columns:repeat(4,minmax(0,1fr)); gap:10px; margin:14px 0 }
 .metric { background:#101a28; border:1px solid #2d3c51; border-radius:12px; padding:12px; min-width:0 }
 .metric small { display:block; margin-bottom:5px } .metric b { font-size:18px; overflow-wrap:anywhere }
@@ -61,17 +61,6 @@ section.side-section { margin:16px 0 0; padding:15px; border-radius:10px; backgr
 .dock-panel .actionbar button { flex:1 }.dock-panel .item button { font-size:.83em; padding:7px 8px }
 .panel-note { margin-top:12px } #toast:not(:empty) { position:fixed; bottom:16px; left:50%; transform:translateX(-50%); z-index:10; max-width:min(94vw,560px); padding:10px 14px; border:1px solid #42799e; border-radius:9px; background:#1b354a; color:#e4f4ff; box-shadow:0 12px 36px #000a; text-align:center }
 [hidden] { display:none!important }
- .auth-gate { position:fixed; inset:0; z-index:20; display:flex; align-items:center; justify-content:center; overflow-y:auto; padding:20px; background:radial-gradient(ellipse at 100% 25%,#16355c 0,transparent 55%),radial-gradient(ellipse at 0 90%,#135049 0,transparent 60%),#060d20 }
-.auth-card { width:min(100%,350px); text-align:center; padding:12px 8px; color:#fff }
-.auth-lock { width:24px; height:28px; margin:0 auto 20px; color:#c7d7e8 }.auth-brand { font-size:.8em; letter-spacing:.18em; color:#b7ccd9; margin-bottom:20px }
-.auth-card h2 { font-size:1.55em; font-weight:400; margin:0 0 22px }.passcode-dots { display:flex; justify-content:center; gap:19px; margin:0 0 20px }
-.passcode-dot { width:13px; height:13px; border:2px solid #e5efff; border-radius:50% }.passcode-dot.filled { background:#e5efff }
-.auth-error { min-height:42px; color:#ffc1c1; font-size:.85em; margin:10px 0 }.auth-help { min-height:36px; font-size:.8em; margin:10px 0 }
-.passcode-pad { display:grid; grid-template-columns:repeat(3,1fr); justify-items:center; gap:18px 12px }
-.passcode-pad button { width:78px; height:78px; border-radius:50%; border:1px solid #e1efff38; background:#bddcff22; font-size:34px; font-weight:400; padding:8px; display:flex; flex-direction:column; justify-content:center; align-items:center; color:#fff }
-.passcode-pad button:active { background:#c9e2ff66 }.passcode-pad small { font-size:9px; letter-spacing:.2em; color:#fff; min-height:12px }
-.passcode-pad .passcode-delete { border:0; background:transparent; font-size:15px }.auth-reset { margin:20px 0 0; border:0; background:transparent; color:#d8e6fa; font-size:.9em }
-@media(max-height:650px) { .auth-lock,.auth-brand { margin-bottom:8px }.auth-card h2 { margin-bottom:14px }.passcode-pad { gap:9px }.passcode-pad button { width:64px; height:64px }.auth-reset { margin-top:8px } }
 @media(max-width:800px) {
   body { grid-template-areas:"head" "main" "nav"; grid-template-rows:auto minmax(0,1fr) auto }
   .terminal-header { padding:9px 12px; min-height:55px; gap:8px }.brand-mark { width:32px; height:32px; font-size:17px }.brand h1 { font-size:1em }.brand small,.brand-terminal,.header-data #status { display:none }
@@ -95,24 +84,24 @@ section.side-section { margin:16px 0 0; padding:15px; border-radius:10px; backgr
   <button id="refresh" class="secondary" aria-label="Refresh data">↻ Refresh</button>
 </header>
 <nav class="view-nav" aria-label="Terminal panels">
-  <button data-view="radar" class="selected">Markets</button><button data-view="paper">Paper wallet</button><button data-view="activity">Activity</button><button data-view="settings">Settings</button><button data-view="live">Live wallet</button>
+  <button data-view="radar" class="selected">Markets</button><button data-view="paper">Paper wallet</button><button data-view="activity">Activity</button><button data-view="settings">Settings</button><button data-view="signals">Signals</button><button data-view="connections">Feeds</button>
 </nav>
 <main id="terminal-grid" class="terminal-grid">
 <section id="radar-panel" class="radar-panel">
   <div class="rowhead"><div><h2>Jupiter markets</h2><small id="market-status">Trending · traded · organic · new pools</small></div><span id="radar-count" class="pill">Loading</span></div>
   <nav class="tabs" id="radar-tabs" aria-label="Radar topics"></nav>
-  <div class="radar-tools"><label>Find any Jupiter token<input id="radar-search" type="search" placeholder="Name, symbol, or mint"></label><label>Interval<select id="radar-source"><option value="5m">5 minutes</option><option value="1h">1 hour</option></select></label><label>Sort<select id="radar-sort"><option value="rank">Jupiter rank</option><option value="change">Price change</option><option value="organicScore">Organic score</option><option value="marketCap">Market cap</option><option value="volume">Volume</option><option value="liquidityUsd">Liquidity</option><option value="holders">Holders</option><option value="age">Age</option><option value="priceUsd">Price</option></select></label></div>
+  <div class="radar-tools"><label>Find any Jupiter token<input id="radar-search" maxlength="80" type="search" placeholder="Name, symbol, or mint"></label><label>Interval<select id="radar-source"><option value="5m">5 minutes</option><option value="1h">1 hour</option><option value="6h">6 hours</option><option value="24h">24 hours</option></select></label><label>Sort<select id="radar-sort"><option value="rank">Jupiter rank</option><option value="change">Price change</option><option value="organicScore">Organic score</option><option value="marketCap">Market cap</option><option value="volume">Volume</option><option value="liquidityUsd">Liquidity</option><option value="holders">Holders</option><option value="age">Age</option><option value="priceUsd">Price</option></select></label></div>
   <div class="radar-actions"><button id="sort-direction" class="secondary">Highest first</button><small>Swipe table → for observed chart</small></div>
   <div class="radar-scroll" id="radar-scroll"><table class="radar-table"><thead><tr><th>Token / age</th><th>Price / change</th><th><button data-sort="organicScore">Organic</button></th><th><button data-sort="marketCap">Market cap</button></th><th><button data-sort="volume">Volume</button></th><th><button data-sort="liquidityUsd">Liquidity</button></th><th><button data-sort="holders">Holders</button></th><th>Paper</th><th>Observed price trail</th></tr></thead><tbody id="radar"></tbody></table></div>
   <div class="pagebar"><button id="previous" class="secondary">← Previous</button><span id="page-label" class="pill">Page 1</span><button id="next" class="secondary">Next →</button></div>
-  <p class="panel-note"><small>Paper prices at entry come from Jupiter Tokens V2. Holds use Jupiter Price V3; unavailable prices remain stale and cannot be sold in paper mode. Organic score measures activity, not safety. Mini charts show prices observed on this phone.</small></p>
+  <p class="panel-note"><small>Paper prices at entry come from Jupiter Tokens V2. Holds use Jupiter Price V3; unavailable prices remain stale and cannot be sold in paper mode. Organic score measures activity, not safety. Mini charts retain up to 24 hours of server observations.</small></p>
 </section>
 <div class="terminal-side">
   <div class="dock-panel active" data-view-panel="paper">
     <section class="side-section"><div class="rowhead"><h2>Paper wallet</h2><span id="auto-label" class="pill">Auto paper: off</span></div>
       <div class="metrics"><div class="metric"><small>Cash</small><b id="cash">—</b></div><div class="metric"><small>Open value</small><b id="open-value">—</b></div><div class="metric"><small>Paper P/L</small><b id="profit">—</b></div><div class="metric"><small>Holds</small><b id="hold-count">—</b></div></div>
       <button id="auto" class="secondary">Start auto paper</button>
-      <p><small>Simulated SOL only. Auto paper buys passing 5-minute trends once while this page is open. No real orders.</small></p><div id="message" role="status"></div>
+      <p><small>Simulated SOL only. Auto paper buys passing tokens from your selected feed once while this page is open. No real orders.</small></p><div id="message" role="status"></div>
     </section>
     <section class="side-section"><h2>Paper holds</h2><p><small>Holds stay here after leaving the radar. Prices refresh separately; stale marks are labeled.</small></p><div id="paper-holds"></div></section>
   </div>
@@ -130,39 +119,27 @@ section.side-section { margin:16px 0 0; padding:15px; border-radius:10px; backgr
       <label>Max age (minutes, 0 = any)<input data-setting="maxAge" type="number" min="0" step="1"></label>
       <label>Min holders<input data-setting="minHolders" type="number" min="0" step="1"></label>
       <label>Min organic score (0–100)<input data-setting="minOrganicScore" type="number" min="0" max="100" step="1"></label>
-      <label>Text size<select id="text-size"><option value="small">Small</option><option value="regular">Regular</option><option value="large">Large</option></select></label>
+      <label>Auto source<select id="auto-source"></select></label><label>Auto sell $1 at multiple (0 = off)<input data-setting="exitMultiple" type="number" min="0" step="0.1"></label><label>Text size<select id="text-size"><option value="small">Small</option><option value="regular">Regular</option><option value="large">Large</option></select></label>
       <label>Rows per page<select id="page-size"><option value="10">10</option><option value="20">20</option><option value="50">50</option></select></label>
       <label>Cash balance (SOL)<input id="cash-input" type="number" min="0" step="0.001"></label>
     </div>
     <div class="actionbar"><button id="set-cash" class="secondary">Set paper cash</button><button id="reset-paper" class="danger">Reset paper wallet</button></div>
     <p><small>Changing cash keeps holds. Reset clears paper holds, activity, and the buy-once list.</small></p>
-    <div class="actionbar"><button id="change-passcode" class="secondary">Change passcode</button><button id="lock-terminal" class="secondary">Lock terminal</button></div>
+
   </section></div>
-  <div class="dock-panel" data-view-panel="live"><section class="side-section"><div class="rowhead"><h2>Real wallet</h2><span class="pill live">LIVE SELLS</span></div>
-    <p><small>Automatic buying is off. Selling a token here sends a real transaction after your confirmation.</small></p>
-    <div class="actionbar"><button id="stop" class="secondary">Pause scans</button></div>
-    <p id="setup"></p><label>Live sell slippage (%)<input id="slippage" type="number" min="0.1" max="50" step="0.01" value="5"></label>
-    <p id="sell-status"></p><div id="holdings"></div><div id="sale-result"></div>
-  </section></div>
+  <div class="dock-panel" data-view-panel="signals"><section class="side-section"><h2>Signals · multiples</h2><p><small>Ranked by return from the first available observation in the last 24 hours. This is observed price movement, not a trade result or a launch return.</small></p><div id="signals"></div></section></div>
+  <div class="dock-panel" data-view-panel="connections"><section class="side-section"><h2>Data feeds</h2><p><small>Jupiter REST scans run every minute, including while your phone is closed. Paper auto runs only while this page is open. This public terminal cannot send real transactions.</small></p><div id="feeds"></div></section></div>
 </div>
 </main>
 <div id="toast" role="status" aria-live="polite"></div>
-<div id="auth-gate" class="auth-gate" hidden><div class="auth-card" role="dialog" aria-modal="true" aria-labelledby="auth-title">
-  <svg class="auth-lock" viewBox="0 0 24 28" fill="currentColor" aria-hidden="true"><path d="M5 12V8a7 7 0 0 1 14 0v4h1a2 2 0 0 1 2 2v11a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V14a2 2 0 0 1 2-2h1zm3 0h8V8a4 4 0 0 0-8 0v4z"/></svg>
-  <div class="auth-brand">BECSBOT TERMINAL</div><h2 id="auth-title">Enter Passcode</h2>
-  <div id="passcode-dots" class="passcode-dots" aria-label="Six digit passcode"></div>
-  <div id="auth-error" class="auth-error" role="alert"></div>
-  <div id="passcode-pad" class="passcode-pad" aria-label="Passcode keypad"></div>
-  <p id="auth-help" class="auth-help">Your six-digit BecsBot passcode</p><button id="auth-reset" class="auth-reset">Clear</button>
-</div></div>
 <script>
 const STORE = "becsPaperV1";
 const RADAR_UI_STORE = "becsRadarUiV1", TRAIL_STORE = "becsRadarTrailV1";
-const defaults = { betUsd:1, reserveSol:.02, feeSol:.000005, impactPct:0, minLiquidity:0, minCap:0, maxCap:0, minAge:0, maxAge:0, minHolders:0, minOrganicScore:0 };
+const defaults = { betUsd:1, reserveSol:.02, feeSol:.000005, impactPct:0, minLiquidity:0, minCap:0, maxCap:0, minAge:0, maxAge:0, minHolders:0, minOrganicScore:0, autoFeed:"trending:5m", exitMultiple:0 };
 function saved(key,fallback) { try { return JSON.parse(localStorage.getItem(key)) || fallback; } catch (_) { return fallback; } }
 let radarUi={tab:"trending",source:"5m",sort:"rank",direction:"desc",size:"regular",pageSize:20,...saved(RADAR_UI_STORE,{})};
 if(!["trending","traded","organic","recent","held","bought"].includes(radarUi.tab)) radarUi.tab="trending";
-if(!["5m","1h"].includes(radarUi.source)) radarUi.source="5m";
+if(!["5m","1h","6h","24h"].includes(radarUi.source)) radarUi.source="5m";
 let trail=saved(TRAIL_STORE,{scan:null,points:{}}), radarPage=0;
 if (!trail || typeof trail.points!=="object" || !trail.points) trail={scan:null,points:{}};
 function fresh() { return { cashSol:.4, settings:{...defaults}, holds:{}, bought:{}, activity:[], realizedUsd:0, auto:false }; }
@@ -170,19 +147,16 @@ function loadPaper() {
   try {
     const old = JSON.parse(localStorage.getItem(STORE));
     if (!old || !Number.isFinite(old.cashSol) || old.cashSol < 0 || !old.holds || !old.bought) return fresh();
-    return { ...fresh(), ...old, settings:{...defaults, ...old.settings}, auto:false };
+    const settings={...defaults,...old.settings};
+    for(const [key,value] of Object.entries(defaults))if(typeof value==="number"&&(!Number.isFinite(settings[key])||settings[key]<0))settings[key]=value;
+    if(settings.betUsd<=0)settings.betUsd=1;if(settings.impactPct>50)settings.impactPct=0;if(settings.minOrganicScore>100)settings.minOrganicScore=0;
+    if(!/^(trending|traded|organic):(5m|1h|6h|24h)$/.test(settings.autoFeed))settings.autoFeed=defaults.autoFeed;
+    return { ...fresh(), ...old, settings, activity:Array.isArray(old.activity)?old.activity:[],realizedUsd:Number.isFinite(old.realizedUsd)?old.realizedUsd:0,auto:false };
   } catch (_) { return fresh(); }
 }
 let paper = loadPaper();
 let snapshot = null, prices = {}, priceTimes = {}, refreshing = false;
 let searchRows=[], searchTimer=null, searchStatus="";
-let unlocked=false, setupToken=null;
-let authFlow="login", authPhase="login", pinDraft="", pendingPin="", currentPin="", authBusy=false;
-sessionStorage.removeItem("becsKey");
-if(typeof location!=="undefined") {
-  setupToken=new URLSearchParams(location.hash.slice(1)).get("setup");
-  if(setupToken) history.replaceState(null,"",location.pathname+location.search);
-}
 const $ = (id) => document.getElementById(id);
 const usd = (n) => Number.isFinite(n) ? "$" + n.toLocaleString(undefined,{maximumFractionDigits:2,minimumFractionDigits:2}) : "—";
 const tokenPrice = (n) => Number.isFinite(n) && n>0 ? "$"+n.toLocaleString(undefined,{maximumSignificantDigits:6}) : "—";
@@ -190,21 +164,10 @@ const short = (n) => Number.isFinite(n) ? n.toLocaleString(undefined,{maximumSig
 function save() { try { localStorage.setItem(STORE, JSON.stringify(paper)); } catch (_) { message("Phone storage is full; paper trades may not persist."); } }
 function saveRadar() { try { localStorage.setItem(RADAR_UI_STORE,JSON.stringify(radarUi)); } catch (_) {} }
 function sampleRadar(s) {
-  if (!s.lastScanAt || s.lastScanAt===trail.scan) return;
-  trail.scan=s.lastScanAt;
-  const at=Date.parse(s.lastScanAt), cutoff=Date.now()-86400000;
-  if (!Number.isFinite(at)) return;
-  for(const row of s.radar||[]) {
-    const price=num(row.priceUsd);if(!price)continue;
-    const points=Array.isArray(trail.points[row.mint])?trail.points[row.mint]:[];
-    points.push([at,price]);
-    trail.points[row.mint]=points.filter((p)=>Array.isArray(p)&&p[0]>=cutoff&&num(p[1])).slice(-288);
-  }
-  for(const mint of Object.keys(trail.points)) {
-    trail.points[mint]=trail.points[mint].filter((p)=>p[0]>=cutoff);
-    if(!trail.points[mint].length)delete trail.points[mint];
-  }
-  try { localStorage.setItem(TRAIL_STORE,JSON.stringify(trail)); } catch (_) {}
+  if(s.trails) {for(const [mint,points] of Object.entries(s.trails)) trail.points[mint]=points;return;}
+  if(!s.lastScanAt||s.lastScanAt===trail.scan)return;
+  trail.scan=s.lastScanAt;const at=Date.parse(s.lastScanAt);
+  for(const row of s.radar||[]) if(num(row.priceUsd)) {const points=trail.points[row.mint]||[];points.push([at,row.priceUsd]);trail.points[row.mint]=points.slice(-1440);}
 }
 let toastTimer;
 function message(value) {
@@ -214,20 +177,18 @@ function message(value) {
 function num(value) { const n=Number(value); return Number.isFinite(n) && n>0 ? n : null; }
 function node(tag, className, value) { const el=document.createElement(tag); if(className)el.className=className; if(value!=null)el.textContent=value; return el; }
 async function call(url, options={}) {
-  if (!unlocked) throw Error("Enter your passcode");
   const response=await fetch(url,{...options,credentials:"same-origin"});
-  if (response.status===401) { unlocked=false;showLogin("Enter your passcode to continue");throw Error("Session locked"); }
   if (!response.ok) { const body=await response.json().catch(()=>({}));throw Error(body.error || "Request failed: " + response.status); }
   return response.json();
 }
 function options() { return {method:"POST",headers:{"Content-Type":"application/json"}}; }
-function solUsd() { return num(snapshot?.solUsd); }
-function paperReady(row) { return num(row?.priceUsd) && !row.isSus; }
+function solUsd() { return Date.now()-snapshot?.solPriceAt<=180000?num(snapshot?.solUsd):null; }
+function paperReady(row) { return Boolean(num(row?.priceUsd) && !row.isSus && Date.now()-row.observedAt<=180000); }
 function passes(row) {
   const s=paper.settings, now=Date.now(), age=Date.parse(row.createdAt);
   if (s.minLiquidity && (!(row.liquidityUsd>=s.minLiquidity))) return false;
   if (s.minCap && (!(row.marketCap>=s.minCap))) return false;
-  if (s.maxCap && (!(row.marketCap<=s.maxCap))) return false;
+  if (s.maxCap && (row.marketCap==null || !(row.marketCap<=s.maxCap))) return false;
   if (s.minHolders && (!(row.holders>=s.minHolders))) return false;
   if (s.minOrganicScore && (!(row.organicScore>=s.minOrganicScore))) return false;
   if (s.minAge && (!Number.isFinite(age) || (now-age)/60000<s.minAge)) return false;
@@ -240,38 +201,40 @@ function buy(row, automatic=false) {
   if (row.isSus) return message("Jupiter flagged this token as suspicious.");
   if (!passes(row)) return message("This token is outside your paper filters.");
   if (paper.bought[row.mint]) return message("Already paper bought this mint once.");
-  if (!rate || !price) return message("Need a current SOL and token price for a paper buy.");
+  if (!rate || !price || !paperReady(row)) return message("Need a current SOL and token price for a paper buy.");
   const solCost=s.betUsd/rate, total=solCost+s.feeSol;
   if (paper.cashSol+1e-10<total+s.reserveSol) return message("Paper cash would fall below your SOL reserve.");
   const entry=price*(1+s.impactPct/100);
   paper.cashSol=Math.max(0,paper.cashSol-total);
   paper.holds[row.mint]={mint:row.mint,symbol:row.symbol,qty:s.betUsd/entry,entryPrice:entry,entryCap:row.marketCap,
     investedUsd:s.betUsd,feesUsd:s.feeSol*rate,boughtAt:new Date().toISOString(),lastPrice:price};
-  paper.bought[row.mint]=true;
-  prices[row.mint]={priceUsd:price,marketCap:row.marketCap,liquidityUsd:row.liquidityUsd};priceTimes[row.mint]=Date.now();
+  paper.bought[row.mint]={...row};
+  prices[row.mint]={priceUsd:price,source:"tokens",marketCap:row.marketCap,liquidityUsd:row.liquidityUsd};
   record("buy",(automatic?"Auto ":"")+"paper buy " + row.symbol + " " + usd(s.betUsd));save();render();
   if (!automatic) message("Paper bought " + row.symbol + " for " + usd(s.betUsd) + ".");
 }
-function sellPaper(mint,pct) {
+function sellPaper(mint,pct,dollars=null,automatic=false) {
   const hold=paper.holds[mint], rate=solUsd();
   const price=num(prices[mint]?.priceUsd);
-  if (!hold || !rate || !price || !priceTimes[mint] || Date.now()-priceTimes[mint]>120000)
+  if (!hold || !rate || !price || prices[mint]?.source!=="jupiter-v3" || !priceTimes[mint] || Date.now()-priceTimes[mint]>120000)
     return message("Need a recent Jupiter Price V3 mark for a paper sale.");
-  const fraction=pct/100, gross=hold.qty*fraction*price*(1-paper.settings.impactPct/100);
+  const unit=price*(1-paper.settings.impactPct/100);
+  const fraction=dollars==null?pct/100:Math.min(1,dollars/(hold.qty*unit)), gross=hold.qty*fraction*unit;
+  if(!Number.isFinite(fraction)||fraction<=0||fraction>1)return message("Invalid sale amount.");
   const fee=paper.settings.feeSol*rate, net=gross-fee;
   if (net<=0) return message("Paper sale amount is smaller than the estimated fee.");
   const basis=hold.investedUsd*fraction+hold.feesUsd*fraction;
   paper.cashSol+=net/rate;paper.realizedUsd+=net-basis;
   hold.qty*=1-fraction;hold.investedUsd*=1-fraction;hold.feesUsd*=1-fraction;
-  if (pct===100 || hold.qty<1e-12) delete paper.holds[mint];
-  record("sell","Paper sold " + pct + "% " + hold.symbol + " · " + usd(net) + " after fee");save();render();
-  message("Paper sold " + pct + "% of " + hold.symbol + ".");
+  if (fraction===1 || hold.qty<1e-12) delete paper.holds[mint];
+  record("sell",(automatic?"Auto ":"")+"Paper sold " + usd(gross) + " " + hold.symbol + " · " + usd(net) + " after fee");save();render();
+  message("Paper sold " + usd(gross) + " of " + hold.symbol + ".");
 }
 function renderWallet() {
   const holds=Object.values(paper.holds), rate=solUsd();
   const value=holds.reduce((sum,h)=>sum+h.qty*(num(prices[h.mint]?.priceUsd)||num(h.lastPrice)||0),0);
   const unrealized=holds.reduce((sum,h)=>sum+h.qty*(num(prices[h.mint]?.priceUsd)||num(h.lastPrice)||0)-h.investedUsd-h.feesUsd,0);
-  $("cash").textContent=short(paper.cashSol)+" SOL";$("open-value").textContent=usd(value);
+  $("cash").textContent=short(paper.cashSol)+" SOL";$("open-value").textContent=usd(value)+(holds.some(h=>!priceTimes[h.mint]||Date.now()-priceTimes[h.mint]>120000)?" · estimated":"");
   const pnl=paper.realizedUsd+unrealized;$("profit").textContent=usd(pnl);$("profit").className=pnl>=0?"good":"bad";
   $("hold-count").textContent=String(holds.length);
   $("sol-rate").textContent=rate?"SOL "+usd(rate):"SOL price pending";
@@ -286,7 +249,8 @@ function sparkline(mint) {
   svg.setAttribute("role","img");svg.setAttribute("aria-label",points.length>1?"Observed price trail from "+points.length+" scans":"Collecting price history");
   if (points.length>1) {
     const values=points.map((p)=>p[1]), low=Math.min(...values), high=Math.max(...values), span=high-low||high*.01||1;
-    const xy=values.map((v,i)=>(3+i*106/(values.length-1)).toFixed(1)+","+(35-(v-low)/span*32).toFixed(1)).join(" ");
+    const duration=points.at(-1)[0]-points[0][0]||1;
+    const xy=values.map((v,i)=>(3+(points[i][0]-points[0][0])*106/duration).toFixed(1)+","+(35-(v-low)/span*32).toFixed(1)).join(" ");
     const line=document.createElementNS("http://www.w3.org/2000/svg","polyline");
     line.setAttribute("points",xy);line.setAttribute("fill","none");line.setAttribute("stroke",values.at(-1)>=values[0]?"#59d6a2":"#ff8585");
     line.setAttribute("stroke-width","2");line.setAttribute("stroke-linejoin","round");svg.append(line);
@@ -312,7 +276,8 @@ function renderRadar() {
   const box=$("radar");box.replaceChildren();
   const query=$("radar-search").value.trim().toLowerCase();
   const feed=radarUi.tab==="recent"?"recent":radarUi.tab+":"+radarUi.source;
-  const allRows=query?[...new Map([...(snapshot?.radar||[]),...searchRows].map((row)=>[row.mint,row])).values()]:(snapshot?.radar||[]);
+  const stored=Object.entries(paper.bought).map(([mint,row])=>typeof row==="object"?row:{mint,symbol:paper.holds[mint]?.symbol||mint.slice(0,6),name:"",feeds:[]});
+  const allRows=query?[...new Map([...(snapshot?.radar||[]),...searchRows].map((row)=>[row.mint,row])).values()]:(radarUi.tab==="held"||radarUi.tab==="bought"?[...new Map([...stored,...(snapshot?.radar||[])].map(row=>[row.mint,row])).values()]:(snapshot?.radar||[]));
   let rows=allRows.filter((row)=>passes(row) &&
     (!query || row.symbol.toLowerCase().includes(query) || row.name.toLowerCase().includes(query) || row.mint.toLowerCase().includes(query)) &&
     (query || (row.feeds||[]).includes(feed) || radarUi.tab==="held"&&paper.holds[row.mint] || radarUi.tab==="bought"&&paper.bought[row.mint]));
@@ -354,55 +319,59 @@ function renderHolds() {
     row.append(node("div","meta","Entry "+tokenPrice(h.entryPrice)+" · now "+tokenPrice(mark)+" · entry cap "+usd(h.entryCap)+" · now cap "+usd(prices[h.mint]?.marketCap)+" · liquidity "+usd(prices[h.mint]?.liquidityUsd)));
     row.append(node("div",pnl>=0?"good":"bad","Value "+usd(value)+" · P/L "+usd(pnl)+" ("+(h.investedUsd?short(pnl/(h.investedUsd+h.feesUsd)*100):"—")+"%)"));
     if (!priceTimes[h.mint] || Date.now()-priceTimes[h.mint]>120000) row.append(node("small","bad","Price may be stale"));
-    const actions=node("div","actionbar");for(const pct of [25,50,100]) { const b=node("button","secondary","Paper sell "+pct+"%");b.onclick=()=>sellPaper(h.mint,pct);actions.append(b); }
-    row.append(actions,node("small","mono",h.mint));box.append(row);
+    const actions=node("div","actionbar");for(const [label,amount] of [["Sell $1",1],["Sell all",null]]) { const b=node("button","secondary",label);b.onclick=()=>sellPaper(h.mint,100,amount);actions.append(b); }
+    row.append(actions);infoLinks(row,h.mint);box.append(row);
   }
   if (!holds.length) box.append(node("p","","No paper holds yet."));
   const activity=$("activity");activity.replaceChildren();for(const entry of paper.activity.slice(0,100)) activity.append(node("div","item",new Date(entry.at).toLocaleString()+" · "+entry.text));
   if (!paper.activity.length) activity.append(node("p","","No paper activity yet."));
 }
-function render() { renderWallet();renderRadar();renderHolds(); }
-async function refreshPrices() {
-  const mints=Object.keys(paper.holds);if (!mints.length) return;
+function render() { renderWallet();renderRadar();renderHolds();renderSignals(); }
+let marking=false,lastMarkAt=0;
+async function refreshPrices(force=false) {
+  const mints=Object.keys(paper.holds);if(!mints.length||marking||!force&&Date.now()-lastMarkAt<30000)return;
+  marking=true;
   try {
-    const result=await call("/api/paper/prices",{...options(),body:JSON.stringify({mints:mints.slice(0,100)})});
-    for(const mint of mints) { const data=result.prices[mint];if (num(data?.priceUsd)) {prices[mint]=data;priceTimes[mint]=Date.now();paper.holds[mint].lastPrice=data.priceUsd;} else {delete prices[mint];delete priceTimes[mint];} }
-    save();render();
-  } catch (error) { message("Paper price update: "+error.message); }
+    for(let i=0;i<mints.length;i+=100) {
+      const chunk=mints.slice(i,i+100),result=await call("/api/paper/prices",{...options(),body:JSON.stringify({mints:chunk})});
+      for(const mint of chunk) {if(!paper.holds[mint])continue;const data=result.prices[mint];
+        if(num(data?.priceUsd)){prices[mint]={...data,source:"jupiter-v3"};priceTimes[mint]=data.observedAt;paper.holds[mint].lastPrice=data.priceUsd;}
+        else {delete prices[mint];delete priceTimes[mint];}
+      }
+    }
+    lastMarkAt=Date.now();runAutoExits();save();render();
+  }catch(error){message("Paper price update: "+error.message);}
+  finally{marking=false;}
+}
+function runAutoBuys() {if(paper.auto)for(const row of snapshot?.radar||[])if(row.feeds.includes(paper.settings.autoFeed)&&paperReady(row)&&passes(row)&&!paper.bought[row.mint])buy(row,true);}
+function runAutoExits() {
+  if(!paper.auto||paper.settings.exitMultiple<=1)return;
+  for(const h of Object.values(paper.holds))if(num(prices[h.mint]?.priceUsd)/h.entryPrice>=paper.settings.exitMultiple&&!h.autoExited) {
+    const before=h.qty;sellPaper(h.mint,100,1,true);
+    if(h.qty<before&&paper.holds[h.mint])paper.holds[h.mint].autoExited=true;
+  }
+}
+function infoLinks(box,mint) {
+  box.append(node("small","mono",mint));const actions=node("div","actionbar"),copy=node("button","secondary","Copy CA"),link=node("a","link","Dex Screener");
+  copy.onclick=async()=>{try{await navigator.clipboard.writeText(mint);message("Token address copied.");}catch(_){message("Copy this address: "+mint);}};
+  link.href="https://dexscreener.com/solana/"+mint;link.target="_blank";link.rel="noopener noreferrer";actions.append(copy,link);box.append(actions);
+}
+function renderSignals() {
+  const box=$("signals");box.replaceChildren();
+  for(const signal of snapshot?.signals||[]) {const item=node("div","item");item.append(node("div","name",signal.symbol+" · "+short(signal.multiple)+"×"),node("div","meta","Peak "+short(signal.peakMultiple)+"× · tracked from "+new Date(signal.firstSeenAt).toLocaleString()+" · "+(Date.now()-signal.observedAt>180000?"stale":"recent")));infoLinks(item,signal.mint);const b=node("button","","Paper buy "+usd(paper.settings.betUsd));b.disabled=!paperReady(signal)||!!paper.bought[signal.mint]||!solUsd();b.onclick=()=>buy(signal);item.append(b);box.append(item);}
+  if(!box.children.length)box.append(node("p","","Waiting for observed signals."));
+  const feeds=$("feeds");feeds.replaceChildren();for(const [name,status] of Object.entries(snapshot?.feeds||{}))feeds.append(node("div","item",name+" · "+(status.count??0)+" tokens · "+(status.error||status.at||"pending")));
 }
 async function refresh() {
-  if (!unlocked) {return;}
   if (refreshing) return;refreshing=true;
   try {
     const s=await call("/api/basket");snapshot=s;sampleRadar(s);
     const scanned=s.lastScanAt?new Date(s.lastScanAt).toLocaleTimeString():"pending";
-    $("status").textContent=(s.paused?"Scans paused":s.running?"Scanning":"Updated")+" · "+scanned+" · wallet "+(s.walletSol==null?"—":short(s.walletSol))+" SOL"+(s.lastError?" · "+s.lastError:"");
-    $("market-status").textContent="Jupiter scan "+scanned+(s.lastError?" · Some data delayed":" · 5m and 1h feeds");
-    $("stop").textContent=s.paused?"Resume scans":"Pause scans";
-    $("setup").textContent="Market: Jupiter Tokens V2 and Price V3. Live manual sells: Jupiter Swap V2. Automatic live buys are off.";
-    $("sell-status").textContent=s.manualSell.enabled?"Manual sell ready · proceeds in SOL":"Manual sell unavailable until wallet signer and sell switch are ready";
-    if (paper.auto) for(const row of s.radar||[]) if (row.feeds.includes("trending:5m")&&paperReady(row)&&passes(row)&&!paper.bought[row.mint]) buy(row,true);
-    render();await refreshPrices();await refreshRealHoldings(s);
+    $("status").textContent=(s.paused?"Scans paused":s.running?"Scanning":"Updated")+" · "+scanned+(s.lastError?" · "+s.lastError:"");
+    $("market-status").textContent="Jupiter scan "+scanned+(s.lastError?" · Some data delayed":" · 5m / 1h / 6h / 24h feeds");
+    runAutoBuys();render();await refreshPrices();
   } catch(error) { $("status").textContent=error.message;message(error.message); }
   finally { refreshing=false; }
-}
-async function refreshRealHoldings(s) {
-  try {
-    const result=await call("/api/holdings"), box=$("holdings");box.replaceChildren();
-    for(const h of result.holdings) { const row=node("div","item");row.append(node("div","name",h.displayAmount+" tokens"),node("small","mono",h.mint));
-      const actions=node("div","actionbar");for(const pct of [25,50,100]) { const b=node("button","danger","LIVE sell "+pct+"%");b.disabled=!s.manualSell.enabled;b.onclick=()=>sellLive(h.mint,pct,b);actions.append(b); }row.append(actions);box.append(row); }
-    if(!result.holdings.length) box.append(node("p","","No tokens in the bot wallet."));
-  } catch(error) { $("holdings").textContent="Wallet holdings: "+error.message; }
-}
-const slippageInput=$("slippage");slippageInput.value=localStorage.getItem("becsSellSlippage")||"5";
-slippageInput.addEventListener("change",()=>localStorage.setItem("becsSellSlippage",slippageInput.value));
-async function sellLive(mint,percent,button) {
-  button.disabled=true;
-  try { const quote=await call("/api/sell/quote",{...options(),body:JSON.stringify({mint,percent,slippage:slippageInput.value})});
-    if (!confirm("LIVE TRANSACTION: Sell "+percent+"% of "+mint+" for about "+quote.expectedSol.toFixed(6)+" SOL? Minimum "+quote.minimumSol.toFixed(6)+" SOL at "+quote.slippage+"% slippage.")) return;
-    const result=await call("/api/sell",{...options(),body:JSON.stringify({quoteId:quote.quoteId})});
-    const link=node("a","link","Sale confirmed · view transaction");link.href="https://solscan.io/tx/"+result.signature;link.target="_blank";link.rel="noopener noreferrer";$("sale-result").replaceChildren(link);await refresh();
-  } catch(error) { alert(error.message); } finally { button.disabled=false; }
 }
 for(const input of document.querySelectorAll("[data-setting]")) {
   const name=input.dataset.setting;input.value=paper.settings[name];input.addEventListener("change",()=>{
@@ -413,7 +382,9 @@ for(const input of document.querySelectorAll("[data-setting]")) {
 $("cash-input").value=paper.cashSol;
 $("set-cash").onclick=()=>{const value=Number($("cash-input").value);if(!Number.isFinite(value)||value<0) return message("Enter a valid SOL amount.");paper.cashSol=value;record("adjust","Set paper cash to "+short(value)+" SOL");save();render();message("Paper cash updated.");};
 $("reset-paper").onclick=()=>{if(!confirm("Reset paper holds, history, and bought-once list?"))return;const cash=Number($("cash-input").value);const settings=paper.settings;paper={...fresh(),cashSol:Number.isFinite(cash)&&cash>=0?cash:.4,settings};prices={};priceTimes={};save();render();message("Paper wallet reset.");};
-$("auto").onclick=()=>{paper.auto=!paper.auto;save();render();message(paper.auto?"Auto paper on while this page is open. Passing 5-minute trends will be paper bought once.":"Auto paper off.");if(paper.auto&&snapshot) { for(const row of snapshot.radar||[]) if(row.feeds.includes("trending:5m")&&paperReady(row)&&passes(row)&&!paper.bought[row.mint]) buy(row,true); } };
+for(const category of ["trending","traded","organic"])for(const interval of ["5m","1h","6h","24h"]) {const option=node("option","",category+" · "+interval);option.value=category+":"+interval;$("auto-source").append(option);}
+$("auto-source").value=paper.settings.autoFeed;$("auto-source").onchange=()=>{paper.settings.autoFeed=$("auto-source").value;save();};
+$("auto").onclick=()=>{paper.auto=!paper.auto;save();render();message(paper.auto?"Auto paper on while this page is open.":"Auto paper off.");runAutoBuys();};
 for(const [tab,label] of [["trending","Trending"],["traded","Top traded"],["organic","Organic"],["recent","New pools"],["held","Paper holds"],["bought","Bought once"]]) {
   const b=node("button","",label);b.dataset.tab=tab;b.onclick=()=>{radarUi.tab=tab;radarPage=0;saveRadar();renderRadar();};$("radar-tabs").append(b);
 }
@@ -443,13 +414,12 @@ $("page-size").value=String(radarUi.pageSize);$("page-size").onchange=()=>{radar
 $("previous").onclick=()=>{radarPage=Math.max(0,radarPage-1);renderRadar();};
 $("next").onclick=()=>{radarPage++;renderRadar();};
 $("refresh").onclick=refresh;
-$("stop").onclick=async()=>{try{await call("/api/pause",{method:"POST"});await refresh();}catch(error){message(error.message);}};
 function setTerminalView(view) {
-  const valid=["radar","paper","activity","settings","live"];
+  const valid=["radar","paper","activity","settings","signals","connections"];
   view=valid.includes(view)?view:"radar";
   document.body.dataset.view=view;
-  $("mode-label").textContent=view==="live"?"LIVE WALLET":"PAPER MODE";
-  $("mode-label").className=view==="live"?"pill live":"pill paper";
+  $("mode-label").textContent="PAPER MODE";
+  $("mode-label").className="pill paper";
   for(const button of document.querySelectorAll(".view-nav [data-view]")) {
     button.className=button.dataset.view===view?"selected":"";
     button.setAttribute("aria-current",button.dataset.view===view?"page":"false");
@@ -459,76 +429,9 @@ function setTerminalView(view) {
     panel.dataset.viewPanel===dock?"dock-panel active":"dock-panel";
   try { localStorage.setItem("becsTerminalView",view); } catch (_) {}
 }
-function drawPasscode() {
-  const dots=$("passcode-dots");dots.replaceChildren();
-  for(let i=0;i<6;i++)dots.append(node("span","passcode-dot"+(i<pinDraft.length?" filled":"")));
-  dots.setAttribute("aria-label",pinDraft.length+" of 6 digits entered");
-  $("auth-title").textContent={login:"Enter Passcode",current:"Current Passcode",new:"Choose Passcode",confirm:"Confirm Passcode"}[authPhase];
-  $("auth-help").textContent=authFlow==="setup"?"Choose a separate six-digit BecsBot passcode":authFlow==="change"?"Change your BecsBot passcode":"Your six-digit BecsBot passcode";
-  for(const button of $("passcode-pad").children)button.disabled=authBusy;
-}
-function showLogin(error="") {
-  authFlow="login";authPhase="login";pinDraft="";pendingPin="";currentPin="";
-  $("auth-gate").hidden=false;$("auth-error").textContent=error;drawPasscode();
-}
-async function authRequest(url,body) {
-  const response=await fetch(url,{...options(),credentials:"same-origin",body:JSON.stringify(body)});
-  const data=await response.json();if(!response.ok)throw Error(data.error||"Could not unlock");return data;
-}
-async function submitPasscode() {
-  const entered=pinDraft;pinDraft="";
-  if(authPhase==="current") {currentPin=entered;authPhase="new";drawPasscode();return;}
-  if(authPhase==="new") {pendingPin=entered;authPhase="confirm";drawPasscode();return;}
-  if(authPhase==="confirm"&&entered!==pendingPin) {pendingPin="";authPhase="new";$("auth-error").textContent="Passcodes did not match. Choose again.";drawPasscode();return;}
-  authBusy=true;drawPasscode();
-  try {
-    if(authFlow==="setup") await authRequest("/api/auth/setup",{token:setupToken,passcode:pendingPin,confirm:entered});
-    else if(authFlow==="change") await authRequest("/api/auth/passcode",{current:currentPin,passcode:pendingPin,confirm:entered});
-    else await authRequest("/api/auth/login",{passcode:entered});
-    unlocked=true;setupToken=null;pendingPin="";currentPin="";$("auth-gate").hidden=true;$("auth-error").textContent="";
-    await refresh();
-  } catch(error) {
-    $("auth-error").textContent=error.message;
-    authPhase=authFlow==="change"?"current":authFlow==="setup"?"new":"login";
-    pendingPin="";currentPin="";
-  } finally {authBusy=false;drawPasscode();}
-}
-function enterDigit(digit) {
-  if(authBusy||$("auth-gate").hidden||pinDraft.length>=6)return;
-  $("auth-error").textContent="";pinDraft+=digit;drawPasscode();if(pinDraft.length===6)submitPasscode();
-}
-for(const [digit,letters] of [["1",""],["2","ABC"],["3","DEF"],["4","GHI"],["5","JKL"],["6","MNO"],["7","PQRS"],["8","TUV"],["9","WXYZ"],["",""],["0",""],["delete",""]]) {
-  if(!digit){$("passcode-pad").append(node("span"));continue;}
-  const button=node("button",digit==="delete"?"passcode-delete":"",digit==="delete"?"Delete":digit);
-  button.type="button";button.setAttribute("aria-label",digit==="delete"?"Delete last digit":digit);
-  if(digit!=="delete")button.append(node("small","",letters));
-  button.onclick=()=>{if(digit==="delete"){pinDraft=pinDraft.slice(0,-1);drawPasscode();}else enterDigit(digit);};
-  $("passcode-pad").append(button);
-}
-$("auth-reset").onclick=()=>{if(authBusy)return;pinDraft="";pendingPin="";currentPin="";authPhase=authFlow==="change"?"current":authFlow==="setup"?"new":"login";$("auth-error").textContent="";drawPasscode();};
-document.addEventListener("keydown",(event)=>{
-  if($("auth-gate").hidden||authBusy)return;
-  if(/^[0-9]$/.test(event.key)){event.preventDefault();enterDigit(event.key);}
-  else if(event.key==="Backspace"){event.preventDefault();pinDraft=pinDraft.slice(0,-1);drawPasscode();}
-});
-$("lock-terminal").onclick=async()=>{try{await authRequest("/api/auth/logout",{});}finally{unlocked=false;showLogin();}};
-$("change-passcode").onclick=()=>{authFlow="change";authPhase="current";pinDraft="";$("auth-error").textContent="";$("auth-gate").hidden=false;drawPasscode();};
-async function initializeAuth() {
-  showLogin();authBusy=true;drawPasscode();
-  try {
-    const response=await fetch("/api/auth/status",{credentials:"same-origin"});if(!response.ok)throw Error("Unable to check login");
-    const status=await response.json();
-    if(status.authenticated){unlocked=true;$("auth-gate").hidden=true;await refresh();}
-    else if(!status.configured){
-      if(setupToken){authFlow="setup";authPhase="new";}
-      else $("auth-error").textContent="Open your private setup link to choose a passcode.";
-    }
-  }catch(error){$("auth-error").textContent=error.message;}
-  finally{authBusy=false;drawPasscode();}
-}
 for(const button of document.querySelectorAll(".view-nav [data-view]"))
   button.onclick=()=>setTerminalView(button.dataset.view);
 setTerminalView(localStorage.getItem("becsTerminalView")||"radar");
-render();initializeAuth();setInterval(refresh,10000);
+render();refresh();setInterval(refresh,10000);
 </script>
 </body></html>

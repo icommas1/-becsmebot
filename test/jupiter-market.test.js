@@ -18,7 +18,7 @@ test("merges Jupiter categories without Pump eligibility", () => {
   assert.equal(rows[0].change5m, 1.25);
   assert.equal(rows[0].isVerified, true);
   assert.equal(rows[0].createdAt, "2026-09-30T00:00:00Z");
-  assert.equal(FEEDS.length, 7);
+  assert.equal(FEEDS.length, 13);
 });
 
 test("missing token prices stay unavailable and suspicious flag uses field presence", () => {

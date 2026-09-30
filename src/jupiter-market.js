@@ -1,12 +1,10 @@
 const { PublicKey } = require("@solana/web3.js");
 
+const INTERVALS = ["5m", "1h", "6h", "24h"];
 const FEEDS = [
-  ["trending:5m", "/tokens/v2/toptrending/5m?limit=50"],
-  ["trending:1h", "/tokens/v2/toptrending/1h?limit=50"],
-  ["traded:5m", "/tokens/v2/toptraded/5m?limit=50"],
-  ["traded:1h", "/tokens/v2/toptraded/1h?limit=50"],
-  ["organic:5m", "/tokens/v2/toporganicscore/5m?limit=50"],
-  ["organic:1h", "/tokens/v2/toporganicscore/1h?limit=50"],
+  ...Object.entries({ trending: "toptrending", traded: "toptraded", organic: "toporganicscore" })
+    .flatMap(([name, endpoint]) => INTERVALS.map((interval) =>
+      [name + ":" + interval, "/tokens/v2/" + endpoint + "/" + interval + "?limit=50"])),
   ["recent", "/tokens/v2/recent"]
 ];
 
@@ -51,7 +49,7 @@ function marketRows(feeds) {
       row.launchpad = token.launchpad || row.launchpad;
       row.isVerified ||= token.isVerified === true;
       row.isSus ||= Object.hasOwn(token.audit || {}, "isSus");
-      for (const interval of ["5m", "1h"]) {
+      for (const interval of INTERVALS) {
         const stats = token["stats" + interval];
         if (!stats) continue;
         row["change" + interval] = metric(stats.priceChange) ?? row["change" + interval];
@@ -64,4 +62,4 @@ function marketRows(feeds) {
   return [...rows.values()];
 }
 
-module.exports = { FEEDS, marketRows, positive };
+module.exports = { FEEDS, INTERVALS, marketRows, positive };

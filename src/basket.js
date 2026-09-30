@@ -1,235 +1,148 @@
 require("dotenv").config();
-const fs = require("node:fs");
 const path = require("node:path");
 const express = require("express");
-const { Connection, PublicKey, LAMPORTS_PER_SOL } = require("@solana/web3.js");
-const { createManualSell } = require("./manual-sell");
-const { createPasscodeAuth } = require("./passcode-auth");
+const { PublicKey } = require("@solana/web3.js");
 const { FEEDS, marketRows, positive } = require("./jupiter-market");
+const { createJupiterClient } = require("./jupiter-client");
+const { createPriceHistory } = require("./price-history");
+
+const { rankSignals } = require("./signals");
 
 const SOL = "So11111111111111111111111111111111111111112";
-const WALLET = "DJ9dHrRXSPEdyLEkJ96Hj79S7Qkt7mgrryT3Q5J5bVws";
-const BET_USD = 1;
-const SCAN_MS = 5 * 60 * 1000;
-// Automatic live trading is deliberately disabled.
-const TRADING_ENABLED = false;
+const SCAN_MS = 60000;
 const PRICE_CACHE_MS = 20000;
-const JUPITER_GAP_MS = 2200;
 
-const apiKey = process.env.JUPITER_API_KEY;
-const rpcUrl = process.env.HELIUS_RPC_URL;
-const dataDir = process.env.DATA_DIR;
-if (!apiKey || !rpcUrl) {
-  throw new Error("HELIUS_RPC_URL and JUPITER_API_KEY are required");
-}
+function createMarket({ apiKey, dataDir, request }) {
+  const jupiter = request || createJupiterClient({ apiKey });
+  const history = createPriceHistory({ dataDir });
+  const state = { lastScanAt:null, lastError:null, running:false, solUsd:null,
+    solPriceAt:null, radar:[], feeds:{}, scanIntervalMs:SCAN_MS };
+  const feedTokens = {}, priceCache = new Map(), searchCache = new Map();
+  const priceJobs = new Map(), searchJobs = new Map();
 
-const wallet = new PublicKey(WALLET);
-const connection = new Connection(rpcUrl, "confirmed");
-const manualSell = createManualSell({ connection, wallet, apiKey,
-  secret: process.env.SOLANA_PRIVATE_KEY,
-  enabled: process.env.MANUAL_SELL_ENABLED === "true" });
-const ledgerPath = dataDir ? path.join(dataDir, "basket.json") : null;
-const state = {
-  lastScanAt: null, lastError: null, running: false, paused: false,
-  solUsd: null, walletSol: null, radar: [], feedStatus: {}, ledger: {}
-};
-const priceCache = new Map();
-const searchCache = new Map();
-let jupiterQueue = Promise.resolve();
-let nextJupiterAt = 0;
-
-function persist() {
-  if (!ledgerPath) throw new Error("Persistent DATA_DIR is required");
-  fs.mkdirSync(dataDir, { recursive: true });
-  const temp = ledgerPath + ".tmp";
-  fs.writeFileSync(temp, JSON.stringify({
-    paused: state.paused, ledger: state.ledger
-  }), { mode: 0o600 });
-  fs.renameSync(temp, ledgerPath);
-}
-
-if (ledgerPath) {
-  fs.mkdirSync(dataDir, { recursive: true });
-  if (fs.existsSync(ledgerPath)) {
-    const saved = JSON.parse(fs.readFileSync(ledgerPath, "utf8"));
-    state.paused = saved.paused === true;
-    state.ledger = saved.ledger || {};
-  }
-}
-
-async function paperPrices(mints) {
-  const now = Date.now();
-  const result = {};
-  const missing = mints.filter((mint) => {
-    const cached = priceCache.get(mint);
-    if (cached && now - cached.at < PRICE_CACHE_MS) {
-      result[mint] = cached.data;
-      return false;
-    }
-    return true;
-  });
-  for (let i = 0; i < missing.length; i += 50) {
-    const chunk = missing.slice(i, i + 50);
-    const prices = await jupiter("/price/v3?ids=" + chunk.join(","));
-    for (const mint of chunk) {
-      const price = positive(prices[mint]?.usdPrice);
-      // Jupiter omits mints when it cannot supply a reliable price.
-      const data = price ? { priceUsd: price, blockId: prices[mint].blockId } : null;
-      result[mint] = data;
-      priceCache.set(mint, { data, at: Date.now() });
-    }
-  }
-  return result;
-}
-
-async function jupiter(url) {
-  // A single queue covers scans, searches, and paper price updates on the Free tier.
-  const request = jupiterQueue.catch(() => {}).then(async () => {
-    for (let attempt = 0; attempt < 2; attempt++) {
-      const delay = Math.max(0, nextJupiterAt - Date.now());
-      if (delay) await new Promise((resolve) => setTimeout(resolve, delay));
-      nextJupiterAt = Date.now() + JUPITER_GAP_MS;
-      const response = await fetch("https://api.jup.ag" + url, {
-        headers: { "x-api-key": apiKey }, signal: AbortSignal.timeout(10000)
-      });
-      const data = await response.json();
-      if (response.ok) return data;
-      if (response.status === 429 && attempt === 0) {
-        const reset = Number(response.headers.get("x-ratelimit-reset"));
-        const wait = Number.isFinite(reset) && reset > 0
-          ? Math.max(JUPITER_GAP_MS, reset * 1000 - Date.now() + 250)
-          : 5000;
-        nextJupiterAt = Date.now() + Math.min(wait, 60000);
-        continue;
+  async function paperPrices(mints) {
+    const result = {}, missing = [...new Set(mints)].sort().filter((mint) => {
+      const cached = priceCache.get(mint);
+      if (cached && Date.now()-cached.at < PRICE_CACHE_MS) { result[mint]=cached.data; return false; }
+      return true;
+    });
+    for (let i=0;i<missing.length;i+=50) {
+      const chunk=missing.slice(i,i+50), key=chunk.join(",");
+      if (!priceJobs.has(key)) {
+        const job = jupiter("/price/v3?ids="+key).then((prices) => {
+          const at=Date.now(), values={};
+          for (const mint of chunk) {
+            const price=positive(prices[mint]?.usdPrice);
+            const data=price?{priceUsd:price,blockId:prices[mint].blockId,observedAt:at}:null;
+            values[mint]=data;priceCache.set(mint,{data,at});
+          }
+          while(priceCache.size>5000)priceCache.delete(priceCache.keys().next().value);
+          return values;
+        }).finally(()=>priceJobs.delete(key));
+        priceJobs.set(key,job);
       }
-      throw new Error("Jupiter " + response.status + ": " +
-        (data.error || data.message || "request failed"));
+      Object.assign(result,await priceJobs.get(key));
     }
-  });
-  jupiterQueue = request.catch(() => {});
-  return request;
-}
+    return result;
+  }
 
-async function scan() {
-  if (state.running || state.paused) return;
-  state.running = true;
-  try {
-    const feeds = {}, errors = [];
+  async function search(query) {
+    const key=query.toLowerCase(),cached=searchCache.get(key);
+    if(cached && Date.now()-cached.at<60000)return cached.rows;
+    if(!searchJobs.has(key)) {
+      const job=jupiter("/tokens/v2/search?query="+encodeURIComponent(query)).then((tokens)=>{
+        if(!Array.isArray(tokens))throw Error("Invalid Jupiter search response");
+        const rows=marketRows({search:tokens}).map((row)=>({...row,observedAt:Date.now()}));
+        searchCache.set(key,{rows,at:Date.now()});
+        if(searchCache.size>100)searchCache.delete(searchCache.keys().next().value);
+        return rows;
+      }).finally(()=>searchJobs.delete(key));
+      searchJobs.set(key,job);
+    }
+    return searchJobs.get(key);
+  }
+
+  async function scan() {
+    if(state.running)return;
+    state.running=true;
+    const successful={},errors=[];
     try {
-      const prices = await jupiter("/price/v3?ids=" + SOL);
-      state.solUsd = positive(prices[SOL]?.usdPrice) ?? state.solUsd;
-    } catch (error) { errors.push("SOL price: " + error.message); }
-    for (const [name, url] of FEEDS) {
       try {
-        const tokens = await jupiter(url);
-        if (!Array.isArray(tokens)) throw new Error("invalid token list");
-        feeds[name] = tokens;
-        state.feedStatus[name] = { count: tokens.length, at: new Date().toISOString() };
-      } catch (error) {
-        errors.push(name + ": " + error.message);
-        state.feedStatus[name] = { ...state.feedStatus[name], error: error.message };
+        const prices=await jupiter("/price/v3?ids="+SOL);
+        const price=positive(prices[SOL]?.usdPrice);
+        if(!price)throw Error("SOL price unavailable");
+        state.solUsd=price;state.solPriceAt=Date.now();
+      }catch(error){errors.push("SOL: "+error.message);}
+      for(const [name,url] of FEEDS) {
+        try {
+          const tokens=await jupiter(url);
+          if(!Array.isArray(tokens))throw Error("Invalid token list");
+          successful[name]=tokens;feedTokens[name]=tokens;
+          state.feeds[name]={count:tokens.length,at:new Date().toISOString()};
+        }catch(error){errors.push(name+": "+error.message);state.feeds[name]={...state.feeds[name],error:error.message};}
       }
-    }
-    if (Object.keys(feeds).length) {
-      const rows = marketRows(feeds);
-      // A failed category does not erase its last known rows.
-      const failed = FEEDS.map(([name]) => name).filter((name) => !(name in feeds));
-      for (const old of state.radar) {
-        const oldFeeds = old.feeds.filter((name) => failed.includes(name));
-        if (!oldFeeds.length) continue;
-        const current = rows.find((row) => row.mint === old.mint);
-        if (current) {
-          current.feeds.push(...oldFeeds.filter((name) => !current.feeds.includes(name)));
-          for (const name of oldFeeds) current.ranks[name] = old.ranks[name];
-        } else rows.push({ ...old, feeds: oldFeeds });
-      }
-      state.radar = rows;
-    }
-    try { state.walletSol = await connection.getBalance(wallet) / LAMPORTS_PER_SOL; }
-    catch (error) { errors.push("wallet balance: " + error.message); }
-    state.lastError = errors.length ? errors.join("; ") : null;
-  } catch (error) {
-    state.lastError = error.message;
-    console.error("Jupiter market scan:", error.message);
-  } finally {
-    state.lastScanAt = new Date().toISOString();
-    state.running = false;
+      // Merge older feeds first so successful fresh metadata wins.
+      const ordered=Object.fromEntries(Object.entries(feedTokens).sort(([a],[b])=>
+        Date.parse(state.feeds[a]?.at||0)-Date.parse(state.feeds[b]?.at||0)));
+      state.radar=marketRows(ordered).map((row)=>({...row,observedAt:Math.max(...row.feeds.map((feed)=>Date.parse(state.feeds[feed]?.at||0)))}));
+      history.sample(marketRows(successful));
+      state.lastError=errors.length?errors.join("; "):null;
+    }catch(error){state.lastError=error.message;}
+    finally{state.lastScanAt=new Date().toISOString();state.running=false;}
   }
+  function snapshot() {
+    const trails=history.snapshot(state.radar.map(row=>row.mint));
+    return {...state,tradingEnabled:false,manualSell:{enabled:false},trails,signals:rankSignals(state.radar,trails)};
+  }
+  return {snapshot,scan,search,paperPrices};
 }
 
-const app = express();
-app.set("trust proxy", 1);
-app.use(express.json({ limit: "20kb" }));
-app.use("/api", (_req, res, next) => { res.set("Cache-Control", "no-store"); next(); });
-app.get("/", (_req, res) => { res.set("Cache-Control", "no-store"); res.set("Referrer-Policy", "no-referrer"); res.sendFile(path.join(__dirname, "dashboard.html")); });
-app.get("/health", (_req, res) => res.json({
-  ok: true, tradingEnabled: TRADING_ENABLED,
-  manualSell: manualSell.status(),
-  lastScanAt: state.lastScanAt, lastError: state.lastError,
-  running: state.running, paused: state.paused,
-  feeds: state.feedStatus
-}));
-const auth = createPasscodeAuth({ dataDir,
-  setupToken: process.env.DASHBOARD_SETUP_TOKEN,
-  setupExpires: process.env.DASHBOARD_SETUP_EXPIRES });
-auth.mount(app);
-const requireAuth = auth.requireAuth;
-app.get("/api/basket", requireAuth, (_req, res) => res.json({
-  betUsd: BET_USD, wallet: WALLET,
-  tradingEnabled: TRADING_ENABLED, paused: state.paused,
-  manualSell: manualSell.status(),
-  solUsd: state.solUsd, walletSol: state.walletSol,
-  running: state.running, lastScanAt: state.lastScanAt,
-  lastError: state.lastError, radar: state.radar, feeds: state.feedStatus,
-  purchases: state.ledger
-}));
-app.get("/api/search", requireAuth, async (req, res) => {
-  const query = String(req.query.q || "").trim();
-  if (query.length < 2 || query.length > 80) return res.status(400).json({ error: "Enter 2–80 characters" });
-  try {
-    const cached = searchCache.get(query.toLowerCase());
-    if (cached && Date.now() - cached.at < 60000) return res.json({ rows: cached.rows });
-    const tokens = await jupiter("/tokens/v2/search?query=" + encodeURIComponent(query));
-    if (!Array.isArray(tokens)) throw new Error("Invalid search response");
-    const rows = marketRows({ search: tokens });
-    searchCache.set(query.toLowerCase(), { rows, at: Date.now() });
-    if (searchCache.size > 100) searchCache.delete(searchCache.keys().next().value);
-    res.json({ rows });
-  } catch (error) { res.status(503).json({ error: error.message }); }
-});
-app.post("/api/paper/prices", requireAuth, async (req, res) => {
-  const input = req.body?.mints;
-  if (!Array.isArray(input) || input.length > 100 ||
-      input.some((mint) => {
-        if (typeof mint !== "string") return true;
-        try { return new PublicKey(mint).toBase58() !== mint; }
-        catch (_) { return true; }
-      })) return res.status(400).json({ error: "Invalid token list" });
-  try { res.json({ prices: await paperPrices([...new Set(input)]) }); }
-  catch (_) { res.status(503).json({ error: "Market prices unavailable" }); }
-});
-app.get("/api/holdings", requireAuth, async (_req, res) => {
-  try { res.json({ holdings: await manualSell.holdings() }); }
-  catch (_) { res.status(503).json({ error: "Wallet holdings unavailable" }); }
-});
-app.post("/api/sell/quote", requireAuth, async (req, res) => {
-  try { res.json(await manualSell.quote(req.body)); }
-  catch (error) { res.status(400).json({ error: error.message }); }
-});
-app.post("/api/sell", requireAuth, async (req, res) => {
-  try { res.json(await manualSell.sell(req.body?.quoteId)); }
-  catch (error) { res.status(400).json({ error: error.message }); }
-});
-app.post("/api/pause", requireAuth, (_req, res) => {
-  state.paused = !state.paused;
-  if (ledgerPath) persist();
-  if (!state.paused) {
-    scan();
+function createApp(market) {
+  const app=express();app.set("trust proxy",1);app.disable("x-powered-by");
+  app.use(express.json({limit:"20kb"}));
+  app.use((_req,res,next)=>{res.set("Cache-Control","no-store");res.set("Referrer-Policy","no-referrer");next();});
+  app.get("/",(_req,res)=>res.sendFile(path.join(__dirname,"dashboard.html")));
+  app.get("/health",(_req,res)=>{
+    const s=market.snapshot();res.json({ok:true,tradingEnabled:false,manualSell:{enabled:false},
+      lastScanAt:s.lastScanAt,lastError:s.lastError,running:s.running,feeds:s.feeds});
+  });
+  // No signing module is loaded. Even old clients cannot execute a real sale.
+  app.use("/api/sell",(_req,res)=>res.status(410).json({error:"Real trading is disabled on the public terminal"}));
+  app.use("/api/pause",(_req,res)=>res.status(410).json({error:"Market scans run automatically"}));
+  app.get("/api/basket",(_req,res)=>res.json(market.snapshot()));
+  const requests=new Map();let globalRequests=[];
+  function limit(req,res,next) {
+    const now=Date.now(),ip=req.ip||"unknown",cutoff=now-60000;
+    const hits=(requests.get(ip)||[]).filter((at)=>at>cutoff);
+    globalRequests=globalRequests.filter((at)=>at>cutoff);
+    if(hits.length>=30||globalRequests.length>=40){res.set("Retry-After","60");return res.status(429).json({error:"Market requests busy. Try again in a minute."});}
+    hits.push(now);requests.set(ip,hits);globalRequests.push(now);
+    if(requests.size>5000)requests.delete(requests.keys().next().value);
+    next();
   }
-  res.json({ paused: state.paused });
-});
-app.listen(process.env.PORT || 3000, "0.0.0.0", () => {
-  console.log("BecsBot Jupiter market terminal running for", WALLET);
-  scan();
-  setInterval(scan, SCAN_MS);
-});
+  app.get("/api/search",limit,async(req,res)=>{
+    const query=typeof req.query.q==="string"?req.query.q.trim():"";
+    if(query.length<2||query.length>80)return res.status(400).json({error:"Enter 2–80 characters"});
+    try{res.json({rows:await market.search(query)});}catch(error){res.status(503).json({error:error.message});}
+  });
+  app.post("/api/paper/prices",limit,async(req,res)=>{
+    const input=req.body?.mints;
+    if(!Array.isArray(input)||input.length>100||input.some((mint)=>{
+      if(typeof mint!=="string")return true;
+      try{return new PublicKey(mint).toBase58()!==mint;}catch(_){return true;}
+    }))return res.status(400).json({error:"Invalid token list"});
+    try{res.json({prices:await market.paperPrices(input)});}catch(error){res.status(503).json({error:error.message});}
+  });
+  app.use((error,_req,res,_next)=>res.status(error.status||500).json({error:error.status===400?"Invalid JSON request":"Request unavailable"}));
+  return app;
+}
+
+if(require.main===module) {
+  if(!process.env.JUPITER_API_KEY)throw Error("JUPITER_API_KEY is required");
+  const market=createMarket({apiKey:process.env.JUPITER_API_KEY,dataDir:process.env.DATA_DIR});
+  createApp(market).listen(process.env.PORT||3000,"0.0.0.0",()=>{
+    console.log("BecsBot public Jupiter paper terminal running");
+    market.scan();setInterval(()=>market.scan(),SCAN_MS);
+  });
+}
+module.exports={createApp,createMarket};
