@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>BecsBot · Paper desk</title>
+<title>BecsBot · Jupiter terminal</title>
 <style>
 :root { color-scheme: dark; --bg:#0b1019; --card:#172231; --line:#34445b; --muted:#b4c2d3; --good:#59d6a2; --bad:#ff8585; --accent:#70b8ff; --scale:1 }
 * { box-sizing:border-box } body { margin:0; background:var(--bg); color:#f5f8ff; font:15px -apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif }
@@ -82,7 +82,7 @@ section.side-section { margin:16px 0 0; padding:15px; border-radius:10px; backgr
 </head>
 <body data-view="radar">
 <header class="terminal-header">
-  <div class="brand"><span class="brand-mark">B</span><div><h1>BecsBot <span class="brand-terminal">TERMINAL</span></h1><small>Solana trend radar · paper trading</small></div></div>
+  <div class="brand"><span class="brand-mark">B</span><div><h1>BecsBot <span class="brand-terminal">TERMINAL</span></h1><small>Jupiter market data · paper trading</small></div></div>
   <div class="header-data"><span id="mode-label" class="pill paper">PAPER MODE</span><span id="sol-rate" class="pill">SOL price pending</span><span id="status">Loading scan…</span></div>
   <button id="refresh" class="secondary" aria-label="Refresh data">↻ Refresh</button>
 </header>
@@ -91,20 +91,20 @@ section.side-section { margin:16px 0 0; padding:15px; border-radius:10px; backgr
 </nav>
 <main id="terminal-grid" class="terminal-grid">
 <section id="radar-panel" class="radar-panel">
-  <div class="rowhead"><div><h2>Market radar</h2><small>Jupiter 5m and 1h trends · verified Pump curves marked</small></div><span id="radar-count" class="pill">Loading</span></div>
+  <div class="rowhead"><div><h2>Jupiter markets</h2><small>Trending · traded · organic · new pools</small></div><span id="radar-count" class="pill">Loading</span></div>
   <nav class="tabs" id="radar-tabs" aria-label="Radar topics"></nav>
-  <div class="radar-tools"><label>Find token<input id="radar-search" type="search" placeholder="Name or mint"></label><label>Source<select id="radar-source"><option value="any">5m + 1h</option><option value="5m">5m list</option><option value="1h">1h list</option><option value="both">On both lists</option></select></label><label>Sort<select id="radar-sort"><option value="rank">Trend rank</option><option value="change">Price change</option><option value="organicScore">Organic score</option><option value="marketCap">Market cap</option><option value="volume">Volume</option><option value="liquidityUsd">Liquidity</option><option value="holders">Holders</option><option value="age">Age</option><option value="priceUsd">Price</option></select></label></div>
+  <div class="radar-tools"><label>Find any Jupiter token<input id="radar-search" type="search" placeholder="Name, symbol, or mint"></label><label>Interval<select id="radar-source"><option value="5m">5 minutes</option><option value="1h">1 hour</option></select></label><label>Sort<select id="radar-sort"><option value="rank">Jupiter rank</option><option value="change">Price change</option><option value="organicScore">Organic score</option><option value="marketCap">Market cap</option><option value="volume">Volume</option><option value="liquidityUsd">Liquidity</option><option value="holders">Holders</option><option value="age">Age</option><option value="priceUsd">Price</option></select></label></div>
   <div class="radar-actions"><button id="sort-direction" class="secondary">Highest first</button><small>Swipe table → for observed chart</small></div>
   <div class="radar-scroll" id="radar-scroll"><table class="radar-table"><thead><tr><th>Token / age</th><th>Price / change</th><th><button data-sort="organicScore">Organic</button></th><th><button data-sort="marketCap">Market cap</button></th><th><button data-sort="volume">Volume</button></th><th><button data-sort="liquidityUsd">Liquidity</button></th><th><button data-sort="holders">Holders</button></th><th>Paper</th><th>Observed price trail</th></tr></thead><tbody id="radar"></tbody></table></div>
   <div class="pagebar"><button id="previous" class="secondary">← Previous</button><span id="page-label" class="pill">Page 1</span><button id="next" class="secondary">Next →</button></div>
-  <p class="panel-note"><small>Only active verified Pump SOL curves allow paper buys. Organic is Jupiter’s 0–100 activity score, not a safety guarantee. Mini charts fill in as this browser observes prices.</small></p>
+  <p class="panel-note"><small>Paper prices at entry come from Jupiter Tokens V2. Holds use Jupiter Price V3; unavailable prices remain stale and cannot be sold in paper mode. Organic score measures activity, not safety. Mini charts show prices observed on this phone.</small></p>
 </section>
 <div class="terminal-side">
   <div class="dock-panel active" data-view-panel="paper">
     <section class="side-section"><div class="rowhead"><h2>Paper wallet</h2><span id="auto-label" class="pill">Auto paper: off</span></div>
       <div class="metrics"><div class="metric"><small>Cash</small><b id="cash">—</b></div><div class="metric"><small>Open value</small><b id="open-value">—</b></div><div class="metric"><small>Paper P/L</small><b id="profit">—</b></div><div class="metric"><small>Holds</small><b id="hold-count">—</b></div></div>
       <button id="auto" class="secondary">Start auto paper</button>
-      <p><small>Simulated SOL only. Auto paper buys eligible curves once while this page is open. No real orders.</small></p><div id="message" role="status"></div>
+      <p><small>Simulated SOL only. Auto paper buys passing 5-minute trends once while this page is open. No real orders.</small></p><div id="message" role="status"></div>
     </section>
     <section class="side-section"><h2>Paper holds</h2><p><small>Holds stay here after leaving the radar. Prices refresh separately; stale marks are labeled.</small></p><div id="paper-holds"></div></section>
   </div>
@@ -148,7 +148,9 @@ const STORE = "becsPaperV1";
 const RADAR_UI_STORE = "becsRadarUiV1", TRAIL_STORE = "becsRadarTrailV1";
 const defaults = { betUsd:1, reserveSol:.02, feeSol:.000005, impactPct:0, minLiquidity:0, minCap:0, maxCap:0, minAge:0, maxAge:0, minHolders:0, minOrganicScore:0 };
 function saved(key,fallback) { try { return JSON.parse(localStorage.getItem(key)) || fallback; } catch (_) { return fallback; } }
-let radarUi={tab:"eligible",source:"any",sort:"rank",direction:"desc",size:"regular",pageSize:20,...saved(RADAR_UI_STORE,{})};
+let radarUi={tab:"trending",source:"5m",sort:"rank",direction:"desc",size:"regular",pageSize:20,...saved(RADAR_UI_STORE,{})};
+if(!["trending","traded","organic","recent","held","bought"].includes(radarUi.tab)) radarUi.tab="trending";
+if(!["5m","1h"].includes(radarUi.source)) radarUi.source="5m";
 let trail=saved(TRAIL_STORE,{scan:null,points:{}}), radarPage=0;
 if (!trail || typeof trail.points!=="object" || !trail.points) trail={scan:null,points:{}};
 function fresh() { return { cashSol:.4, settings:{...defaults}, holds:{}, bought:{}, activity:[], realizedUsd:0, auto:false }; }
@@ -161,6 +163,7 @@ function loadPaper() {
 }
 let paper = loadPaper();
 let snapshot = null, prices = {}, priceTimes = {}, refreshing = false;
+let searchRows=[], searchTimer=null, searchStatus="";
 let key = sessionStorage.getItem("becsKey") || "";
 const $ = (id) => document.getElementById(id);
 const usd = (n) => Number.isFinite(n) ? "$" + n.toLocaleString(undefined,{maximumFractionDigits:2,minimumFractionDigits:2}) : "—";
@@ -201,7 +204,7 @@ async function call(url, options={}) {
 }
 function options() { return {method:"POST",headers:{"Content-Type":"application/json"}}; }
 function solUsd() { return num(snapshot?.solUsd); }
-function eligible(row) { return snapshot?.candidates?.some((c)=>c.mint===row.mint); }
+function paperReady(row) { return num(row?.priceUsd) && !row.isSus; }
 function passes(row) {
   const s=paper.settings, now=Date.now(), age=Date.parse(row.createdAt);
   if (s.minLiquidity && (!(row.liquidityUsd>=s.minLiquidity))) return false;
@@ -216,7 +219,7 @@ function passes(row) {
 function record(kind,text) { paper.activity.unshift({at:new Date().toISOString(),kind,text});paper.activity.length=Math.min(paper.activity.length,500); }
 function buy(row, automatic=false) {
   const rate=solUsd(), price=num(row.priceUsd), s=paper.settings;
-  if (!eligible(row)) return message("Paper buys require an active verified Pump SOL curve.");
+  if (row.isSus) return message("Jupiter flagged this token as suspicious.");
   if (!passes(row)) return message("This token is outside your paper filters.");
   if (paper.bought[row.mint]) return message("Already paper bought this mint once.");
   if (!rate || !price) return message("Need a current SOL and token price for a paper buy.");
@@ -233,8 +236,9 @@ function buy(row, automatic=false) {
 }
 function sellPaper(mint,pct) {
   const hold=paper.holds[mint], rate=solUsd();
-  const price=num(prices[mint]?.priceUsd) || num(hold?.lastPrice);
-  if (!hold || !rate || !price) return message("Need a price and SOL rate for a paper sale.");
+  const price=num(prices[mint]?.priceUsd);
+  if (!hold || !rate || !price || !priceTimes[mint] || Date.now()-priceTimes[mint]>120000)
+    return message("Need a recent Jupiter Price V3 mark for a paper sale.");
   const fraction=pct/100, gross=hold.qty*fraction*price*(1-paper.settings.impactPct/100);
   const fee=paper.settings.feeSol*rate, net=gross-fee;
   if (net<=0) return message("Paper sale amount is smaller than the estimated fee.");
@@ -277,10 +281,11 @@ function sparkline(mint) {
 function ageMinutes(row) { const time=Date.parse(row.createdAt);return Number.isFinite(time)?Math.max(0,(Date.now()-time)/60000):null; }
 function ageText(row) {const age=ageMinutes(row);return age==null?"age —":age<60?Math.floor(age)+"m":age<1440?Math.floor(age/60)+"h":Math.floor(age/1440)+"d";}
 function sortValue(row) {
+  const interval=radarUi.source, feed=radarUi.tab+":"+interval;
   switch(radarUi.sort) {
-    case "rank":return -(row.rank5m||row.rank1h||999);
-    case "change":return row.change5m??row.change1h;
-    case "volume":return row.volume5m??row.volume1h;
+    case "rank":return -(row.ranks?.[radarUi.tab==="recent"?"recent":feed]||999);
+    case "change":return row["change"+interval];
+    case "volume":return row["volume"+interval];
     case "age":return ageMinutes(row);
     default:return row[radarUi.sort];
   }
@@ -288,11 +293,11 @@ function sortValue(row) {
 function renderRadar() {
   const box=$("radar");box.replaceChildren();
   const query=$("radar-search").value.trim().toLowerCase();
-  let rows=(snapshot?.radar||[]).filter((row)=>passes(row) &&
+  const feed=radarUi.tab==="recent"?"recent":radarUi.tab+":"+radarUi.source;
+  const allRows=query?[...new Map([...(snapshot?.radar||[]),...searchRows].map((row)=>[row.mint,row])).values()]:(snapshot?.radar||[]);
+  let rows=allRows.filter((row)=>passes(row) &&
     (!query || row.symbol.toLowerCase().includes(query) || row.name.toLowerCase().includes(query) || row.mint.toLowerCase().includes(query)) &&
-    (radarUi.source==="any" || (radarUi.source==="both"?row.sources.length===2:row.sources.includes(radarUi.source))) &&
-    (radarUi.tab==="all" || radarUi.tab==="eligible"&&eligible(row) ||
-      radarUi.tab==="held"&&paper.holds[row.mint] || radarUi.tab==="bought"&&paper.bought[row.mint]));
+    (query || (row.feeds||[]).includes(feed) || radarUi.tab==="held"&&paper.holds[row.mint] || radarUi.tab==="bought"&&paper.bought[row.mint]));
   rows.sort((a,b)=>{
     const x=sortValue(a),y=sortValue(b);
     if(x==null)return y==null?0:1;if(y==null)return -1;
@@ -300,24 +305,25 @@ function renderRadar() {
   });
   const size=[10,20,50].includes(Number(radarUi.pageSize))?Number(radarUi.pageSize):20;
   const pages=Math.max(1,Math.ceil(rows.length/size));radarPage=Math.min(radarPage,pages-1);
-  $("radar-count").textContent=rows.length+" matches · "+(snapshot?.radar?.length||0)+" trending";
+  const feedInfo=snapshot?.feeds?.[feed];
+  $("radar-count").textContent=rows.length+" shown · "+(query?searchStatus||"searching Jupiter":(snapshot?.radar?.length||0)+" tokens"+(feedInfo?.error?" · feed delayed":""));
   $("page-label").textContent="Page "+(radarPage+1)+" of "+pages;
   $("previous").disabled=radarPage===0;$("next").disabled=radarPage>=pages-1;
   for(const row of rows.slice(radarPage*size,(radarPage+1)*size)) {
     const tr=node("tr"), token=node("td"), link=node("a","token link",row.symbol);
     link.href="https://jup.ag/tokens/"+row.mint;link.target="_blank";link.rel="noopener noreferrer";
-    token.append(link,node("span","subline",ageText(row)+" · "+(eligible(row)?"Pump curve":"Watch only")+" · "+row.sources.join("+")));
-    const change=row.change5m??row.change1h;
+    token.append(link,node("span","subline",ageText(row)+" · "+(row.isSus?"Suspect":row.isVerified?"Verified":"Unverified")+" · "+(row.launchpad||"Jupiter")));
+    const change=row["change"+radarUi.source];
     const price=node("td","",tokenPrice(row.priceUsd));
     if(change!=null) price.append(node("span","subline "+(change>=0?"good":"bad"),(change>=0?"+":"")+short(change)+"%"));
-    const paperCell=node("td"), button=node("button","",paper.bought[row.mint]?"Bought":eligible(row)?"Paper "+usd(paper.settings.betUsd):"Watch");
-    button.disabled=!eligible(row)||Boolean(paper.bought[row.mint])||!num(row.priceUsd)||!solUsd();button.onclick=()=>buy(row);
+    const paperCell=node("td"), button=node("button","",paper.bought[row.mint]?"Bought":row.isSus?"Flagged":"Paper "+usd(paper.settings.betUsd));
+    button.disabled=!paperReady(row)||Boolean(paper.bought[row.mint])||!solUsd();button.onclick=()=>buy(row);
     paperCell.append(button);
     const chart=node("td");chart.append(sparkline(row.mint));
-    tr.append(token,price,node("td","",row.organicScore==null?"—":short(row.organicScore)+" / 100"),node("td","",usd(row.marketCap)),node("td","",usd(row.volume5m??row.volume1h)),
+    tr.append(token,price,node("td","",row.organicScore==null?"—":short(row.organicScore)+" / 100"),node("td","",usd(row.marketCap)),node("td","",usd(row["volume"+radarUi.source])),
       node("td","",usd(row.liquidityUsd)),node("td","",row.holders==null?"—":short(row.holders)),paperCell,chart);box.append(tr);
   }
-  if(!rows.length) {const tr=node("tr"),td=node("td","","No trends match this view right now.");td.colSpan=9;tr.append(td);box.append(tr);}
+  if(!rows.length) {const tr=node("tr"),td=node("td","",query?searchStatus||"Searching Jupiter…":feedInfo?.error?"Feed delayed: "+feedInfo.error:"No tokens match this view right now.");td.colSpan=9;tr.append(td);box.append(tr);}
   for(const b of $("radar-tabs").children) {b.className=b.dataset.tab===radarUi.tab?"selected":"";b.setAttribute("aria-pressed",String(b.dataset.tab===radarUi.tab));}
   $("sort-direction").textContent=radarUi.direction==="desc"?"Highest first ↓":"Lowest first ↑";
 }
@@ -342,7 +348,7 @@ async function refreshPrices() {
   const mints=Object.keys(paper.holds);if (!mints.length) return;
   try {
     const result=await call("/api/paper/prices",{...options(),body:JSON.stringify({mints:mints.slice(0,100)})});
-    for(const mint of mints) { const data=result.prices[mint];if (num(data?.priceUsd)) {prices[mint]=data;priceTimes[mint]=Date.now();paper.holds[mint].lastPrice=data.priceUsd;} }
+    for(const mint of mints) { const data=result.prices[mint];if (num(data?.priceUsd)) {prices[mint]=data;priceTimes[mint]=Date.now();paper.holds[mint].lastPrice=data.priceUsd;} else {delete prices[mint];delete priceTimes[mint];} }
     save();render();
   } catch (error) { message("Paper price update: "+error.message); }
 }
@@ -353,9 +359,9 @@ async function refresh() {
     const s=await call("/api/basket");snapshot=s;sampleRadar(s);
     $("status").textContent=(s.paused?"Scans paused":s.running?"Scanning":"Scanning")+" · last scan "+(s.lastScanAt?new Date(s.lastScanAt).toLocaleTimeString():"pending")+" · wallet "+(s.walletSol==null?"—":short(s.walletSol))+" SOL"+(s.lastError?" · "+s.lastError:"");
     $("stop").textContent=s.paused?"Resume scans":"Pause scans";
-    $("setup").textContent="Pump volume account: "+(s.pumpVolumeReady===null?"checking":s.pumpVolumeReady?"ready":"needed on first buy")+". Existing token accounts are reused after a sale.";
+    $("setup").textContent="Market: Jupiter Tokens V2 and Price V3. Live manual sells: Jupiter Swap V2. Automatic live buys are off.";
     $("sell-status").textContent=s.manualSell.enabled?"Manual sell ready · proceeds in SOL":"Manual sell unavailable until wallet signer and sell switch are ready";
-    if (paper.auto) for(const row of s.radar||[]) if (eligible(row)&&passes(row)&&!paper.bought[row.mint]) buy(row,true);
+    if (paper.auto) for(const row of s.radar||[]) if (row.feeds.includes("trending:5m")&&paperReady(row)&&passes(row)&&!paper.bought[row.mint]) buy(row,true);
     render();await refreshPrices();await refreshRealHoldings(s);
   } catch(error) { $("status").textContent=error.message;message(error.message); }
   finally { refreshing=false; }
@@ -387,11 +393,23 @@ for(const input of document.querySelectorAll("[data-setting]")) {
 $("cash-input").value=paper.cashSol;
 $("set-cash").onclick=()=>{const value=Number($("cash-input").value);if(!Number.isFinite(value)||value<0) return message("Enter a valid SOL amount.");paper.cashSol=value;record("adjust","Set paper cash to "+short(value)+" SOL");save();render();message("Paper cash updated.");};
 $("reset-paper").onclick=()=>{if(!confirm("Reset paper holds, history, and bought-once list?"))return;const cash=Number($("cash-input").value);const settings=paper.settings;paper={...fresh(),cashSol:Number.isFinite(cash)&&cash>=0?cash:.4,settings};prices={};priceTimes={};save();render();message("Paper wallet reset.");};
-$("auto").onclick=()=>{paper.auto=!paper.auto;save();render();message(paper.auto?"Auto paper on while this page is open. Eligible trends will be paper bought once as scans update.":"Auto paper off.");if(paper.auto&&snapshot) { for(const row of snapshot.radar||[]) if(eligible(row)&&passes(row)&&!paper.bought[row.mint]) buy(row,true); } };
-for(const [tab,label] of [["eligible","Pump curves"],["all","All trends"],["held","Paper holds"],["bought","Bought once"]]) {
+$("auto").onclick=()=>{paper.auto=!paper.auto;save();render();message(paper.auto?"Auto paper on while this page is open. Passing 5-minute trends will be paper bought once.":"Auto paper off.");if(paper.auto&&snapshot) { for(const row of snapshot.radar||[]) if(row.feeds.includes("trending:5m")&&paperReady(row)&&passes(row)&&!paper.bought[row.mint]) buy(row,true); } };
+for(const [tab,label] of [["trending","Trending"],["traded","Top traded"],["organic","Organic"],["recent","New pools"],["held","Paper holds"],["bought","Bought once"]]) {
   const b=node("button","",label);b.dataset.tab=tab;b.onclick=()=>{radarUi.tab=tab;radarPage=0;saveRadar();renderRadar();};$("radar-tabs").append(b);
 }
-$("radar-search").oninput=()=>{radarPage=0;renderRadar();};
+$("radar-search").oninput=()=>{
+  radarPage=0;clearTimeout(searchTimer);
+  const query=$("radar-search").value.trim();
+  searchRows=[];searchStatus=query.length<2?"Enter at least 2 characters":"Searching Jupiter…";renderRadar();
+  if(query.length<2)return;
+  searchTimer=setTimeout(async()=>{
+    try {
+      const result=await call("/api/search?q="+encodeURIComponent(query));
+      if($("radar-search").value.trim()!==query)return;
+      searchRows=result.rows;searchStatus=result.rows.length+" Jupiter search results";renderRadar();
+    } catch(error) {if($("radar-search").value.trim()===query){searchStatus="Search: "+error.message;renderRadar();}}
+  },450);
+};
 $("radar-source").value=radarUi.source;$("radar-source").onchange=()=>{radarUi.source=$("radar-source").value;radarPage=0;saveRadar();renderRadar();};
 $("radar-sort").value=radarUi.sort;$("radar-sort").onchange=()=>{radarUi.sort=$("radar-sort").value;radarPage=0;saveRadar();renderRadar();};
 $("sort-direction").onclick=()=>{radarUi.direction=radarUi.direction==="desc"?"asc":"desc";radarPage=0;saveRadar();renderRadar();};
