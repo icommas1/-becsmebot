@@ -9,6 +9,8 @@ const {smoke}=require("../../scripts/smoke");
 async function serve(t,market){const server=createApp(market).listen(0,"127.0.0.1");await new Promise(r=>server.once("listening",r));t.after(()=>new Promise(r=>server.close(r)));return "http://127.0.0.1:"+server.address().port;}
 test("all public response contracts and read-only smoke work against a real HTTP server",async t=>{
   const market=await fixtureMarket(),base=await serve(t,market);
+  const stylesheet=await fetch(base+"/assets/dashboard.css");
+  assert.equal(stylesheet.status,200);assert.match(stylesheet.headers.get("content-type"),/^text\/css/);
   for(const [route,schema]of [["/health","health"],["/api/basket","snapshot"],["/api/search?q=FRESH","searchResponse"]]){
     const r=await fetch(base+route);assert.equal(r.status,200);assert.ok(isValid(schema,await r.json()));
   }

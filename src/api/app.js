@@ -16,7 +16,9 @@ function createApp(market) {
     "X-Frame-Options":"DENY"
   });next();});
   app.get("/",(_req,res)=>res.sendFile(path.join(__dirname,"../web/dashboard.html")));
-  app.get("/assets/becs-logo.jpg",(_req,res)=>res.sendFile(path.join(__dirname,"../web/assets/becs-logo.jpg")));
+  app.use("/assets",express.static(path.join(__dirname,"../web/assets"),{
+    dotfiles:"deny",fallthrough:false,index:false
+  }));
   app.get("/health",(_req,res)=>{
     const s=market.snapshot();send(res,"health",{ok:true,tradingEnabled:false,manualSell:{enabled:false},
       lastScanAt:s.lastScanAt,lastError:s.lastError,running:s.running,feeds:s.feeds});
