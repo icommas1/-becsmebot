@@ -26,8 +26,27 @@ Buys need recent Tokens V2 and SOL marks. Sells need a recent Jupiter Price V3 m
 
 ## Run
 
-Node 20+, `npm ci`, `npm test`, `npm start`. Set `JUPITER_API_KEY`; optionally set `PORT` and persistent `DATA_DIR`. API keys remain server-side. No paid plan is purchased by this project.
+Node 22+, `npm ci`, `npm test`, `npm start`. Set `JUPITER_API_KEY`; optionally set `PORT` and persistent `DATA_DIR`. API keys remain server-side. No paid plan is purchased by this project.
 
 Jupiter calls are serialized, spaced 2.2 seconds apart, cached and bounded. One 429 retry uses the reset header. Public search and price endpoints validate inputs and rate limit requests.
 
 Tests cover normalization, incoming feeds and failures, missing prices, history persistence, observed signal multiples, retry/queue behavior, public endpoint validation, blocked signing routes, and paper dollar accounting. Fixtures verify behavior; they do not predict returns or guarantee live liquidity.
+
+## Contributor guide and repository checks
+
+Read [AGENTS.md](AGENTS.md), [ARCHITECTURE.md](ARCHITECTURE.md), [RADAR_SPEC.md](RADAR_SPEC.md), [SIGNALS_SPEC.md](SIGNALS_SPEC.md), [CONTRIBUTING.md](CONTRIBUTING.md), [SECURITY.md](SECURITY.md) and [OPERATIONS.md](OPERATIONS.md). The stable Railway entry point remains `src/basket.js`; market modules, API contracts and browser assets are separated under `src/market`, `src/api` and `src/web`.
+
+Copy `.env.example` to `.env` for local configuration and keep your API key server-side. Use Node 22/24 for CI parity.
+
+```sh
+npm ci
+npm run check
+npm test
+npx playwright install --with-deps chromium webkit
+npm run test:mobile
+npm run test:smoke
+```
+
+`npm test` is offline and credential-free. Playwright starts a deterministic local Express fixture on port 4173 and tests iPhone WebKit, mobile Chromium and desktop Chromium. `npm run verify` combines syntax/schema, unit/integration and browser checks. Browser reports and traces are generated locally and ignored by git.
+
+Smoke defaults to the public Railway origin; override `SMOKE_BASE_URL` for a fixture or staging service. It only uses GET requests and checks API contracts, the configured feeds, a recent scan, disabled live trading, terminal controls and logo. Provider degradation is reported without confusing it with a service outage; set `SMOKE_REQUIRE_MARKET_DATA=1` when a strict all-feeds/SOL readiness check is specifically wanted. `SMOKE_ATTEMPTS` allows bounded deployment warm-up retries. GitHub CI runs on PRs/main; Railway smoke runs on main, manually and every six hours. Dependabot checks npm and Actions weekly. API schemas are in `src/api/schemas.json` and validate successful responses and upstream payloads without coercion.

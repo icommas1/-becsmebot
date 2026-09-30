@@ -1,0 +1,27 @@
+# Operations
+
+## Runtime
+
+BecsBot runs as one Node/Express process with `npm start`. It requires Node 22 or 24 and listens on `0.0.0.0` using `PORT` (default `3000`). Startup fails with a concise error when `JUPITER_API_KEY` is absent or `PORT` is invalid. `SIGTERM` and `SIGINT` stop the scan interval and close HTTP connections gracefully; provider requests already have a ten-second timeout.
+
+Required and optional variable names are documented in `.env.example`. Values belong in Railway or a local untracked `.env`, never in source control or command output.
+
+## Railway
+
+The repository assumes Railway runs `npm start`. Configure the service health check to `GET /health`. Mount the persistent volume at the same directory supplied as `DATA_DIR`—the existing deployment uses `/app/data`—so observed chart history survives restarts. Do not point `DATA_DIR` at source files or a shared credential directory.
+
+Railway service access, variables, volume attachment, restart policy and deployment health-check settings are external configuration and cannot be proven from this repository. No wallet or private key is required or expected.
+
+## Health and smoke checks
+
+`GET /health` proves process liveness and reports scan/feed state; it is not a promise that Jupiter is healthy. `npm run test:smoke` performs four read-only GET requests against `SMOKE_BASE_URL`, validates contracts and confirms that live trading remains disabled. It reports provider degradation separately. Set `SMOKE_REQUIRE_MARKET_DATA=1` only for a strict provider-readiness check.
+
+The smoke script rejects URLs containing embedded credentials, query strings or fragments. It never calls search, price POST, wallet, order, sell or pause operations.
+
+## Failure behavior
+
+- A failed feed retains its last successful data and timestamp and exposes a delayed status.
+- Missing Price V3 entries remain unavailable; they cannot produce a paper sale.
+- Invalid provider contracts fail that operation with 503 and do not expose the provider body.
+- Missing history can be rebuilt by later scans; a persistence failure does not stop market discovery.
+- A missing API key or invalid port prevents startup rather than creating a partially configured process.

@@ -1,6 +1,6 @@
 const test = require("node:test");
 const assert = require("node:assert/strict");
-const { FEEDS, marketRows } = require("../src/jupiter-market");
+const { FEEDS, marketRows } = require("../../src/market/tokens");
 
 test("merges Jupiter categories without Pump eligibility", () => {
   const mint = "So11111111111111111111111111111111111111112";
@@ -27,4 +27,18 @@ test("missing token prices stay unavailable and suspicious flag uses field prese
   const [row] = marketRows({ recent: [{ id: mint, usdPrice: null, audit: { isSus: false } }] });
   assert.equal(row.priceUsd, null);
   assert.equal(row.isSus, true);
+});
+
+test("duplicate provider rows collapse to one mint and preserve the first feed rank", () => {
+  const mint = "So11111111111111111111111111111111111111112";
+  const [row] = marketRows({
+    "trending:5m": [
+      { id: mint, symbol: "FIRST", usdPrice: 1 },
+      { id: mint, symbol: "UPDATED", usdPrice: 2 }
+    ],
+    recent: [{ id: mint, name: "Merged metadata" }]
+  });
+  assert.equal(row.mint,mint);assert.equal(row.symbol,"UPDATED");assert.equal(row.name,"Merged metadata");
+  assert.deepEqual(row.feeds,["trending:5m","recent"]);
+  assert.deepEqual(row.ranks,{"trending:5m":1,recent:1});
 });

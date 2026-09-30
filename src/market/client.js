@@ -21,8 +21,7 @@ function createJupiterClient({ apiKey, fetchImpl = fetch, now = Date.now,
           nextAt = now() + Math.min(backoff, 60000);
           continue;
         }
-        throw new Error("Jupiter " + response.status + ": " +
-          (typeof data?.message === "string" ? data.message.slice(0,160) : "data unavailable"));
+        throw new Error("Jupiter " + response.status + " data unavailable");
       }
     }).finally(() => { pending--; });
     queue = result.catch(() => {});

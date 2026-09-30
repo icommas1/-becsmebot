@@ -1,4 +1,4 @@
-const { PublicKey } = require("@solana/web3.js");
+const { isCanonicalMint } = require("./mint");
 
 const INTERVALS = ["5m", "1h", "6h", "24h"];
 const FEEDS = [
@@ -26,8 +26,7 @@ function marketRows(feeds) {
     if (!Array.isArray(tokens)) continue;
     for (const [index, token] of tokens.entries()) {
       if (!token?.id) continue;
-      try { if (new PublicKey(token.id).toBase58() !== token.id) continue; }
-      catch (_) { continue; }
+      if(!isCanonicalMint(token.id))continue;
       const row = rows.get(token.id) || {
         mint: token.id, symbol: "?", name: "", feeds: [], ranks: {},
         priceUsd: null, marketCap: null, liquidityUsd: null, holders: null,
@@ -35,8 +34,8 @@ function marketRows(feeds) {
         isVerified: false, isSus: false,
         change5m: null, change1h: null, volume5m: null, volume1h: null
       };
-      row.feeds.push(feed);
-      row.ranks[feed] = index + 1;
+      if (!row.feeds.includes(feed)) row.feeds.push(feed);
+      row.ranks[feed] ??= index + 1;
       row.symbol = String(token.symbol || row.symbol).slice(0, 32);
       row.name = String(token.name || row.name).slice(0, 100);
       if (positive(token.usdPrice)) { row.priceUsd=positive(token.usdPrice);row.priceFeed=feed; }
@@ -54,7 +53,7 @@ function marketRows(feeds) {
         if (!stats) continue;
         row["change" + interval] = metric(stats.priceChange) ?? row["change" + interval];
         const buy = metric(stats.buyVolume), sell = metric(stats.sellVolume);
-        if (buy != null && sell != null) row["volume" + interval] = buy + sell;
+        if (buy != null && sell != null && buy>=0 && sell>=0) row["volume" + interval] = buy + sell;
       }
       rows.set(token.id, row);
     }

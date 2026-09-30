@@ -1,0 +1,25 @@
+name: Bug report
+description: Report a terminal, data or paper execution failure
+body:
+  - type: textarea
+    id: behavior
+    attributes:
+      label: What happened and what did you expect?
+    validations:
+      required: true
+  - type: textarea
+    id: steps
+    attributes:
+      label: Steps to reproduce
+    validations:
+      required: true
+  - type: input
+    id: device
+    attributes:
+      label: Device and browser
+      placeholder: iPhone / Safari / version
+  - type: textarea
+    id: context
+    attributes:
+      label: Token CA, filters, feed timestamps or screenshot
+      description: Do not include API keys, private keys or personal wallet data.
