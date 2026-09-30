@@ -48,6 +48,21 @@ service does not use PumpPortal's Lightning trading API.
 Never commit a key.
 The public wallet address is configured in `src/basket.js`.
 
+The dashboard also has a separate paper desk. Set any nonnegative simulated
+SOL cash balance and edit the paper USD buy size, SOL cash reserve, estimated
+network fee, price impact, market cap, liquidity, age, and holder filters.
+Its radar shows Jupiter 5-minute and 1-hour trends, with manual paper buys
+restricted to the on-chain verified active Pump SOL curves. The optional auto
+paper button buys each passing curve once while the page is open; it switches
+off when the page is reopened. Paper holds and the buy-once list persist in
+that browser's local storage and remain after leaving the radar. A separate
+Dex Screener token-pair price lookup (with Jupiter price fallback) marks
+paper holds, including 25%, 50%, and 100% paper sells. Paper fills use a
+price estimate and configurable fee and impact, not a transaction quote.
+They do not send orders or change the real wallet. Clearing site data or
+changing phones loses this local paper record; Railway does not run paper
+auto buys when the dashboard is closed.
+
 The dashboard lists nonzero balances in this wallet's canonical token accounts
 for both Token and Token-2022. Its 25%, 50%, and 100% sell buttons request a
 Jupiter Swap V2 token-to-SOL quote, then require a second confirmation. The

@@ -22,6 +22,7 @@ const SCAN_MS = 5 * 60 * 1000;
 const STREAM_SCAN_MIN_MS = 60 * 1000;
 // Direct Pump bonding-curve execution is not implemented; no buy route exists here.
 const TRADING_ENABLED = false;
+const PRICE_CACHE_MS = 20000;
 
 const apiKey = process.env.JUPITER_API_KEY;
 const dashboardKey = process.env.DASHBOARD_KEY;
@@ -48,8 +49,9 @@ const [volumeAccount] = PublicKey.findProgramAddressSync(
 );
 const state = {
   lastScanAt: null, lastError: null, running: false, paused: false,
-  solUsd: null, walletSol: null, candidates: [], pumpVolumeReady: null, ledger: {}
+  solUsd: null, walletSol: null, candidates: [], radar: [], pumpVolumeReady: null, ledger: {}
 };
+const priceCache = new Map();
 
 function persist() {
   if (!ledgerPath) throw new Error("Persistent DATA_DIR is required");
@@ -72,6 +74,86 @@ if (ledgerPath) {
 
 function isPump(token) {
   return /pump/i.test(String(token.launchpad || ""));
+}
+
+function finitePositive(value) {
+  const number = Number(value);
+  return Number.isFinite(number) && number > 0 ? number : null;
+}
+
+function trendRows(five, hour) {
+  const rows = new Map();
+  for (const [source, tokens] of [["5m", five], ["1h", hour]]) {
+    for (const token of tokens) {
+      if (!token?.id) continue;
+      try { new PublicKey(token.id); } catch (_) { continue; }
+      const row = rows.get(token.id) || {
+        mint: token.id, symbol: String(token.symbol || "?").slice(0, 32),
+        name: String(token.name || "").slice(0, 100), sources: [],
+        priceUsd: null, marketCap: null, liquidityUsd: null,
+        holders: null, createdAt: null, launchpad: null
+      };
+      row.sources.push(source);
+      row.priceUsd ||= finitePositive(token.usdPrice);
+      row.marketCap ||= finitePositive(token.mcap);
+      row.liquidityUsd ||= finitePositive(token.liquidity);
+      row.holders ||= finitePositive(token.holderCount);
+      row.createdAt ||= token.firstPool?.createdAt || token.createdAt || null;
+      row.launchpad ||= token.launchpad || null;
+      rows.set(token.id, row);
+    }
+  }
+  return [...rows.values()];
+}
+
+async function paperPrices(mints) {
+  const now = Date.now();
+  const result = {};
+  const missing = mints.filter((mint) => {
+    const cached = priceCache.get(mint);
+    if (cached && now - cached.at < PRICE_CACHE_MS) {
+      result[mint] = cached.data;
+      return false;
+    }
+    return true;
+  });
+  for (let i = 0; i < missing.length; i += 30) {
+    const chunk = missing.slice(i, i + 30);
+    let pairs = [];
+    try {
+      const response = await fetch("https://api.dexscreener.com/tokens/v1/solana/" + chunk.join(","),
+        { signal: AbortSignal.timeout(8000) });
+      if (response.ok) pairs = await response.json();
+    } catch (_) { /* Jupiter price fallback below. */ }
+    for (const mint of chunk) {
+      const best = (Array.isArray(pairs) ? pairs : [])
+        .filter((pair) => pair.chainId === "solana" && pair.baseToken?.address === mint &&
+          finitePositive(pair.priceUsd))
+        .sort((a, b) => (Number(b.liquidity?.usd) || 0) - (Number(a.liquidity?.usd) || 0))[0];
+      const data = best ? {
+        priceUsd: finitePositive(best.priceUsd),
+        marketCap: finitePositive(best.marketCap || best.fdv),
+        liquidityUsd: finitePositive(best.liquidity?.usd)
+      } : null;
+      result[mint] = data;
+      priceCache.set(mint, { data, at: now });
+    }
+  }
+  const withoutPrice = missing.filter((mint) => !result[mint]?.priceUsd);
+  for (let i = 0; i < withoutPrice.length; i += 50) {
+    const chunk = withoutPrice.slice(i, i + 50);
+    try {
+      const jupPrices = await jupiter("/price/v3?ids=" + chunk.join(","));
+      for (const mint of chunk) {
+        const price = finitePositive(jupPrices[mint]?.usdPrice);
+        if (price) {
+          result[mint] = { priceUsd: price, marketCap: null, liquidityUsd: null };
+          priceCache.set(mint, { data: result[mint], at: now });
+        }
+      }
+    } catch (_) { /* A missing price remains explicitly unavailable. */ }
+  }
+  return result;
 }
 
 function isSolCurve(info) {
@@ -163,6 +245,7 @@ async function scan() {
       connection.getBalance(wallet),
       connection.getAccountInfo(volumeAccount)
     ]);
+    state.radar = trendRows(five, hour);
     const unique = new Map();
     const trending = new Map([...five, ...hour]
       .filter((token) => token?.id).map((token) => [token.id, token]));
@@ -229,13 +312,24 @@ app.get("/api/basket", requireKey, (_req, res) => res.json({
   manualSell: manualSell.status(),
   solUsd: state.solUsd, walletSol: state.walletSol,
   running: state.running, lastScanAt: state.lastScanAt,
-  lastError: state.lastError, candidates: state.candidates,
+  lastError: state.lastError, candidates: state.candidates, radar: state.radar,
   pumpVolumeReady: state.pumpVolumeReady,
   pumpVolumeAccount: volumeAccount.toBase58(),
   pumpFeed: pumpFeed.status(),
   tradeActivityLastMinute: pumpFeed.tradeActivity(),
   purchases: state.ledger
 }));
+app.post("/api/paper/prices", requireKey, async (req, res) => {
+  const input = req.body?.mints;
+  if (!Array.isArray(input) || input.length > 100 ||
+      input.some((mint) => {
+        if (typeof mint !== "string") return true;
+        try { return new PublicKey(mint).toBase58() !== mint; }
+        catch (_) { return true; }
+      })) return res.status(400).json({ error: "Invalid token list" });
+  try { res.json({ prices: await paperPrices([...new Set(input)]) }); }
+  catch (_) { res.status(503).json({ error: "Market prices unavailable" }); }
+});
 app.get("/api/holdings", requireKey, async (_req, res) => {
   try { res.json({ holdings: await manualSell.holdings() }); }
   catch (_) { res.status(503).json({ error: "Wallet holdings unavailable" }); }

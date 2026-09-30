@@ -1,142 +1,242 @@
 <!doctype html>
 <html lang="en">
+<head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>BecsBot</title>
+<title>BecsBot · Paper desk</title>
 <style>
-  body { font: 16px -apple-system, BlinkMacSystemFont, sans-serif; background: #0b1019; color: #f6f8ff; margin: 0; }
-  main { max-width: 760px; margin: auto; padding: 20px; }
-  section { background: #182130; border: 1px solid #334159; border-radius: 16px; padding: 18px; margin: 16px 0; }
-  h1 { margin-bottom: 4px; }
-  small { color: #b7c1d3; }
-  li { margin: 12px 0; overflow-wrap: anywhere; }
-  button { background: #e75959; border: 0; border-radius: 8px; color: white; padding: 12px; font-weight: bold; }
-  button:disabled { opacity: .45; }
-  input { width: 80px; padding: 10px; font-size: 16px; border-radius: 8px; border: 1px solid #64738d; }
-  .sell-actions { display: flex; gap: 8px; margin: 10px 0; }
-  .sell-actions button { background: #ab4545; }
+:root { color-scheme: dark; --bg:#0b1019; --card:#172231; --line:#34445b; --muted:#b4c2d3; --good:#59d6a2; --bad:#ff8585; --accent:#70b8ff }
+* { box-sizing:border-box } body { margin:0; background:var(--bg); color:#f5f8ff; font:15px -apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif }
+main { max-width:940px; margin:auto; padding:18px 14px 50px } h1 { margin:0; font-size:27px } h2 { margin:0 0 10px; font-size:19px } h3 { margin:0 0 6px; font-size:16px }
+p, small { color:var(--muted); line-height:1.4 } p { margin:8px 0 12px } small { font-size:12px } .sub { margin:4px 0 18px }
+section { background:var(--card); border:1px solid var(--line); border-radius:16px; padding:16px; margin:13px 0 }
+.topline,.rowhead,.actions,.pillrow { display:flex; gap:9px; align-items:center; justify-content:space-between; flex-wrap:wrap }
+.pill { display:inline-block; border:1px solid var(--line); border-radius:99px; padding:5px 9px; font-size:12px; color:var(--muted) }
+.paper { color:var(--good); border-color:#33755d } .live { color:#ffc077; border-color:#855b31 } .bad { color:var(--bad) } .good { color:var(--good) }
+.metrics { display:grid; grid-template-columns:repeat(4,minmax(0,1fr)); gap:10px; margin:14px 0 }
+.metric { background:#101a28; border:1px solid #2d3c51; border-radius:12px; padding:12px; min-width:0 }
+.metric small { display:block; margin-bottom:5px } .metric b { font-size:18px; overflow-wrap:anywhere }
+button { background:#316b9c; border:1px solid #4f93ca; border-radius:9px; color:white; padding:9px 12px; font:inherit; font-weight:650; min-height:38px; cursor:pointer }
+button:disabled { opacity:.42; cursor:default } button.secondary { background:#25344a; border-color:#455a76 } button.danger { background:#843d43; border-color:#b4555e }
+input,select { background:#0d1826; color:white; border:1px solid #64738d; border-radius:8px; padding:9px; min-height:38px; font:inherit; width:100%; min-width:0 }
+label { display:block; color:var(--muted); font-size:12px } label input, label select { display:block; margin-top:5px }
+.settings { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:10px; margin:12px 0 } details summary { cursor:pointer; font-weight:650; padding:3px 0 }
+.item { border-top:1px solid #34445b; padding:12px 0; overflow-wrap:anywhere } .item:first-child { border-top:0 } .item .name { font-weight:750; font-size:16px } .meta { color:var(--muted); font-size:12px; margin:5px 0; line-height:1.45 } .actionbar { display:flex; gap:7px; flex-wrap:wrap; margin-top:8px }
+#message { min-height:18px; color:var(--accent); font-size:13px } #status { font-size:13px; color:var(--muted) } .link { color:#9accff } .mono { font-family:ui-monospace,SFMono-Regular,monospace; font-size:11px; overflow-wrap:anywhere }
+@media(max-width:650px) { .metrics { grid-template-columns:repeat(2,minmax(0,1fr)) } .settings { grid-template-columns:repeat(2,minmax(0,1fr)) } .metric b { font-size:16px } }
 </style>
-<main>
-  <h1>BecsBot</h1>
-  <small>Pump.fun SOL bonding curves · $1 plan · buy once · hold</small>
-  <section><strong>AUTOMATIC BUYING IS OFF</strong><p>Manual sell buttons appear for tokens held by the bot wallet when its signing key and sell switch are ready.</p></section>
-  <section><h2>Status</h2><div id="status">Loading…</div><button id="stop">Pause scans</button></section>
-  <section><h2>Active Pump curve sample</h2>
-    <small>Recent Pump launches cross-matched with Jupiter trends, with Pump-labeled Jupiter fallback. Each candidate is verified against the on-chain SOL curve.</small>
-    <ol id="candidates"></ol>
-  </section>
-  <section><h2>Wallet setup</h2><div id="setup">Loading…</div></section>
-  <section><h2>Wallet tokens</h2>
-    <label>Sell slippage (%) <input id="slippage" type="number" min="0.1" max="50" step="0.01" value="5"></label>
-    <p><small>Saved on this phone. A sell requests a fresh SOL quote and asks you to confirm it.</small></p>
-    <div id="sell-status">Loading…</div><ul id="holdings"></ul>
-    <div id="sale-result"></div>
-  </section>
+</head>
+<body><main>
+<header class="topline"><div><h1>BecsBot</h1><p class="sub">Trend radar · $1 paper plan · buy once · hold</p></div><span class="pill paper">PAPER DESK</span></header>
+<section>
+  <div class="rowhead"><h2>Paper wallet</h2><span id="auto-label" class="pill">Auto paper: off</span></div>
+  <div class="metrics"><div class="metric"><small>Cash</small><b id="cash">—</b></div><div class="metric"><small>Open value</small><b id="open-value">—</b></div><div class="metric"><small>Paper P/L</small><b id="profit">—</b></div><div class="metric"><small>Open holds</small><b id="hold-count">—</b></div></div>
+  <div class="actions"><button id="auto" class="secondary">Start auto paper</button><span id="sol-rate" class="pill">SOL price pending</span></div>
+  <p><small>Simulated SOL only. Auto paper runs while this page is open, using verified active Pump SOL curves and buying each mint once. No real orders.</small></p>
+  <div id="message" role="status"></div>
+</section>
+<section><details id="settings"><summary>Adjust paper settings</summary>
+  <div class="settings">
+    <label>Paper buy ($)<input data-setting="betUsd" type="number" min="0.01" step="0.01"></label>
+    <label>Keep as cash (SOL)<input data-setting="reserveSol" type="number" min="0" step="0.000001"></label>
+    <label>Estimated network fee (SOL)<input data-setting="feeSol" type="number" min="0" step="0.000001"></label>
+    <label>Paper price impact (%)<input data-setting="impactPct" type="number" min="0" max="50" step="0.1"></label>
+    <label>Min liquidity ($)<input data-setting="minLiquidity" type="number" min="0" step="100"></label>
+    <label>Min market cap ($)<input data-setting="minCap" type="number" min="0" step="100"></label>
+    <label>Max market cap ($, 0 = any)<input data-setting="maxCap" type="number" min="0" step="100"></label>
+    <label>Min age (minutes)<input data-setting="minAge" type="number" min="0" step="1"></label>
+    <label>Max age (minutes, 0 = any)<input data-setting="maxAge" type="number" min="0" step="1"></label>
+    <label>Min holders<input data-setting="minHolders" type="number" min="0" step="1"></label>
+    <label>Cash balance (SOL)<input id="cash-input" type="number" min="0" step="0.001"></label>
+  </div>
+  <div class="actionbar"><button id="set-cash" class="secondary">Set paper cash</button><button id="reset-paper" class="danger">Reset paper wallet</button></div>
+  <p><small>Changing cash keeps existing holds. Reset clears paper holds, history, and the buy-once list. Settings and trades are saved in this browser on this phone.</small></p>
+</details></section>
+<section><div class="rowhead"><h2>Trend radar</h2><span id="radar-count" class="pill">Loading</span></div>
+  <p><small>Jupiter 5m and 1h trends. Only rows marked “Pump curve active” can make paper buys. Filters hide rows with missing required data. Prices are estimates.</small></p>
+  <div class="actions"><label style="min-width:150px">Show<select id="radar-view"><option value="eligible">Active Pump curves</option><option value="all">All trends</option></select></label><button id="refresh" class="secondary">Refresh</button></div>
+  <div id="radar"></div>
+</section>
+<section><h2>Paper holds</h2><p><small>Holds stay here after leaving the radar. Current prices refresh separately; if unavailable, the last known price is labeled stale.</small></p><div id="paper-holds"></div></section>
+<section><details><summary>Paper activity</summary><div id="activity"></div></details></section>
+<section><div class="rowhead"><h2>Real wallet</h2><span class="pill live">LIVE SELLS</span></div>
+  <p><small>Automatic buying is off. These tokens belong to the actual bot wallet. Selling sends a real transaction after your confirmation.</small></p>
+  <div id="status">Loading status…</div><div class="actionbar"><button id="stop" class="secondary">Pause scans</button></div>
+  <details><summary>Wallet accounts and manual sells</summary><p id="setup"></p>
+    <label style="max-width:200px">Live sell slippage (%)<input id="slippage" type="number" min="0.1" max="50" step="0.01" value="5"></label>
+    <p id="sell-status"></p><div id="holdings"></div><div id="sale-result"></div>
+  </details>
+</section>
 </main>
 <script>
-  let key = sessionStorage.getItem("becsKey") || "";
-  async function call(url, options = {}) {
-    if (!key) key = prompt("BecsBot dashboard key") || "";
-    if (key) sessionStorage.setItem("becsKey", key);
-    const response = await fetch(url, { ...options,
-      headers: { ...options.headers, "x-dashboard-key": key } });
-    if (response.status === 401) {
-      key = "";
-      sessionStorage.removeItem("becsKey");
-      throw Error("Dashboard key rejected");
-    }
-    if (!response.ok) {
-      const detail = await response.json().catch(() => ({}));
-      throw Error(detail.error || "Request failed: " + response.status);
-    }
-    return response.json();
+const STORE = "becsPaperV1";
+const defaults = { betUsd:1, reserveSol:.02, feeSol:.000005, impactPct:0, minLiquidity:0, minCap:0, maxCap:0, minAge:0, maxAge:0, minHolders:0 };
+function fresh() { return { cashSol:.4, settings:{...defaults}, holds:{}, bought:{}, activity:[], realizedUsd:0, auto:false }; }
+function loadPaper() {
+  try {
+    const old = JSON.parse(localStorage.getItem(STORE));
+    if (!old || !Number.isFinite(old.cashSol) || old.cashSol < 0 || !old.holds || !old.bought) return fresh();
+    return { ...fresh(), ...old, settings:{...defaults, ...old.settings}, auto:false };
+  } catch (_) { return fresh(); }
+}
+let paper = loadPaper();
+let snapshot = null, prices = {}, priceTimes = {}, refreshing = false;
+let key = sessionStorage.getItem("becsKey") || "";
+const $ = (id) => document.getElementById(id);
+const usd = (n) => Number.isFinite(n) ? "$" + n.toLocaleString(undefined,{maximumFractionDigits:2,minimumFractionDigits:2}) : "—";
+const short = (n) => Number.isFinite(n) ? n.toLocaleString(undefined,{maximumSignificantDigits:5}) : "—";
+function save() { try { localStorage.setItem(STORE, JSON.stringify(paper)); } catch (_) { message("Phone storage is full; paper trades may not persist."); } }
+function message(value) { $("message").textContent = value; }
+function num(value) { const n=Number(value); return Number.isFinite(n) && n>0 ? n : null; }
+function node(tag, className, value) { const el=document.createElement(tag); if(className)el.className=className; if(value!=null)el.textContent=value; return el; }
+async function call(url, options={}) {
+  if (!key) key=prompt("BecsBot dashboard key") || "";
+  if (key) sessionStorage.setItem("becsKey",key);
+  const response=await fetch(url,{...options,headers:{...options.headers,"x-dashboard-key":key}});
+  if (response.status===401) { key="";sessionStorage.removeItem("becsKey");throw Error("Dashboard key rejected"); }
+  if (!response.ok) { const body=await response.json().catch(()=>({}));throw Error(body.error || "Request failed: " + response.status); }
+  return response.json();
+}
+function options() { return {method:"POST",headers:{"Content-Type":"application/json"}}; }
+function solUsd() { return num(snapshot?.solUsd); }
+function eligible(row) { return snapshot?.candidates?.some((c)=>c.mint===row.mint); }
+function passes(row) {
+  const s=paper.settings, now=Date.now(), age=Date.parse(row.createdAt);
+  if (s.minLiquidity && (!(row.liquidityUsd>=s.minLiquidity))) return false;
+  if (s.minCap && (!(row.marketCap>=s.minCap))) return false;
+  if (s.maxCap && (!(row.marketCap<=s.maxCap))) return false;
+  if (s.minHolders && (!(row.holders>=s.minHolders))) return false;
+  if (s.minAge && (!Number.isFinite(age) || (now-age)/60000<s.minAge)) return false;
+  if (s.maxAge && (!Number.isFinite(age) || (now-age)/60000>s.maxAge)) return false;
+  return true;
+}
+function record(kind,text) { paper.activity.unshift({at:new Date().toISOString(),kind,text});paper.activity.length=Math.min(paper.activity.length,500); }
+function buy(row, automatic=false) {
+  const rate=solUsd(), price=num(row.priceUsd), s=paper.settings;
+  if (!eligible(row)) return message("Paper buys require an active verified Pump SOL curve.");
+  if (!passes(row)) return message("This token is outside your paper filters.");
+  if (paper.bought[row.mint]) return message("Already paper bought this mint once.");
+  if (!rate || !price) return message("Need a current SOL and token price for a paper buy.");
+  const solCost=s.betUsd/rate, total=solCost+s.feeSol;
+  if (paper.cashSol+1e-10<total+s.reserveSol) return message("Paper cash would fall below your SOL reserve.");
+  const entry=price*(1+s.impactPct/100);
+  paper.cashSol=Math.max(0,paper.cashSol-total);
+  paper.holds[row.mint]={mint:row.mint,symbol:row.symbol,qty:s.betUsd/entry,entryPrice:entry,entryCap:row.marketCap,
+    investedUsd:s.betUsd,feesUsd:s.feeSol*rate,boughtAt:new Date().toISOString(),lastPrice:price};
+  paper.bought[row.mint]=true;
+  prices[row.mint]={priceUsd:price,marketCap:row.marketCap,liquidityUsd:row.liquidityUsd};priceTimes[row.mint]=Date.now();
+  record("buy",(automatic?"Auto ":"")+"paper buy " + row.symbol + " " + usd(s.betUsd));save();render();
+  if (!automatic) message("Paper bought " + row.symbol + " for " + usd(s.betUsd) + ".");
+}
+function sellPaper(mint,pct) {
+  const hold=paper.holds[mint], rate=solUsd();
+  const price=num(prices[mint]?.priceUsd) || num(hold?.lastPrice);
+  if (!hold || !rate || !price) return message("Need a price and SOL rate for a paper sale.");
+  const fraction=pct/100, gross=hold.qty*fraction*price*(1-paper.settings.impactPct/100);
+  const fee=paper.settings.feeSol*rate, net=gross-fee;
+  if (net<=0) return message("Paper sale amount is smaller than the estimated fee.");
+  const basis=hold.investedUsd*fraction+hold.feesUsd*fraction;
+  paper.cashSol+=net/rate;paper.realizedUsd+=net-basis;
+  hold.qty*=1-fraction;hold.investedUsd*=1-fraction;hold.feesUsd*=1-fraction;
+  if (pct===100 || hold.qty<1e-12) delete paper.holds[mint];
+  record("sell","Paper sold " + pct + "% " + hold.symbol + " · " + usd(net) + " after fee");save();render();
+  message("Paper sold " + pct + "% of " + hold.symbol + ".");
+}
+function renderWallet() {
+  const holds=Object.values(paper.holds), rate=solUsd();
+  const value=holds.reduce((sum,h)=>sum+h.qty*(num(prices[h.mint]?.priceUsd)||num(h.lastPrice)||0),0);
+  const unrealized=holds.reduce((sum,h)=>sum+h.qty*(num(prices[h.mint]?.priceUsd)||num(h.lastPrice)||0)-h.investedUsd-h.feesUsd,0);
+  $("cash").textContent=short(paper.cashSol)+" SOL";$("open-value").textContent=usd(value);
+  const pnl=paper.realizedUsd+unrealized;$("profit").textContent=usd(pnl);$("profit").className=pnl>=0?"good":"bad";
+  $("hold-count").textContent=String(holds.length);
+  $("sol-rate").textContent=rate?"SOL "+usd(rate):"SOL price pending";
+  $("auto").textContent=paper.auto?"Stop auto paper":"Start auto paper";
+  $("auto-label").textContent="Auto paper: "+(paper.auto?"on":"off");
+  $("auto-label").className="pill "+(paper.auto?"paper":"");
+}
+function renderRadar() {
+  const box=$("radar");box.replaceChildren();
+  let rows=(snapshot?.radar||[]).filter(passes);
+  if ($("radar-view").value==="eligible") rows=rows.filter(eligible);
+  $("radar-count").textContent=rows.length+" shown / "+(snapshot?.radar?.length||0)+" trending";
+  for (const row of rows.slice(0,60)) {
+    const card=node("div","item");const head=node("div","rowhead");
+    head.append(node("span","name",row.symbol+" · "+(eligible(row)?"Pump curve active":"Watch only")),node("span","pill",row.sources.join(" + ")));
+    card.append(head,node("div","meta",usd(row.priceUsd)+" per token · cap "+usd(row.marketCap)+" · liquidity "+usd(row.liquidityUsd)+" · holders "+(row.holders??"—")+" · age "+(row.createdAt?Math.max(0,Math.floor((Date.now()-Date.parse(row.createdAt))/60000))+"m":"—")));
+    const actions=node("div","actionbar"), button=node("button","",paper.bought[row.mint]?"Bought once":"Paper buy "+usd(paper.settings.betUsd));
+    button.disabled=!eligible(row)||Boolean(paper.bought[row.mint])||!num(row.priceUsd)||!solUsd();button.onclick=()=>buy(row);
+    actions.append(button,node("small","mono",row.mint));card.append(actions);box.append(card);
   }
-  function list(id, items, format) {
-    const box = document.getElementById(id);
-    box.replaceChildren();
-    for (const item of items) {
-      const li = document.createElement("li");
-      li.textContent = format(item);
-      box.appendChild(li);
-    }
+  if (!rows.length) box.append(node("p","","No trends match these filters right now."));
+}
+function renderHolds() {
+  const box=$("paper-holds");box.replaceChildren();const holds=Object.values(paper.holds);
+  for (const h of holds) {
+    const mark=num(prices[h.mint]?.priceUsd)||num(h.lastPrice);
+    const value=h.qty*(mark||0), pnl=value-h.investedUsd-h.feesUsd;
+    const row=node("div","item");row.append(node("div","name",h.symbol+" · "+short(h.qty)+" tokens"));
+    row.append(node("div","meta","Entry "+usd(h.entryPrice)+" · now "+usd(mark)+" · entry cap "+usd(h.entryCap)+" · now cap "+usd(prices[h.mint]?.marketCap)+" · liquidity "+usd(prices[h.mint]?.liquidityUsd)));
+    row.append(node("div",pnl>=0?"good":"bad","Value "+usd(value)+" · P/L "+usd(pnl)+" ("+(h.investedUsd?short(pnl/(h.investedUsd+h.feesUsd)*100):"—")+"%)"));
+    if (!priceTimes[h.mint] || Date.now()-priceTimes[h.mint]>120000) row.append(node("small","bad","Price may be stale"));
+    const actions=node("div","actionbar");for(const pct of [25,50,100]) { const b=node("button","secondary","Paper sell "+pct+"%");b.onclick=()=>sellPaper(h.mint,pct);actions.append(b); }
+    row.append(actions,node("small","mono",h.mint));box.append(row);
   }
-  async function refresh() {
-    try {
-      const s = await call("/api/basket");
-      document.getElementById("status").textContent =
-        (s.paused ? "Paused" : s.running ? "Checking now" : "Checking Pump curves") +
-        " · Last scan: " + (s.lastScanAt || "pending") +
-        " · Wallet: " + (s.walletSol == null ? "—" : s.walletSol.toFixed(5)) + " SOL" +
-        " · SOL $" + (s.solUsd || "—") +
-        (s.lastError ? " · Error: " + s.lastError : "");
-      list("candidates", s.candidates.slice(0, 30),
-        (x) => x.symbol + " · active SOL curve · receiving account: " +
-          x.accountStatus + " · mint " + x.mint);
-      document.getElementById("setup").textContent =
-        "Pump wallet volume account: " + (s.pumpVolumeReady === null ? "checking" :
-          s.pumpVolumeReady ? "ready" : "needed on first Pump buy") +
-        ". Existing token accounts are reused after a sale; new mints need their own account.";
-      document.getElementById("stop").textContent = s.paused ? "Resume scans" : "Pause scans";
-      document.getElementById("sell-status").textContent = s.manualSell.enabled ?
-        "Manual sells available · destination: SOL · direct account-close instructions blocked" :
-        "Manual sells locked until the bot wallet signer and sell switch are ready";
-      const holdings = await call("/api/holdings");
-      const list = document.getElementById("holdings");
-      list.replaceChildren();
-      for (const item of holdings.holdings) {
-        const row = document.createElement("li");
-        const name = document.createElement("div");
-        name.textContent = item.displayAmount + " tokens · " + item.mint;
-        row.appendChild(name);
-        const actions = document.createElement("div");
-        actions.className = "sell-actions";
-        for (const percent of [25, 50, 100]) {
-          const button = document.createElement("button");
-          button.textContent = "Sell " + percent + "%";
-          button.disabled = !s.manualSell.enabled;
-          button.onclick = () => sell(item.mint, percent, button);
-          actions.appendChild(button);
-        }
-        row.appendChild(actions);
-        list.appendChild(row);
-      }
-      if (!holdings.holdings.length) list.textContent = "No tokens in this bot wallet.";
-    } catch (error) {
-      document.getElementById("status").textContent = error.message;
-    }
-  }
-  const slippageInput = document.getElementById("slippage");
-  slippageInput.value = localStorage.getItem("becsSellSlippage") || "5";
-  slippageInput.addEventListener("change", () => {
-    localStorage.setItem("becsSellSlippage", slippageInput.value);
+  if (!holds.length) box.append(node("p","","No paper holds yet."));
+  const activity=$("activity");activity.replaceChildren();for(const entry of paper.activity.slice(0,100)) activity.append(node("div","item",new Date(entry.at).toLocaleString()+" · "+entry.text));
+  if (!paper.activity.length) activity.append(node("p","","No paper activity yet."));
+}
+function render() { renderWallet();renderRadar();renderHolds(); }
+async function refreshPrices() {
+  const mints=Object.keys(paper.holds);if (!mints.length) return;
+  try {
+    const result=await call("/api/paper/prices",{...options(),body:JSON.stringify({mints:mints.slice(0,100)})});
+    for(const mint of mints) { const data=result.prices[mint];if (num(data?.priceUsd)) {prices[mint]=data;priceTimes[mint]=Date.now();paper.holds[mint].lastPrice=data.priceUsd;} }
+    save();render();
+  } catch (error) { message("Paper price update: "+error.message); }
+}
+async function refresh() {
+  if (refreshing) return;refreshing=true;
+  try {
+    const s=await call("/api/basket");snapshot=s;
+    $("status").textContent=(s.paused?"Scans paused":s.running?"Scanning":"Scanning")+" · last scan "+(s.lastScanAt?new Date(s.lastScanAt).toLocaleTimeString():"pending")+" · wallet "+(s.walletSol==null?"—":short(s.walletSol))+" SOL"+(s.lastError?" · "+s.lastError:"");
+    $("stop").textContent=s.paused?"Resume scans":"Pause scans";
+    $("setup").textContent="Pump volume account: "+(s.pumpVolumeReady===null?"checking":s.pumpVolumeReady?"ready":"needed on first buy")+". Existing token accounts are reused after a sale.";
+    $("sell-status").textContent=s.manualSell.enabled?"Manual sell ready · proceeds in SOL":"Manual sell unavailable until wallet signer and sell switch are ready";
+    if (paper.auto) for(const row of s.radar||[]) if (eligible(row)&&passes(row)&&!paper.bought[row.mint]) buy(row,true);
+    render();await refreshPrices();await refreshRealHoldings(s);
+  } catch(error) { $("status").textContent=error.message;message(error.message); }
+  finally { refreshing=false; }
+}
+async function refreshRealHoldings(s) {
+  try {
+    const result=await call("/api/holdings"), box=$("holdings");box.replaceChildren();
+    for(const h of result.holdings) { const row=node("div","item");row.append(node("div","name",h.displayAmount+" tokens"),node("small","mono",h.mint));
+      const actions=node("div","actionbar");for(const pct of [25,50,100]) { const b=node("button","danger","LIVE sell "+pct+"%");b.disabled=!s.manualSell.enabled;b.onclick=()=>sellLive(h.mint,pct,b);actions.append(b); }row.append(actions);box.append(row); }
+    if(!result.holdings.length) box.append(node("p","","No tokens in the bot wallet."));
+  } catch(error) { $("holdings").textContent="Wallet holdings: "+error.message; }
+}
+const slippageInput=$("slippage");slippageInput.value=localStorage.getItem("becsSellSlippage")||"5";
+slippageInput.addEventListener("change",()=>localStorage.setItem("becsSellSlippage",slippageInput.value));
+async function sellLive(mint,percent,button) {
+  button.disabled=true;
+  try { const quote=await call("/api/sell/quote",{...options(),body:JSON.stringify({mint,percent,slippage:slippageInput.value})});
+    if (!confirm("LIVE TRANSACTION: Sell "+percent+"% of "+mint+" for about "+quote.expectedSol.toFixed(6)+" SOL? Minimum "+quote.minimumSol.toFixed(6)+" SOL at "+quote.slippage+"% slippage.")) return;
+    const result=await call("/api/sell",{...options(),body:JSON.stringify({quoteId:quote.quoteId})});
+    const link=node("a","link","Sale confirmed · view transaction");link.href="https://solscan.io/tx/"+result.signature;link.target="_blank";link.rel="noopener noreferrer";$("sale-result").replaceChildren(link);await refresh();
+  } catch(error) { alert(error.message); } finally { button.disabled=false; }
+}
+for(const input of document.querySelectorAll("[data-setting]")) {
+  const name=input.dataset.setting;input.value=paper.settings[name];input.addEventListener("change",()=>{
+    const value=Number(input.value);if (!Number.isFinite(value)||value<0||(name==="betUsd"&&value<=0)||(name==="impactPct"&&value>50)) {input.value=paper.settings[name];return message("Enter a valid nonnegative value.");}
+    paper.settings[name]=value;save();render();message("Paper settings saved.");
   });
-  async function sell(mint, percent, button) {
-    button.disabled = true;
-    try {
-      const quote = await call("/api/sell/quote", { method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ mint, percent, slippage: slippageInput.value }) });
-      if (!confirm("Sell " + percent + "% of " + mint + " for about " +
-        quote.expectedSol.toFixed(6) + " SOL? Minimum " +
-        quote.minimumSol.toFixed(6) + " SOL at " + quote.slippage + "% slippage.")) return;
-      const result = await call("/api/sell", { method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ quoteId: quote.quoteId }) });
-      const link = document.createElement("a");
-      link.href = "https://solscan.io/tx/" + result.signature;
-      link.textContent = "Sale confirmed · view transaction";
-      link.target = "_blank";
-      link.rel = "noopener noreferrer";
-      document.getElementById("sale-result").replaceChildren(link);
-      await refresh();
-    } catch (error) { alert(error.message); }
-    finally { button.disabled = false; }
-  }
-  document.getElementById("stop").onclick = async () => {
-    try { await call("/api/pause", { method: "POST" }); await refresh(); }
-    catch (error) { alert(error.message); }
-  };
-  refresh();
-  setInterval(refresh, 10000);
+}
+$("cash-input").value=paper.cashSol;
+$("set-cash").onclick=()=>{const value=Number($("cash-input").value);if(!Number.isFinite(value)||value<0) return message("Enter a valid SOL amount.");paper.cashSol=value;record("adjust","Set paper cash to "+short(value)+" SOL");save();render();message("Paper cash updated.");};
+$("reset-paper").onclick=()=>{if(!confirm("Reset paper holds, history, and bought-once list?"))return;const cash=Number($("cash-input").value);const settings=paper.settings;paper={...fresh(),cashSol:Number.isFinite(cash)&&cash>=0?cash:.4,settings};prices={};priceTimes={};save();render();message("Paper wallet reset.");};
+$("auto").onclick=()=>{paper.auto=!paper.auto;save();render();message(paper.auto?"Auto paper on while this page is open. Eligible trends will be paper bought once as scans update.":"Auto paper off.");if(paper.auto&&snapshot) { for(const row of snapshot.radar||[]) if(eligible(row)&&passes(row)&&!paper.bought[row.mint]) buy(row,true); } };
+$("radar-view").onchange=renderRadar;$("refresh").onclick=refresh;
+$("stop").onclick=async()=>{try{await call("/api/pause",{method:"POST"});await refresh();}catch(error){message(error.message);}};
+render();refresh();setInterval(refresh,10000);
 </script>
-</html>
+</body></html>
