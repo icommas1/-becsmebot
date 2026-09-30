@@ -11,30 +11,44 @@
   small { color: #b7c1d3; }
   li { margin: 12px 0; overflow-wrap: anywhere; }
   button { background: #e75959; border: 0; border-radius: 8px; color: white; padding: 12px; font-weight: bold; }
+  button:disabled { opacity: .45; }
+  input { width: 80px; padding: 10px; font-size: 16px; border-radius: 8px; border: 1px solid #64738d; }
+  .sell-actions { display: flex; gap: 8px; margin: 10px 0; }
+  .sell-actions button { background: #ab4545; }
 </style>
 <main>
   <h1>BecsBot</h1>
   <small>Pump.fun SOL bonding curves · $1 plan · buy once · hold</small>
-  <section><strong>LIVE TRADING IS LOCKED OFF</strong><p>This dashboard checks curve and receiving account status. It creates no accounts and sends no orders.</p></section>
+  <section><strong>AUTOMATIC BUYING IS OFF</strong><p>Manual sell buttons appear for tokens held by the bot wallet when its signing key and sell switch are ready.</p></section>
   <section><h2>Status</h2><div id="status">Loading…</div><button id="stop">Pause scans</button></section>
   <section><h2>Active Pump curve sample</h2>
     <small>Recent Pump launches cross-matched with Jupiter trends, with Pump-labeled Jupiter fallback. Each candidate is verified against the on-chain SOL curve.</small>
     <ol id="candidates"></ol>
   </section>
   <section><h2>Wallet setup</h2><div id="setup">Loading…</div></section>
+  <section><h2>Wallet tokens</h2>
+    <label>Sell slippage (%) <input id="slippage" type="number" min="0.1" max="50" step="0.01" value="5"></label>
+    <p><small>Saved on this phone. A sell requests a fresh SOL quote and asks you to confirm it.</small></p>
+    <div id="sell-status">Loading…</div><ul id="holdings"></ul>
+    <div id="sale-result"></div>
+  </section>
 </main>
 <script>
   let key = sessionStorage.getItem("becsKey") || "";
   async function call(url, options = {}) {
     if (!key) key = prompt("BecsBot dashboard key") || "";
     if (key) sessionStorage.setItem("becsKey", key);
-    const response = await fetch(url, { ...options, headers: { "x-dashboard-key": key } });
+    const response = await fetch(url, { ...options,
+      headers: { ...options.headers, "x-dashboard-key": key } });
     if (response.status === 401) {
       key = "";
       sessionStorage.removeItem("becsKey");
       throw Error("Dashboard key rejected");
     }
-    if (!response.ok) throw Error("Request failed: " + response.status);
+    if (!response.ok) {
+      const detail = await response.json().catch(() => ({}));
+      throw Error(detail.error || "Request failed: " + response.status);
+    }
     return response.json();
   }
   function list(id, items, format) {
@@ -63,9 +77,60 @@
           s.pumpVolumeReady ? "ready" : "needed on first Pump buy") +
         ". Existing token accounts are reused after a sale; new mints need their own account.";
       document.getElementById("stop").textContent = s.paused ? "Resume scans" : "Pause scans";
+      document.getElementById("sell-status").textContent = s.manualSell.enabled ?
+        "Manual sells available · destination: SOL · receiving accounts stay open" :
+        "Manual sells locked until the bot wallet signer and sell switch are ready";
+      const holdings = await call("/api/holdings");
+      const list = document.getElementById("holdings");
+      list.replaceChildren();
+      for (const item of holdings.holdings) {
+        const row = document.createElement("li");
+        const name = document.createElement("div");
+        name.textContent = item.displayAmount + " tokens · " + item.mint;
+        row.appendChild(name);
+        const actions = document.createElement("div");
+        actions.className = "sell-actions";
+        for (const percent of [25, 50, 100]) {
+          const button = document.createElement("button");
+          button.textContent = "Sell " + percent + "%";
+          button.disabled = !s.manualSell.enabled;
+          button.onclick = () => sell(item.mint, percent, button);
+          actions.appendChild(button);
+        }
+        row.appendChild(actions);
+        list.appendChild(row);
+      }
+      if (!holdings.holdings.length) list.textContent = "No tokens in this bot wallet.";
     } catch (error) {
       document.getElementById("status").textContent = error.message;
     }
+  }
+  const slippageInput = document.getElementById("slippage");
+  slippageInput.value = localStorage.getItem("becsSellSlippage") || "5";
+  slippageInput.addEventListener("change", () => {
+    localStorage.setItem("becsSellSlippage", slippageInput.value);
+  });
+  async function sell(mint, percent, button) {
+    button.disabled = true;
+    try {
+      const quote = await call("/api/sell/quote", { method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ mint, percent, slippage: slippageInput.value }) });
+      if (!confirm("Sell " + percent + "% of " + mint + " for about " +
+        quote.expectedSol.toFixed(6) + " SOL? Minimum " +
+        quote.minimumSol.toFixed(6) + " SOL at " + quote.slippage + "% slippage.")) return;
+      const result = await call("/api/sell", { method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ quoteId: quote.quoteId }) });
+      const link = document.createElement("a");
+      link.href = "https://solscan.io/tx/" + result.signature;
+      link.textContent = "Sale confirmed · view transaction";
+      link.target = "_blank";
+      link.rel = "noopener noreferrer";
+      document.getElementById("sale-result").replaceChildren(link);
+      await refresh();
+    } catch (error) { alert(error.message); }
+    finally { button.disabled = false; }
   }
   document.getElementById("stop").onclick = async () => {
     try { await call("/api/pause", { method: "POST" }); await refresh(); }

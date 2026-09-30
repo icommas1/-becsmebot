@@ -1,10 +1,13 @@
 # BecsBot
 
-BecsBot is a **read-only service** for a planned strategy: spend approximately
+BecsBot scans for a planned strategy: spend approximately
 $1 worth of SOL per selected trending Solana token, buy once automatically,
 and hold. Pump.fun launches should be bought on their active SOL bonding curve;
 other eligible trends can use Jupiter. Direct Pump trading, account creation,
-and automatic buying are not implemented. No service route sends a transaction.
+and automatic buying are not implemented. Automatic trading is off. The only
+transaction route is an explicitly confirmed manual sale when the separate
+`MANUAL_SELL_ENABLED=true` switch is set and `SOLANA_PRIVATE_KEY` derives the
+configured bot wallet. Without that switch, sell buttons are locked.
 
 The service listens for Pump.fun launch and migration events through one
 PumpPortal WebSocket connection. Launch and migration subscriptions are free.
@@ -27,7 +30,7 @@ record of Pump.fun launches**, particularly during disconnects or
 restarts. A curve can complete after the scan; a future buy must
 recheck its state immediately before submitting a direct Pump instruction.
 
-For each verified sample, the preview derives this wallet's associated token
+For each verified sample, the scanner derives this wallet's associated token
 account using the mint's actual Token or Token-2022 program and checks whether
 it exists. A later buy of the same mint can reuse the account, even after its
 balance was sold. A different mint needs a different account. The preview also
@@ -41,8 +44,21 @@ paid trade subscriptions. PumpPortal charges 0.01 SOL per 10,000 trade events.
 The stream reports connection status and event counters at `/health`, and
 one-minute trade counts at `/api/basket`. The API key is for data only; this
 service does not use PumpPortal's Lightning trading API.
-`SOLANA_PRIVATE_KEY` is not used by this read-only service. Never commit a key.
+`SOLANA_PRIVATE_KEY` is used only for manually confirmed sales when enabled.
+Never commit a key.
 The public wallet address is configured in `src/basket.js`.
+
+The dashboard lists nonzero balances in this wallet's canonical token accounts
+for both Token and Token-2022. Its 25%, 50%, and 100% sell buttons request a
+Jupiter Swap V2 token-to-SOL quote, then require a second confirmation. The
+slippage percentage (0.1% to 50%) is saved in the browser on that phone, and
+applies to manual sales. Quotes expire after 30 seconds and can be used once.
+At confirmation the server rechecks the balance and price, signs only if the
+key matches the configured public wallet, and rejects direct token-account
+close instructions targeting the receiving account. Network or quote failures
+may still leave an uncertain outcome: check wallet transaction history before
+trying again. No automatic retries and no token-account close instruction is
+added by this service. Other transactions are never sent by the dashboard.
 
 Before enabling live buying, harden launch recovery and add direct Pump
 bonding-curve transaction construction and simulation, precise $1 SOL input

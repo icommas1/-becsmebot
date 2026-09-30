@@ -5,6 +5,7 @@ const crypto = require("node:crypto");
 const express = require("express");
 const { Connection, PublicKey, LAMPORTS_PER_SOL } = require("@solana/web3.js");
 const { createPumpFeed } = require("./pump-feed");
+const { createManualSell } = require("./manual-sell");
 
 const SOL = "So11111111111111111111111111111111111111112";
 const PUMP = new PublicKey("6EF8rrecthR5Dkzon8Nwu78hRvfCKubJ14M5uBEwF6P");
@@ -32,6 +33,9 @@ if (!apiKey || !dashboardKey || !rpcUrl) {
 
 const wallet = new PublicKey(WALLET);
 const connection = new Connection(rpcUrl, "confirmed");
+const manualSell = createManualSell({ connection, wallet, apiKey,
+  secret: process.env.SOLANA_PRIVATE_KEY,
+  enabled: process.env.MANUAL_SELL_ENABLED === "true" });
 const pumpFeed = createPumpFeed({
   apiKey: process.env.PUMP_PORTAL_API_KEY || "",
   onEvent: () => scheduleStreamScan()
@@ -203,10 +207,12 @@ function scheduleStreamScan() {
 }
 
 const app = express();
-app.use(express.json());
+app.use(express.json({ limit: "20kb" }));
+app.use("/api", (_req, res, next) => { res.set("Cache-Control", "no-store"); next(); });
 app.get("/", (_req, res) => res.sendFile(path.join(__dirname, "dashboard.html")));
 app.get("/health", (_req, res) => res.json({
   ok: true, tradingEnabled: TRADING_ENABLED,
+  manualSell: manualSell.status(),
   lastScanAt: state.lastScanAt, lastError: state.lastError,
   running: state.running, paused: state.paused,
   pumpFeed: pumpFeed.status()
@@ -220,6 +226,7 @@ function requireKey(req, res, next) {
 app.get("/api/basket", requireKey, (_req, res) => res.json({
   betUsd: BET_USD, wallet: WALLET,
   tradingEnabled: TRADING_ENABLED, paused: state.paused,
+  manualSell: manualSell.status(),
   solUsd: state.solUsd, walletSol: state.walletSol,
   running: state.running, lastScanAt: state.lastScanAt,
   lastError: state.lastError, candidates: state.candidates,
@@ -229,6 +236,18 @@ app.get("/api/basket", requireKey, (_req, res) => res.json({
   tradeActivityLastMinute: pumpFeed.tradeActivity(),
   purchases: state.ledger
 }));
+app.get("/api/holdings", requireKey, async (_req, res) => {
+  try { res.json({ holdings: await manualSell.holdings() }); }
+  catch (_) { res.status(503).json({ error: "Wallet holdings unavailable" }); }
+});
+app.post("/api/sell/quote", requireKey, async (req, res) => {
+  try { res.json(await manualSell.quote(req.body)); }
+  catch (error) { res.status(400).json({ error: error.message }); }
+});
+app.post("/api/sell", requireKey, async (req, res) => {
+  try { res.json(await manualSell.sell(req.body?.quoteId)); }
+  catch (error) { res.status(400).json({ error: error.message }); }
+});
 app.post("/api/pause", requireKey, (_req, res) => {
   state.paused = !state.paused;
   if (ledgerPath) persist();
