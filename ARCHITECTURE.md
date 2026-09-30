@@ -37,7 +37,7 @@ The process scans SOL Price V3 and thirteen Tokens V2 feeds once a minute. Jupit
 
 Normalization merges canonical mints and feeds. Positive finite prices and numeric metrics are retained; absence stays unavailable. The snapshot contains feed timestamps, radar rows, observed trails and ranked signals. The browser polls this cached snapshot every ten seconds; this does not make market scans faster or turn REST into a stream.
 
-`DATA_DIR/market-history.json` is atomically replaced with restricted file permissions. History keeps up to 1,000 mints, 1,440 points per mint and 24 hours. Invalid, old and future observations are discarded. Failure to read history rebuilds it from later scans; persistence errors do not stop market discovery. Railway's `/app/data` volume must remain mounted.
+`DATA_DIR/market-history.json` is atomically replaced with restricted file permissions. History keeps up to 1,000 mints, 1,440 points per mint and 24 hours. Invalid, old and future observations are discarded. Pruning is shared and limited to once per scan interval so repeated browser snapshot reads do not repeatedly sort the complete history. Failure to read history rebuilds it from later scans; persistence errors do not stop market discovery. Railway's `/app/data` volume must remain mounted.
 
 ## HTTP contract
 
