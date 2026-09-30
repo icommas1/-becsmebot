@@ -13,7 +13,9 @@ function createPriceHistory({ dataDir, now = Date.now } = {}) {
     const cutoff = now() - DAY_MS;
     for (const mint of Object.keys(points)) {
       points[mint] = (Array.isArray(points[mint]) ? points[mint] : [])
-        .filter((p) => Array.isArray(p) && Number.isFinite(p[0]) && p[0] >= cutoff && Number.isFinite(p[1]) && p[1] > 0)
+        .filter((p) => Array.isArray(p) && Number.isInteger(p[0]) && p[0] >= cutoff && p[0] <= now() && Number.isFinite(p[1]) && p[1] > 0)
+        .sort((a,b)=>a[0]-b[0])
+        .filter((p,index,series)=>index===0||p[0]!==series[index-1][0])
         .slice(-1440);
       if (!points[mint].length) delete points[mint];
     }
@@ -22,6 +24,7 @@ function createPriceHistory({ dataDir, now = Date.now } = {}) {
   }
   function sample(rows, at = now()) {
     prune();
+    if(!Number.isInteger(at)||at<0||at>now())return;
     for (const row of rows) {
       if (!Number.isFinite(row.priceUsd) || row.priceUsd <= 0) continue;
       const series = points[row.mint] || [];

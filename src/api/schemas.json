@@ -1,0 +1,929 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "definitions": {
+    "row": {
+      "type": "object",
+      "properties": {
+        "mint": {
+          "type": "string",
+          "format": "solana-mint"
+        },
+        "symbol": {
+          "type": "string",
+          "maxLength": 32
+        },
+        "name": {
+          "type": "string",
+          "maxLength": 100
+        },
+        "feeds": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "maxItems": 20
+        },
+        "ranks": {
+          "type": "object",
+          "additionalProperties": {
+            "type": "integer",
+            "minimum": 1
+          }
+        },
+        "priceUsd": {
+          "type": [
+            "number",
+            "null"
+          ],
+          "exclusiveMinimum": 0
+        },
+        "marketCap": {
+          "type": [
+            "number",
+            "null"
+          ],
+          "exclusiveMinimum": 0
+        },
+        "liquidityUsd": {
+          "type": [
+            "number",
+            "null"
+          ],
+          "exclusiveMinimum": 0
+        },
+        "holders": {
+          "type": [
+            "number",
+            "null"
+          ],
+          "exclusiveMinimum": 0
+        },
+        "organicScore": {
+          "type": [
+            "number",
+            "null"
+          ],
+          "minimum": 0,
+          "maximum": 100
+        },
+        "createdAt": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "format": "date-time"
+        },
+        "launchpad": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "isVerified": {
+          "type": "boolean"
+        },
+        "isSus": {
+          "type": "boolean"
+        },
+        "priceFeed": {
+          "type": "string"
+        },
+        "observedAt": {
+          "type": [
+            "integer",
+            "null"
+          ],
+          "minimum": 0
+        },
+        "change5m": {
+          "type": [
+            "number",
+            "null"
+          ]
+        },
+        "change1h": {
+          "type": [
+            "number",
+            "null"
+          ]
+        },
+        "change6h": {
+          "type": [
+            "number",
+            "null"
+          ]
+        },
+        "change24h": {
+          "type": [
+            "number",
+            "null"
+          ]
+        },
+        "volume5m": {
+          "type": [
+            "number",
+            "null"
+          ],
+          "minimum": 0
+        },
+        "volume1h": {
+          "type": [
+            "number",
+            "null"
+          ],
+          "minimum": 0
+        },
+        "volume6h": {
+          "type": [
+            "number",
+            "null"
+          ],
+          "minimum": 0
+        },
+        "volume24h": {
+          "type": [
+            "number",
+            "null"
+          ],
+          "minimum": 0
+        }
+      },
+      "required": [
+        "mint",
+        "symbol",
+        "name",
+        "feeds",
+        "ranks",
+        "priceUsd",
+        "marketCap",
+        "liquidityUsd",
+        "holders",
+        "organicScore",
+        "createdAt",
+        "launchpad",
+        "isVerified",
+        "isSus",
+        "observedAt"
+      ],
+      "additionalProperties": true
+    },
+    "signal": {
+      "allOf": [
+        {
+          "$ref": "#/definitions/row"
+        },
+        {
+          "type": "object",
+          "properties": {
+            "firstSeenAt": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "multiple": {
+              "type": "number",
+              "exclusiveMinimum": 0
+            },
+            "peakMultiple": {
+              "type": "number",
+              "exclusiveMinimum": 0
+            }
+          },
+          "required": [
+            "firstSeenAt",
+            "multiple",
+            "peakMultiple"
+          ],
+          "additionalProperties": true
+        }
+      ]
+    },
+    "point": {
+      "type": "array",
+      "items": [
+        {
+          "type": "integer",
+          "minimum": 0
+        },
+        {
+          "type": "number",
+          "exclusiveMinimum": 0
+        }
+      ],
+      "minItems": 2,
+      "maxItems": 2,
+      "additionalItems": false
+    },
+    "feed": {
+      "type": "object",
+      "properties": {
+        "count": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "at": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "format": "date-time"
+        },
+        "error": {
+          "type": "string"
+        }
+      },
+      "required": [],
+      "additionalProperties": false
+    },
+    "health": {
+      "type": "object",
+      "properties": {
+        "ok": {
+          "const": true
+        },
+        "tradingEnabled": {
+          "const": false
+        },
+        "manualSell": {
+          "type": "object",
+          "properties": {
+            "enabled": {
+              "const": false
+            }
+          },
+          "required": [
+            "enabled"
+          ],
+          "additionalProperties": false
+        },
+        "lastScanAt": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "format": "date-time"
+        },
+        "lastError": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "running": {
+          "type": "boolean"
+        },
+        "feeds": {
+          "type": "object",
+          "maxProperties": 13,
+          "propertyNames": {
+            "enum": [
+              "recent",
+              "trending:5m",
+              "trending:1h",
+              "trending:6h",
+              "trending:24h",
+              "traded:5m",
+              "traded:1h",
+              "traded:6h",
+              "traded:24h",
+              "organic:5m",
+              "organic:1h",
+              "organic:6h",
+              "organic:24h"
+            ]
+          },
+          "additionalProperties": {
+            "$ref": "#/definitions/feed"
+          }
+        }
+      },
+      "required": [
+        "ok",
+        "tradingEnabled",
+        "manualSell",
+        "lastScanAt",
+        "lastError",
+        "running",
+        "feeds"
+      ],
+      "additionalProperties": false
+    },
+    "snapshot": {
+      "type": "object",
+      "properties": {
+        "tradingEnabled": {
+          "const": false
+        },
+        "manualSell": {
+          "type": "object",
+          "properties": {
+            "enabled": {
+              "const": false
+            }
+          },
+          "required": [
+            "enabled"
+          ],
+          "additionalProperties": false
+        },
+        "lastScanAt": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "format": "date-time"
+        },
+        "lastError": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "running": {
+          "type": "boolean"
+        },
+        "feeds": {
+          "type": "object",
+          "maxProperties": 13,
+          "propertyNames": {
+            "enum": [
+              "recent",
+              "trending:5m",
+              "trending:1h",
+              "trending:6h",
+              "trending:24h",
+              "traded:5m",
+              "traded:1h",
+              "traded:6h",
+              "traded:24h",
+              "organic:5m",
+              "organic:1h",
+              "organic:6h",
+              "organic:24h"
+            ]
+          },
+          "additionalProperties": {
+            "$ref": "#/definitions/feed"
+          }
+        },
+        "solUsd": {
+          "type": [
+            "number",
+            "null"
+          ],
+          "exclusiveMinimum": 0
+        },
+        "solPriceAt": {
+          "type": [
+            "integer",
+            "null"
+          ],
+          "minimum": 0
+        },
+        "scanIntervalMs": {
+          "type": "integer",
+          "minimum": 1000
+        },
+        "radar": {
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/row"
+          },
+          "maxItems": 1000
+        },
+        "signals": {
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/signal"
+          },
+          "maxItems": 1000
+        },
+        "trails": {
+          "type": "object",
+          "propertyNames": {
+            "type": "string",
+            "format": "solana-mint"
+          },
+          "additionalProperties": {
+            "type": "array",
+            "items": {
+              "$ref": "#/definitions/point"
+            },
+            "maxItems": 1440
+          }
+        }
+      },
+      "required": [
+        "tradingEnabled",
+        "manualSell",
+        "lastScanAt",
+        "lastError",
+        "running",
+        "feeds",
+        "solUsd",
+        "solPriceAt",
+        "scanIntervalMs",
+        "radar",
+        "signals",
+        "trails"
+      ],
+      "additionalProperties": false
+    },
+    "searchQuery": {
+      "type": "string",
+      "minLength": 2,
+      "maxLength": 80
+    },
+    "priceRequest": {
+      "type": "object",
+      "properties": {
+        "mints": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "format": "solana-mint"
+          },
+          "maxItems": 100
+        }
+      },
+      "required": [
+        "mints"
+      ],
+      "additionalProperties": false
+    },
+    "searchResponse": {
+      "type": "object",
+      "properties": {
+        "rows": {
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/row"
+          },
+          "maxItems": 1000
+        }
+      },
+      "required": [
+        "rows"
+      ],
+      "additionalProperties": false
+    },
+    "priceResponse": {
+      "type": "object",
+      "properties": {
+        "prices": {
+          "type": "object",
+          "maxProperties": 100,
+          "propertyNames": {
+            "type": "string",
+            "format": "solana-mint"
+          },
+          "additionalProperties": {
+            "anyOf": [
+              {
+                "type": "object",
+                "properties": {
+                  "priceUsd": {
+                    "type": "number",
+                    "exclusiveMinimum": 0
+                  },
+                  "observedAt": {
+                    "type": "integer",
+                    "minimum": 0
+                  },
+                  "blockId": {
+                    "type": "integer",
+                    "minimum": 0
+                  }
+                },
+                "required": [
+                  "priceUsd",
+                  "observedAt"
+                ],
+                "additionalProperties": false
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        }
+      },
+      "required": [
+        "prices"
+      ],
+      "additionalProperties": false
+    },
+    "upstreamTokens": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "symbol": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "name": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "usdPrice": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "string",
+                "pattern": "^-?\\d+(\\.\\d+)?([eE][+-]?\\d+)?$"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "mcap": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "string",
+                "pattern": "^-?\\d+(\\.\\d+)?([eE][+-]?\\d+)?$"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "liquidity": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "string",
+                "pattern": "^-?\\d+(\\.\\d+)?([eE][+-]?\\d+)?$"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "holderCount": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "string",
+                "pattern": "^-?\\d+(\\.\\d+)?([eE][+-]?\\d+)?$"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "organicScore": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "string",
+                "pattern": "^-?\\d+(\\.\\d+)?([eE][+-]?\\d+)?$"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "createdAt": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "date-time"
+          },
+          "launchpad": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "firstPool": {
+            "anyOf": [
+              {
+                "type": "object",
+                "properties": {
+                  "createdAt": {
+                    "type": [
+                      "string",
+                      "null"
+                    ],
+                    "format": "date-time"
+                  }
+                },
+                "required": [],
+                "additionalProperties": true
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "isVerified": {
+            "type": [
+              "boolean",
+              "null"
+            ]
+          },
+          "audit": {
+            "type": [
+              "object",
+              "null"
+            ]
+          },
+          "stats5m": {
+            "anyOf": [
+              {
+                "type": "object",
+                "properties": {
+                  "priceChange": {
+                    "anyOf": [
+                      {
+                        "type": "number"
+                      },
+                      {
+                        "type": "string",
+                        "pattern": "^-?\\d+(\\.\\d+)?([eE][+-]?\\d+)?$"
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
+                  },
+                  "buyVolume": {
+                    "anyOf": [
+                      {
+                        "type": "number"
+                      },
+                      {
+                        "type": "string",
+                        "pattern": "^-?\\d+(\\.\\d+)?([eE][+-]?\\d+)?$"
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
+                  },
+                  "sellVolume": {
+                    "anyOf": [
+                      {
+                        "type": "number"
+                      },
+                      {
+                        "type": "string",
+                        "pattern": "^-?\\d+(\\.\\d+)?([eE][+-]?\\d+)?$"
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
+                  }
+                },
+                "required": [],
+                "additionalProperties": true
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "stats1h": {
+            "anyOf": [
+              {
+                "type": "object",
+                "properties": {
+                  "priceChange": {
+                    "anyOf": [
+                      {
+                        "type": "number"
+                      },
+                      {
+                        "type": "string",
+                        "pattern": "^-?\\d+(\\.\\d+)?([eE][+-]?\\d+)?$"
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
+                  },
+                  "buyVolume": {
+                    "anyOf": [
+                      {
+                        "type": "number"
+                      },
+                      {
+                        "type": "string",
+                        "pattern": "^-?\\d+(\\.\\d+)?([eE][+-]?\\d+)?$"
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
+                  },
+                  "sellVolume": {
+                    "anyOf": [
+                      {
+                        "type": "number"
+                      },
+                      {
+                        "type": "string",
+                        "pattern": "^-?\\d+(\\.\\d+)?([eE][+-]?\\d+)?$"
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
+                  }
+                },
+                "required": [],
+                "additionalProperties": true
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "stats6h": {
+            "anyOf": [
+              {
+                "type": "object",
+                "properties": {
+                  "priceChange": {
+                    "anyOf": [
+                      {
+                        "type": "number"
+                      },
+                      {
+                        "type": "string",
+                        "pattern": "^-?\\d+(\\.\\d+)?([eE][+-]?\\d+)?$"
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
+                  },
+                  "buyVolume": {
+                    "anyOf": [
+                      {
+                        "type": "number"
+                      },
+                      {
+                        "type": "string",
+                        "pattern": "^-?\\d+(\\.\\d+)?([eE][+-]?\\d+)?$"
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
+                  },
+                  "sellVolume": {
+                    "anyOf": [
+                      {
+                        "type": "number"
+                      },
+                      {
+                        "type": "string",
+                        "pattern": "^-?\\d+(\\.\\d+)?([eE][+-]?\\d+)?$"
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
+                  }
+                },
+                "required": [],
+                "additionalProperties": true
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "stats24h": {
+            "anyOf": [
+              {
+                "type": "object",
+                "properties": {
+                  "priceChange": {
+                    "anyOf": [
+                      {
+                        "type": "number"
+                      },
+                      {
+                        "type": "string",
+                        "pattern": "^-?\\d+(\\.\\d+)?([eE][+-]?\\d+)?$"
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
+                  },
+                  "buyVolume": {
+                    "anyOf": [
+                      {
+                        "type": "number"
+                      },
+                      {
+                        "type": "string",
+                        "pattern": "^-?\\d+(\\.\\d+)?([eE][+-]?\\d+)?$"
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
+                  },
+                  "sellVolume": {
+                    "anyOf": [
+                      {
+                        "type": "number"
+                      },
+                      {
+                        "type": "string",
+                        "pattern": "^-?\\d+(\\.\\d+)?([eE][+-]?\\d+)?$"
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
+                  }
+                },
+                "required": [],
+                "additionalProperties": true
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "required": [
+          "id"
+        ],
+        "additionalProperties": true
+      },
+      "maxItems": 2000
+    },
+    "upstreamPrices": {
+      "type": "object",
+      "maxProperties": 50,
+      "propertyNames": {
+        "type": "string",
+        "format": "solana-mint"
+      },
+      "additionalProperties": {
+        "type": "object",
+        "properties": {
+          "usdPrice": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "string",
+                "pattern": "^-?\\d+(\\.\\d+)?([eE][+-]?\\d+)?$"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "blockId": {
+            "type": "integer",
+            "minimum": 0
+          }
+        },
+        "required": [],
+        "additionalProperties": true
+      }
+    },
+    "error": {
+      "type": "object",
+      "properties": {
+        "error": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "error"
+      ],
+      "additionalProperties": false
+    }
+  }
+}

@@ -12,7 +12,7 @@ function element(tag) {
 }
 
 test("paper buys use SOL cash, survive radar exit, and sell without a live request", async () => {
-  const html = fs.readFileSync(require.resolve("../src/dashboard.html"), "utf8");
+  const html = fs.readFileSync(require.resolve("../../src/web/dashboard.html"), "utf8");
   const script = html.match(/<script>([\s\S]*?)<\/script>/)[1]
     .replace(/render\(\);refresh\(\);setInterval\(refresh,10000\);\s*$/, "");
   const elements = new Map(), storage = new Map();
@@ -30,6 +30,12 @@ test("paper buys use SOL cash, survive radar exit, and sell without a live reque
     confirm:()=>true
   });
   vm.runInContext(script,context);
+  assert.equal(vm.runInContext("paperReady({priceUsd:1,observedAt:Date.now()+60000})",context),false);
+  assert.equal(vm.runInContext("recentMark(null,180000)",context),false);
+  assert.equal(vm.runInContext("recentMark(Date.now()-180001,180000)",context),false);
+  vm.runInContext("snapshot={solUsd:200,solPriceAt:Date.now()+60000}",context);
+  assert.equal(vm.runInContext("solUsd()",context),null);
+
   vm.runInContext(`var eligible={priceUsd:.01,marketCap:50000,liquidityUsd:5000,createdAt:new Date(Date.now()-600000).toISOString(),observedAt:Date.now()};radarUi.tab="trending";`,context);
   const mint="So11111111111111111111111111111111111111112";
   vm.runInContext("paper.settings.minOrganicScore=70",context);

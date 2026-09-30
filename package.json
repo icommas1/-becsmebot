@@ -6,14 +6,24 @@
   "main": "src/basket.js",
   "scripts": {
     "start": "node src/basket.js",
-    "test": "node --test"
+    "test": "node --test test/unit/*.test.js test/integration/*.test.js",
+    "test:unit": "node --test test/unit/*.test.js",
+    "test:integration": "node --test test/integration/*.test.js",
+    "test:mobile": "playwright test",
+    "test:smoke": "node scripts/smoke.js",
+    "check": "node scripts/check.js",
+    "verify": "npm run check && npm test && npm run test:mobile"
   },
   "engines": {
     "node": ">=20"
   },
   "dependencies": {
     "@solana/web3.js": "^1.98.4",
+    "ajv": "^8.20.0",
     "dotenv": "^17.2.2",
     "express": "^5.1.0"
+  },
+  "devDependencies": {
+    "@playwright/test": "^1.63.0"
   }
 }

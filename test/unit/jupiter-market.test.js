@@ -1,6 +1,6 @@
 const test = require("node:test");
 const assert = require("node:assert/strict");
-const { FEEDS, marketRows } = require("../src/jupiter-market");
+const { FEEDS, marketRows } = require("../../src/market/tokens");
 
 test("merges Jupiter categories without Pump eligibility", () => {
   const mint = "So11111111111111111111111111111111111111112";

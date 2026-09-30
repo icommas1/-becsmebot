@@ -54,7 +54,7 @@ function marketRows(feeds) {
         if (!stats) continue;
         row["change" + interval] = metric(stats.priceChange) ?? row["change" + interval];
         const buy = metric(stats.buyVolume), sell = metric(stats.sellVolume);
-        if (buy != null && sell != null) row["volume" + interval] = buy + sell;
+        if (buy != null && sell != null && buy>=0 && sell>=0) row["volume" + interval] = buy + sell;
       }
       rows.set(token.id, row);
     }

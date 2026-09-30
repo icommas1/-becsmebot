@@ -215,8 +215,9 @@ async function call(url, options={}) {
   return response.json();
 }
 function options() { return {method:"POST",headers:{"Content-Type":"application/json"}}; }
-function solUsd() { return Date.now()-snapshot?.solPriceAt<=180000?num(snapshot?.solUsd):null; }
-function paperReady(row) { return Boolean(num(row?.priceUsd) && !row.isSus && Date.now()-row.observedAt<=180000); }
+function recentMark(at, maxAge) { const age=Date.now()-at;return Number.isFinite(at)&&at>0&&age>=0&&age<=maxAge; }
+function solUsd() { return recentMark(snapshot?.solPriceAt,180000)?num(snapshot?.solUsd):null; }
+function paperReady(row) { return Boolean(num(row?.priceUsd) && !row.isSus && recentMark(row.observedAt,180000)); }
 function passes(row) {
   const s=paper.settings, age=(Date.now()-Date.parse(row.createdAt))/60000;
   if(!paperReady(row)||!Number.isFinite(age)||age<0||!num(row.marketCap))return false;
@@ -257,7 +258,7 @@ function buy(row, automatic=false, amount=paper.settings.betUsd) {
 function sellPaper(mint,pct,dollars=null,automatic=false) {
   const hold=paper.holds[mint], rate=solUsd();
   const price=num(prices[mint]?.priceUsd);
-  if (!hold || !rate || !price || prices[mint]?.source!=="jupiter-v3" || !priceTimes[mint] || Date.now()-priceTimes[mint]>120000)
+  if (!hold || !rate || !price || prices[mint]?.source!=="jupiter-v3" || !recentMark(priceTimes[mint],120000))
     return message("Need a recent Jupiter Price V3 mark for a paper sale.");
   const unit=price*(1-paper.settings.impactPct/100);
   const fraction=dollars==null?pct/100:Math.min(1,dollars/(hold.qty*unit)), gross=hold.qty*fraction*unit;
@@ -428,7 +429,7 @@ function tokenCard(row){
  const actions=node('div','actionbar'),buyButton=node('button','',paper.bought[row.mint]?'BOUGHT':'BUY $1'),sellButton=node('button','secondary','SELL $1'),inspect=node('button','secondary','DETAILS');
  buyButton.disabled=!passes(row)||!!paper.bought[row.mint]||!solUsd();buyButton.onclick=()=>{selectedMint=row.mint;selectedFallback=row;buy(row,false,1);refreshPrices(true);};sellButton.disabled=!canSell(row.mint);sellButton.onclick=()=>sellPaper(row.mint,100,1);inspect.onclick=()=>selectToken(row);actions.append(buyButton,sellButton,inspect);card.append(actions);return card;
 }
-function canSell(mint){return Boolean(paper.holds[mint]&&solUsd()&&prices[mint]?.source==='jupiter-v3'&&num(prices[mint]?.priceUsd)&&priceTimes[mint]&&Date.now()-priceTimes[mint]<=120000);}
+function canSell(mint){return Boolean(paper.holds[mint]&&solUsd()&&prices[mint]?.source==='jupiter-v3'&&num(prices[mint]?.priceUsd)&&recentMark(priceTimes[mint],120000));}
 function currentToken(){return (snapshot?.radar||[]).find(row=>row.mint===selectedMint)||searchRows.find(row=>row.mint===selectedMint)||selectedFallback;}
 function selectToken(row,forceSheet=false){selectedMint=row.mint;selectedFallback=row;renderDock();renderSheet();if(forceSheet||typeof matchMedia==='undefined'||matchMedia('(max-width:800px)').matches)$('token-sheet').showModal?.();}
 function renderDock(){
