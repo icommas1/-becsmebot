@@ -39,6 +39,13 @@ test("omitted provider prices are cached as unavailable and duplicate mint jobs 
   assert.equal(calls,1);assert.deepEqual(a,{[SOL]:null});assert.deepEqual(a,b);
   await market.paperPrices([SOL]);assert.equal(calls,1);
 });
+test("explicit null provider prices degrade to unavailable without rejecting valid siblings",async()=>{
+  const other=MINTS[0];
+  const market=createMarket({request:async()=>({[SOL]:null,[other]:{usdPrice:"2.5",blockId:7}})});
+  const result=await market.paperPrices([SOL,other]);
+  assert.equal(result[SOL],null);assert.equal(result[other].priceUsd,2.5);assert.equal(result[other].blockId,7);
+  assert.ok(Number.isInteger(result[other].observedAt));
+});
 test("persisted corrupt, unsorted and future points cannot become a signal baseline",()=>{
   const now=Date.now(),dir=fs.mkdtempSync(path.join(os.tmpdir(),"becs-corrupt-"));
   try{

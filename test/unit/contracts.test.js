@@ -16,6 +16,7 @@ test("strict price request rejects unknown fields, invalid mints and oversized b
 });
 test("price contracts preserve omitted marks and reject impossible numbers",()=>{
   assert.ok(isValid("upstreamPrices",{}));
+  assert.ok(isValid("upstreamPrices",{[SOL]:null}));
   assert.ok(isValid("priceResponse",{prices:{[SOL]:null}}));
   for(const price of [NaN,Infinity,0,-1,"1"])
     assert.equal(isValid("priceResponse",{prices:{[SOL]:{priceUsd:price,observedAt:Date.now()}}}),false);

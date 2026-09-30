@@ -888,29 +888,36 @@
         "format": "solana-mint"
       },
       "additionalProperties": {
-        "type": "object",
-        "properties": {
-          "usdPrice": {
-            "anyOf": [
-              {
-                "type": "number"
+        "anyOf": [
+          {
+            "type": "object",
+            "properties": {
+              "usdPrice": {
+                "anyOf": [
+                  {
+                    "type": "number"
+                  },
+                  {
+                    "type": "string",
+                    "pattern": "^-?\\d+(\\.\\d+)?([eE][+-]?\\d+)?$"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
               },
-              {
-                "type": "string",
-                "pattern": "^-?\\d+(\\.\\d+)?([eE][+-]?\\d+)?$"
-              },
-              {
-                "type": "null"
+              "blockId": {
+                "type": "integer",
+                "minimum": 0
               }
-            ]
+            },
+            "required": [],
+            "additionalProperties": true
           },
-          "blockId": {
-            "type": "integer",
-            "minimum": 0
+          {
+            "type": "null"
           }
-        },
-        "required": [],
-        "additionalProperties": true
+        ]
       }
     },
     "error": {
