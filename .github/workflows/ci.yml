@@ -29,6 +29,9 @@ jobs:
       - run: npm ci
       - run: npm run check
       - run: npm test
+      - name: Audit production dependencies
+        if: matrix.node == 22
+        run: npm audit --omit=dev --audit-level=high
   browsers:
     name: Mobile and desktop browser checks
     runs-on: ubuntu-latest
