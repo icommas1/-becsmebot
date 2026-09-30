@@ -24,6 +24,13 @@ test("response schema violations return 503 instead of exposing malformed data",
   assert.equal((await fetch(base+"/api/paper/prices",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({mints:[SOL]})})).status,503);
   assert.equal((await fetch(base+"/api/paper/prices",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({mints:[SOL],unknown:true})})).status,400);
 });
+test("a provider-facing route failure does not take down cached read-only routes",async t=>{
+  const market=await fixtureMarket();
+  const base=await serve(t,{snapshot:market.snapshot,search:async()=>{throw Error("provider unavailable");},paperPrices:market.paperPrices});
+  assert.equal((await fetch(base+"/api/search?q=SOL")).status,503);
+  assert.equal((await fetch(base+"/health")).status,200);
+  assert.equal((await fetch(base+"/api/basket")).status,200);
+});
 test("malformed upstream feeds retain their actual prior data and timestamp",async()=>{
   let invalid=false;
   const market=createMarket({request:async url=>url.startsWith("/price")?{[SOL]:{usdPrice:200}}:invalid?{bad:true}:[{id:SOL,usdPrice:200}]});

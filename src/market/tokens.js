@@ -34,8 +34,8 @@ function marketRows(feeds) {
         isVerified: false, isSus: false,
         change5m: null, change1h: null, volume5m: null, volume1h: null
       };
-      row.feeds.push(feed);
-      row.ranks[feed] = index + 1;
+      if (!row.feeds.includes(feed)) row.feeds.push(feed);
+      row.ranks[feed] ??= index + 1;
       row.symbol = String(token.symbol || row.symbol).slice(0, 32);
       row.name = String(token.name || row.name).slice(0, 100);
       if (positive(token.usdPrice)) { row.priceUsd=positive(token.usdPrice);row.priceFeed=feed; }
