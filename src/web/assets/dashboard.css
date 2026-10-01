@@ -52,7 +52,7 @@ section.side-section { margin:16px 0 0; padding:15px; border-radius:10px; backgr
 .dock-panel .metrics { grid-template-columns:repeat(2,minmax(0,1fr)); gap:8px }.dock-panel .metric { padding:10px }.dock-panel .metric b { font-size:1.1em }
 .dock-panel .settings { grid-template-columns:repeat(2,minmax(0,1fr)) }.dock-panel .settings label { min-width:0 }
 .dock-panel .actionbar button { flex:1 }.dock-panel .item button { font-size:.83em; padding:7px 8px }
-.panel-note { margin-top:12px } #toast:not(:empty) { position:fixed; bottom:16px; left:50%; transform:translateX(-50%); z-index:10; max-width:min(94vw,560px); padding:10px 14px; border:1px solid #42799e; border-radius:9px; background:#1b354a; color:#e4f4ff; box-shadow:0 12px 36px #000a; text-align:center }
+.panel-note { margin-top:12px }.panel-note summary { min-height:44px; display:flex; align-items:center; list-style:none }.panel-note summary::-webkit-details-marker { display:none }.panel-note summary::before { content:"▸"; margin-right:6px }.panel-note[open] summary::before { content:"▾" } #toast:not(:empty) { position:fixed; bottom:16px; left:50%; transform:translateX(-50%); z-index:10; max-width:min(94vw,560px); padding:10px 14px; border:1px solid #42799e; border-radius:9px; background:#1b354a; color:#e4f4ff; box-shadow:0 12px 36px #000a; text-align:center }
 [hidden] { display:none!important }
 @media(max-width:800px) {
   body { grid-template-areas:"head" "main" "nav"; grid-template-rows:auto minmax(0,1fr) auto }
