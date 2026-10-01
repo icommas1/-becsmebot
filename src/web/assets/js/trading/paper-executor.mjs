@@ -5,20 +5,41 @@ import {executionResult,validAccount,validOrderIntent} from "./contracts.mjs";
 export function createPaperExecutor({account,paper}) {
   if(!validAccount(account)||account.executionMode!=="paper")throw Error("Live execution is disabled");
   return Object.freeze({execute(intent,market) {
-    const now=market.now??Date.now();
+    const validNow=Number.isFinite(market?.now)&&Number.isFinite(new Date(market.now).getTime());
+    const now=validNow?market.now:Date.now();
     const reject=(reason,message)=>executionResult(intent,{reason,message,now});
     if(!validOrderIntent(intent))return reject("invalid-intent","Invalid order intent.");
-    if(!validAccount(account)||account.executionMode!=="paper"||!validAccount(paper.account)||paper.account.executionMode!=="paper")
+    if(!validAccount(account)||account.executionMode!=="paper"||!validAccount(paper?.account)||paper.account.executionMode!=="paper")
       return reject("execution-disabled","Live execution is disabled.");
+    if(!market||typeof market!=="object"||market.now!=null&&!validNow)
+      return reject("invalid-market","Invalid paper market context.");
     if(intent.userId!==account.userId||intent.accountId!==account.accountId||
       paper.account.userId!==account.userId||paper.account.accountId!==account.accountId)
       return reject("ownership-mismatch","Order account does not own this paper ledger.");
+    if(!validLedger(paper))return reject("invalid-ledger","Paper ledger is unavailable or invalid.");
     if(intent.side==="buy"&&!market.row)return reject("missing-market","Need a current SOL and token price for a paper buy.");
+    if(intent.side==="sell"&&!validHold(paper.holds[intent.asset]))
+      return reject("invalid-ledger","Paper holding is unavailable or invalid.");
     const fill=intent.side==="buy"?fillBuy(paper,intent,{...market,now}):fillSale(paper,intent,{...market,now});
     return executionResult(intent,{status:fill.ok?"filled":"rejected",reason:fill.ok?null:"paper-rejected",
       message:fill.message,filledQuantity:fill.filledQuantity,filledQuoteQuantity:fill.ok?fill.gross:0,
       fillPrice:fill.fillPrice,fee:fill.fee,now});
   }});
+}
+
+function validLedger(paper) {
+  const settings=paper.settings;
+  return Number.isFinite(paper.cashSol)&&paper.cashSol>=0&&Number.isFinite(paper.realizedUsd)&&
+    paper.holds&&typeof paper.holds==="object"&&!Array.isArray(paper.holds)&&
+    paper.bought&&typeof paper.bought==="object"&&!Array.isArray(paper.bought)&&
+    Array.isArray(paper.activity)&&settings&&
+    ["feeSol","reserveSol","impactPct"].every(key=>Number.isFinite(settings[key])&&settings[key]>=0);
+}
+
+function validHold(hold) {
+  return hold&&Number.isFinite(hold.qty)&&hold.qty>0&&
+    Number.isFinite(hold.investedUsd)&&hold.investedUsd>=0&&
+    Number.isFinite(hold.feesUsd)&&hold.feesUsd>=0;
 }
 
 export function recordActivity(paper,kind,text,details={},now=Date.now()) {
