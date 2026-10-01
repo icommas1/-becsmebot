@@ -112,7 +112,12 @@ function createWalletIntel({config=walletIntelConfig(),nansenFetch=fetchNansen,n
       providers:{nansen:{enabled:config.enabled,records:events.length,lastSuccessAt,lastError}},
       tokens:aggregate(events)};
   }
-  return {scan,snapshot,revision:()=>revision,scanMs:config.scanMs};
+  function researchSnapshot(){
+    return {schemaVersion:1,enabled:config.enabled,updatedAt:lastSuccessAt,lastError,
+      providers:{nansen:{enabled:config.enabled,records:events.length,lastSuccessAt,lastError}},
+      events:structuredClone(events),tokens:aggregate(events)};
+  }
+  return {scan,snapshot,researchSnapshot,revision:()=>revision,scanMs:config.scanMs};
 }
 
 module.exports={MAX_EVENTS,walletIntelConfig,labels,normalizeNansen,fetchNansen,aggregate,createWalletIntel};
