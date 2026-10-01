@@ -2,7 +2,7 @@
 
 ## Sources and eligibility
 
-Default topic: New launches (`recent`), newest first, 20 contacts/page. Other topics are Trending, Active and Organic with 5m/1h/6h/24h intervals. Each category requests 50 tokens. Discovery is limited to the provider's returned set; it is not every Solana launch.
+Default topic: New launches (`recent`), newest first, 20 contacts/page. Other topics are Trending, Active and Organic with 5m/1h/6h/24h intervals. Each Jupiter category requests 50 tokens. Six additional topics are Dex profiles, updates, community takeovers, paid ads, latest paid boosts and top paid boosts. Dex topics have no interval; the interval control is disabled there and the last selected interval still controls displayed metrics. Each keeps at most 50 canonical Solana mints and enriches them with Jupiter metadata. Source rank preserves the returned discovery order. Top boosts are paid promotion, not DexScreener's proprietary trending ranking. Missing Jupiter metadata or price cannot bypass eligibility. Discovery is limited to the provider's returned set; it is not every Solana launch.
 
 Defaults apply to radar contacts, Signals and automatic paper buys:
 
@@ -35,3 +35,4 @@ Buys require SOL and token marks no older than 180 seconds. Sells require a posi
 ## Required regressions
 
 Test boundary ages/caps/liquidity, missing and future marks, suspicious flags, topic/interval changes, search/auto separation, save/reload migration, buy-once behavior, stale-sale rejection, fee/reserve accounting and all holding price batches. Browser tests must cover native mobile layout, overflow, details/CA, dollar presets, $1 buy/sale, same-filter auto, reload and reduced motion.
+

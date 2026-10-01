@@ -3,6 +3,9 @@
 All notable repository-level changes are recorded here. Product strategy and proposed behavior do not belong in this file.
 
 ## Unreleased
+
+- Add six bounded, independently failing DexScreener discovery feeds with Jupiter mint enrichment, explicit paid labels and shared Radar/Signals/auto filters. Expand contracts and read-only readiness checks to nineteen feeds.
+
 - Add browser request deadlines and recovery, resilient startup with blocked storage, persistent failed-save warnings, and visible search failures.
 - Separate shared decisions and OrderIntents from account-scoped paper execution while preserving existing paper accounting and stored holdings.
 - Scope revision ETags to each server instance so restarts cannot reuse a validator for changed data.

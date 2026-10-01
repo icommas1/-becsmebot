@@ -126,3 +126,16 @@ test("request deadlines cover stalled response bodies for history, search and pa
     await assert.rejects(action(client),/timed out/i);
   }
 });
+
+test("Dex sources persist selection and share launch eligibility with Radar, Signals and auto",async()=>{
+ const [,filters,{paperDefaults}]=await modules;
+ const now=Date.now(),row={mint,feeds:["dex:top"],ranks:{"dex:top":3},priceUsd:.01,marketCap:50000,
+  liquidityUsd:5000,createdAt:new Date(now-60000).toISOString(),observedAt:now};
+ const ui=filters.normalizeRadarUi({tab:"dex:top",source:"24h",launchVersion:2,sort:"rank"});
+ assert.equal(filters.selectedFeed(ui),"dex:top");assert.equal(filters.sortValue(row,ui,now),-3);
+ assert.equal(filters.launchRows([row],paperDefaults,ui,now).length,1);
+ assert.equal(filters.launchRows([{...row,priceUsd:null}],paperDefaults,ui,now).length,0);
+ assert.equal(filters.launchRows([row],paperDefaults,{...ui,tab:"recent"},now).length,0);
+ const {autoBuyCandidates}=await import("../../src/web/assets/js/trading/decision-engine.mjs");
+ assert.equal(autoBuyCandidates({enabled:true,rows:[row],settings:paperDefaults,radarUi:ui,enteredAssets:{},now}).length,1);
+});

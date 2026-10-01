@@ -10,7 +10,7 @@
 </head>
 <body data-view="radar">
 <header class="terminal-header">
-  <div class="brand"><button id="brand-logo" class="brand-logo" aria-label="View BecsBot logo"><img src="/assets/becs-logo.jpg" alt="" width="32" height="32"></button><div><h1>BecsBot <span class="brand-terminal">TERMINAL</span></h1><small>Jupiter market data · paper trading</small></div></div>
+  <div class="brand"><button id="brand-logo" class="brand-logo" aria-label="View BecsBot logo"><img src="/assets/becs-logo.jpg" alt="" width="32" height="32"></button><div><h1>BecsBot <span class="brand-terminal">TERMINAL</span></h1><small>Jupiter + DexScreener · paper trading</small></div></div>
   <div class="header-data"><span id="hud-cash" class="hud-metric">CASH —</span><span id="hud-pnl" class="hud-metric">P/L —</span><span id="mode-label" class="pill paper">PAPER MODE</span><span id="sol-rate" class="pill">SOL price pending</span><span id="status">Loading scan…</span></div>
   <button id="refresh" class="secondary" aria-label="Refresh data">↻ Refresh</button>
 </header>
@@ -22,7 +22,7 @@
 <section id="radar-panel" class="radar-panel">
   <div class="rowhead"><div><h2>Fresh launches</h2><small id="market-status">Fresh launches · lower market caps</small></div><span id="radar-count" class="pill">Loading</span></div>
   <nav class="tabs" id="radar-tabs" aria-label="Radar topics"></nav>
-  <div class="radar-tools"><label>Find a launch<input id="radar-search" maxlength="80" type="search" placeholder="Name, symbol, or mint"></label><label>Interval<select id="radar-source"><option value="5m">5 minutes</option><option value="1h">1 hour</option><option value="6h">6 hours</option><option value="24h">24 hours</option></select></label><label>Sort<select id="radar-sort"><option value="rank">Jupiter rank</option><option value="change">Price change</option><option value="organicScore">Organic score</option><option value="marketCap">Market cap</option><option value="volume">Volume</option><option value="liquidityUsd">Liquidity</option><option value="holders">Holders</option><option value="age">Age</option><option value="priceUsd">Price</option></select></label></div>
+  <div class="radar-tools"><label>Find a launch<input id="radar-search" maxlength="80" type="search" placeholder="Name, symbol, or mint"></label><label>Interval<select id="radar-source"><option value="5m">5 minutes</option><option value="1h">1 hour</option><option value="6h">6 hours</option><option value="24h">24 hours</option></select></label><label>Sort<select id="radar-sort"><option value="rank">Source rank</option><option value="change">Price change</option><option value="organicScore">Organic score</option><option value="marketCap">Market cap</option><option value="volume">Volume</option><option value="liquidityUsd">Liquidity</option><option value="holders">Holders</option><option value="age">Age</option><option value="priceUsd">Price</option></select></label></div>
   <details class="radar-filters"><summary>Launch filters <span id="filter-summary" class="pill"></span></summary><p><small>Shared by radar, signals and auto buys. Unknown age/cap, flagged tokens and stale prices are excluded.</small></p><div class="settings">      <label>Min liquidity ($)<input data-setting="minLiquidity" type="number" min="0" step="100"></label>
       <label>Min market cap ($)<input data-setting="minCap" type="number" min="0" step="100"></label>
       <label>Max market cap ($, 0 = any)<input data-setting="maxCap" type="number" min="0" step="100"></label>
@@ -35,7 +35,7 @@
   <div class="radar-instrument"><div class="instrument-label"><span class="live-dot"></span> LAUNCH DETECTION <span id="scan-state">REST / 60s</span></div><div id="radar-map" class="radar-map" aria-label="Launch radar"></div><div class="radar-key">Inner = newer (small spacing jitter) · larger = stronger observed activity · tap a blip to inspect</div></div>
   <div class="strip-heading"><h3>Launch contacts</h3><small>Swipe cards on iPhone · tap to inspect</small></div><div id="radar" class="token-deck"></div>
   <div class="pagebar"><button id="previous" class="secondary">← Previous</button><span id="page-label" class="pill">Page 1</span><button id="next" class="secondary">Next →</button></div>
-  <p class="panel-note"><small>Paper prices at entry come from Jupiter Tokens V2. Holds use Jupiter Price V3; unavailable prices remain stale and cannot be sold in paper mode. Organic score measures activity, not safety. Mini charts retain up to 24 hours of server observations. Age is token creation time when available; otherwise first pool time.</small></p>
+  <p class="panel-note"><small>Dex profiles, updates and takeovers are discovery feeds; ads and boosts are paid promotions, not an organic trending ranking. All sources share your launch filters. Paper prices at entry come from Jupiter Tokens V2. Holds use Jupiter Price V3; unavailable prices remain stale and cannot be sold in paper mode. Organic score measures activity, not safety. Mini charts retain up to 24 hours of server observations. Age is token creation time when available; otherwise first pool time.</small></p>
 </section>
 <div class="terminal-side">
   <div class="dock-panel active" data-view-panel="paper">
@@ -62,7 +62,7 @@
     <p><small>Changing cash keeps holds. Reset clears paper holds, activity, and the buy-once list.</small></p>
 
   </section></div>
-  <div class="dock-panel" data-view-panel="connections"><section class="side-section"><h2>Data feeds</h2><p><small>Jupiter REST scans run every minute, including while your phone is closed. Paper auto runs only while this page is open. This public terminal cannot send real transactions.</small></p><div id="feeds"></div></section></div>
+  <div class="dock-panel" data-view-panel="connections"><section class="side-section"><h2>Data feeds</h2><p><small>Jupiter and DexScreener REST scans run every minute, including while your phone is closed. Paper auto runs only while this page is open. This public terminal cannot send real transactions.</small></p><div id="feeds"></div></section></div>
 </div>
 </main>
 <div class="live-tape"><b>TAPE <span class="live-dot"></span></b><div id="trade-tape" role="log" aria-label="Observed signal and paper trade tape"></div></div>
@@ -72,3 +72,4 @@
 <dialog id="brand-sheet" class="brand-sheet" aria-labelledby="brand-title"><div class="sheet-top"><h2 id="brand-title">BecsBot</h2><button id="brand-close" class="secondary" aria-label="Close BecsBot logo">×</button></div><img src="/assets/becs-logo.jpg" alt="Becs collage with a black cat wearing a BECS helmet" width="600" height="400"></dialog>
 <script type="module" src="/assets/js/dashboard.mjs"></script>
 </body></html>
+

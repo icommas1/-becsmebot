@@ -1,4 +1,7 @@
 const assert=require("node:assert/strict");
+const {FEEDS}=require("../src/market/tokens");
+const {DEX_FEEDS}=require("../src/market/dexscreener");
+const feedNames=[...FEEDS,...DEX_FEEDS].map(([name])=>name);
 const {assertSchema}=require("../src/api/validation");
 async function smoke(base,{request=fetch,now=Date.now,maxAgeMs=300000,requireMarketData=false}={}){
   const url=new URL(base);
@@ -18,7 +21,7 @@ async function smoke(base,{request=fetch,now=Date.now,maxAgeMs=300000,requireMar
   assert.equal(snapshot.manualSell.enabled,false,"Snapshot unexpectedly enables manual selling");
   const age=now()-Date.parse(health.lastScanAt);
   assert.ok(Number.isFinite(age)&&age>=0&&age<=maxAgeMs,"Market scan is stale or missing");
-  assert.equal(Object.keys(snapshot.feeds).length,13,"Missing configured feeds");
+  assert.deepEqual(Object.keys(snapshot.feeds).sort(),[...feedNames].sort(),"Missing configured feeds");
   const solAge=now()-snapshot.solPriceAt;
   const solFresh=snapshot.solUsd>0&&Number.isFinite(solAge)&&solAge>=0&&solAge<=maxAgeMs;
   let healthyFeeds=0;
@@ -36,7 +39,7 @@ async function smoke(base,{request=fetch,now=Date.now,maxAgeMs=300000,requireMar
   assert.ok((await logo.arrayBuffer()).byteLength>100,"Logo is empty");
   // Read-only: never call order, wallet, search or price POST endpoints.
   return {radar:snapshot.radar.length,signals:snapshot.signals.length,chartMints:Object.keys(history.trails).length,scanAgeSeconds:Math.round(age/1000),
-    marketData:{solFresh,healthyFeeds,totalFeeds:13,degraded:!solFresh||healthyFeeds<13}};
+    marketData:{solFresh,healthyFeeds,totalFeeds:feedNames.length,degraded:!solFresh||healthyFeeds<feedNames.length}};
 }
 if(require.main===module){
   const base=process.env.SMOKE_BASE_URL||"https://becsbot-production.up.railway.app";
@@ -48,3 +51,4 @@ if(require.main===module){
   }})().catch(error=>{console.error("Smoke failed: "+error.message);process.exitCode=1;});
 }
 module.exports={smoke};
+
