@@ -192,3 +192,16 @@ Railway service variables, volume attachment and health-check configuration live
 Market re-renders retain the currently visible mobile card by mint and preserve panel/sheet scroll. Source, sort, search, filter and page changes reset horizontal contacts. Token details use a labeled 48px close control and backdrop dismissal; closing restores focus to the stable dock token without scrolling the market.
 
 The entry response contains only a loading status, CSS and a self-hosted launch module. That module loads the static terminal fragment before starting the dashboard. A same-origin `/terminal` route and standalone web app manifest support a home-screen launch. Safari Reader eligibility and automatic Reader preferences remain browser decisions; the initial response no longer presents Radar as an article-like HTML document.
+
+
+## Permanent research archive
+
+BecsBot has a separate append-only research archive for long-horizon replay and future BecsSuperAgent analysis. It is intentionally distinct from the operational 24-hour chart-history file and from the private BecsEvent execution audit ledger.
+
+When `RESEARCH_ARCHIVE_ENABLED=true`, each completed market scan is persisted to PostgreSQL with the complete normalized Radar snapshot, ranked Signals, accepted provider rows, feed status/errors, SOL reference price and scan timestamp. Smart-wallet scans are persisted with their private normalized wallet/transaction observations plus public aggregates when wallet intelligence is enabled.
+
+The archive uses two tables layers: content-addressed gzip-compressed JSON payloads keyed by deterministic SHA-256 and an immutable chronological record stream. Repeated identical payloads reuse the same blob while every observation still receives its own sequence, timestamp and hash-chain record. PostgreSQL triggers reject UPDATE and DELETE on archive records and payloads. Application code contains no retention or pruning path.
+
+`RESEARCH_ARCHIVE_DATABASE_URL` can point to a dedicated PostgreSQL database later; when omitted, the archive reuses `DATABASE_URL`. This keeps the capture contract stable if research storage is split from paper-account storage as volume grows.
+
+The archive is not a substitute for independent backups. PostgreSQL + its persistent Railway volume is the primary durable copy; an off-provider/object-storage backup is still required before the word “forever” can be treated as an operational retention guarantee. BecsEvent remains the tamper-evident decision/execution ledger, while the research archive retains market/intelligence evidence used for replay, backtests and outcome analysis.

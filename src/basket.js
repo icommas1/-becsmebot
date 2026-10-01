@@ -4,6 +4,8 @@ const {createApp}=require("./api/app");
 const {paperConfig}=require("./paper/config");
 const {createStore}=require("./paper/store");
 const {createWalletIntel,walletIntelConfig}=require("./intel/wallet-intel");
+const {archiveConfig}=require("./archive/config");
+const {createResearchArchive}=require("./archive/store");
 
 function readConfig(env=process.env) {
   const apiKey=typeof env.JUPITER_API_KEY==="string"?env.JUPITER_API_KEY.trim():"";
@@ -14,27 +16,56 @@ function readConfig(env=process.env) {
   return {apiKey,port,dataDir};
 }
 
-function start({env=process.env,logger=console,marketFactory=createMarket,walletIntelFactory=createWalletIntel}={}) {
+function start({env=process.env,logger=console,marketFactory=createMarket,walletIntelFactory=createWalletIntel,archiveFactory=createResearchArchive}={}) {
   const config=readConfig(env),market=marketFactory({apiKey:config.apiKey,dataDir:config.dataDir});
   const accounts=paperConfig(env),store=accounts.enabled?createStore(accounts.databaseUrl):null;
   const walletIntel=walletIntelFactory({config:walletIntelConfig(env)});
-  let interval=null,walletInterval=null,closing=null;
+  const archiveSettings=archiveConfig(env);
+  const archive=archiveSettings.enabled?archiveFactory(archiveSettings.databaseUrl,{streamId:archiveSettings.streamId}):null;
+  let interval=null,walletInterval=null,closing=null,marketJob=false,walletJob=false;
+  const archiveFailure=(kind,error)=>logger.error?.("Research archive "+kind+" failed: "+String(error?.message||error).slice(0,300));
+  async function record(kind,source,payload,occurredAt,metadata={}) {
+    if(!archive||!payload)return;
+    try{await archive.record({kind,source,payload,occurredAt,metadata});}
+    catch(error){archiveFailure(kind,error);}
+  }
+  async function scanMarket(){
+    if(marketJob)return;marketJob=true;
+    try{
+      await market.scan();
+      const snapshot=market.researchSnapshot?.();
+      await record("market.scan","market",snapshot,snapshot?.scanAt||Date.now(),{scanIntervalMs:SCAN_MS});
+    }finally{marketJob=false;}
+  }
+  async function scanWalletIntel(){
+    if(walletJob)return;walletJob=true;
+    try{
+      await walletIntel.scan();
+      const snapshot=walletIntel.researchSnapshot?.();
+      await record("wallet-intel.scan","wallet-intel",snapshot,snapshot?.updatedAt||Date.now(),{scanIntervalMs:walletIntel.scanMs});
+    }finally{walletJob=false;}
+  }
   const server=createApp(market,{config:accounts,store},walletIntel).listen(config.port,"0.0.0.0",()=>{
     logger.log("BecsBot public Jupiter paper terminal running on port "+server.address().port);
-    market.scan();interval=setInterval(()=>market.scan(),SCAN_MS);
-    if(walletIntel.snapshot().enabled){walletIntel.scan();walletInterval=setInterval(()=>walletIntel.scan(),walletIntel.scanMs);}
+    if(archive){
+      logger.log("Permanent research archive enabled");
+      record("runtime.started","runtime",{schemaVersion:1,tradingEnabled:false,marketScanMs:SCAN_MS,
+        walletIntelEnabled:walletIntel.snapshot().enabled,walletIntelScanMs:walletIntel.scanMs},Date.now());
+    }
+    scanMarket();interval=setInterval(scanMarket,SCAN_MS);
+    if(walletIntel.snapshot().enabled){scanWalletIntel();walletInterval=setInterval(scanWalletIntel,walletIntel.scanMs);}
   });
   function shutdown() {
     if(closing)return closing;
     if(interval)clearInterval(interval);if(walletInterval)clearInterval(walletInterval);
     closing=new Promise((resolve,reject)=>{
       const force=setTimeout(()=>server.closeAllConnections?.(),10000);force.unref?.();
-      server.close(error=>{clearTimeout(force);Promise.resolve(store?.close()).then(()=>error?reject(error):resolve(),reject);});
+      server.close(error=>{clearTimeout(force);Promise.all([store?.close(),archive?.close()]).then(()=>error?reject(error):resolve(),reject);});
       server.closeIdleConnections?.();
     });
     return closing;
   }
-  return {server,market,shutdown};
+  return {server,market,archive,shutdown};
 }
 
 if(require.main===module) {
