@@ -15,6 +15,7 @@ async function smoke(base,{request=fetch,now=Date.now,maxAgeMs=300000,requireMar
   const health=assertSchema("health",await(await get("/health")).json());
   const snapshot=assertSchema("snapshot",await(await get("/api/basket")).json());
   const history=assertSchema("historyResponse",await(await get("/api/history")).json());
+  const walletIntel=assertSchema("walletIntelResponse",await(await get("/api/wallet-intel")).json());
   assert.equal(health.tradingEnabled,false,"Health unexpectedly enables real trading");
   assert.equal(snapshot.tradingEnabled,false,"Snapshot unexpectedly enables real trading");
   assert.equal(health.manualSell.enabled,false,"Health unexpectedly enables manual selling");
@@ -45,8 +46,8 @@ async function smoke(base,{request=fetch,now=Date.now,maxAgeMs=300000,requireMar
   const logo=await get("/assets/becs-logo.jpg");
   assert.ok(logo.headers.get("content-type")?.startsWith("image/jpeg"),"Logo MIME type");
   assert.ok((await logo.arrayBuffer()).byteLength>100,"Logo is empty");
-  // Read-only: never call order, wallet, search or price POST endpoints.
-  return {radar:snapshot.radar.length,signals:snapshot.signals.length,chartMints:Object.keys(history.trails).length,scanAgeSeconds:Math.round(age/1000),
+  // Read-only: never call order, authenticated paper, search or price POST endpoints.
+  return {radar:snapshot.radar.length,signals:snapshot.signals.length,chartMints:Object.keys(history.trails).length,walletIntelEnabled:walletIntel.enabled,smartTokens:walletIntel.tokens.length,scanAgeSeconds:Math.round(age/1000),
     marketData:{solFresh,healthyFeeds,totalFeeds:feedNames.length,degraded:!solFresh||healthyFeeds<feedNames.length}};
 }
 if(require.main===module){
