@@ -135,23 +135,27 @@ function createStore(connectionString) {
   async function verifyEvents(userId) {
     await init();const streamId=streamForUser(userId);
     const stream=(await pool.query("SELECT * FROM becs_event_streams WHERE stream_id=$1",[streamId])).rows[0];
-    if(!stream)return {valid:true,complete:true,eventCount:0,verifiedEvents:0,headHash:null,proofProvider:proofProvider.id,proofsChecked:0,proofsValid:true};
-    const eventCount=Number(stream.event_count),start=Math.max(1,eventCount-VERIFY_MAX_EVENTS+1);
+    if(!stream)return {valid:true,complete:true,eventCount:0,verifiedEvents:0,headHash:null,metadataValid:true,
+      proofProvider:proofProvider.id,proofsChecked:0,proofsValid:true,proofsComplete:true};
+    const stats=(await pool.query("SELECT count(*) AS count,COALESCE(max(sequence),0) AS max_sequence FROM becs_events WHERE stream_id=$1",[streamId])).rows[0];
+    const eventCount=Number(stats.count),maxSequence=Number(stats.max_sequence),metadataValid=
+      eventCount===Number(stream.event_count)&&maxSequence===Number(stream.head_sequence);
+    const start=Math.max(1,maxSequence-VERIFY_MAX_EVENTS+1);
     const events=(await pool.query("SELECT * FROM becs_events WHERE stream_id=$1 AND sequence>=$2 ORDER BY sequence ASC",[streamId,start])).rows.map(eventFromRow);
     const complete=start===1,chain=verifyChain(events,{streamId,startSequence:start,startPreviousHash:complete?null:events[0]?.previousHash??null});
     const headMatches=chain.headHash===(stream.head_hash??null)&&(!events.length||events.at(-1).sequence===Number(stream.head_sequence));
-    const proofRows=(await pool.query("SELECT * FROM becs_event_proofs WHERE stream_id=$1 AND provider=$2 ORDER BY last_sequence ASC LIMIT 1000",
-      [streamId,proofProvider.id])).rows;
+    const proofRows=(await pool.query("SELECT * FROM becs_event_proofs WHERE stream_id=$1 AND provider=$2 ORDER BY last_sequence ASC LIMIT 1001",
+      [streamId,proofProvider.id])).rows,proofsComplete=proofRows.length<=1000;
     let proofsValid=true,proofsChecked=0;
-    for(const row of proofRows){
+    for(const row of proofRows.slice(0,1000)){
       const proof={...row.proof,firstSequence:Number(row.first_sequence),lastSequence:Number(row.last_sequence),eventCount:Number(row.event_count),
         rootHash:row.root_hash,provider:row.provider,streamId};
       const range=(await pool.query("SELECT * FROM becs_events WHERE stream_id=$1 AND sequence BETWEEN $2 AND $3 ORDER BY sequence ASC",
         [streamId,proof.firstSequence,proof.lastSequence])).rows.map(eventFromRow);
       proofsChecked++;if(!proofProvider.verify(range,proof)){proofsValid=false;break;}
     }
-    return {valid:chain.valid&&headMatches&&proofsValid,complete,eventCount,verifiedEvents:events.length,
-      headHash:stream.head_hash??null,proofProvider:proofProvider.id,proofsChecked,proofsValid};
+    return {valid:chain.valid&&headMatches&&metadataValid&&proofsValid,complete,eventCount,verifiedEvents:events.length,
+      headHash:stream.head_hash??null,metadataValid,proofProvider:proofProvider.id,proofsChecked,proofsValid,proofsComplete};
   }
 
   async function createSession(userId) {
