@@ -18,8 +18,8 @@ async function githubIdentity(config,code,verifier) {
     client_secret:config.clientSecret,code,code_verifier:verifier,redirect_uri:config.origin+"/api/auth/github/callback"})});
   if(typeof token.access_token!=="string")throw Error("GitHub sign-in failed");
   const user=await json("https://api.github.com/user",{headers:{Authorization:"Bearer "+token.access_token,"User-Agent":"BecsBot","X-GitHub-Api-Version":"2022-11-28"}});
-  if(!Number.isSafeInteger(user.id))throw Error("GitHub identity unavailable");
-  return String(user.id); // OAuth token is neither stored nor sent to the browser.
+  if(!Number.isSafeInteger(user.id)||typeof user.login!=="string"||!user.login)throw Error("GitHub identity unavailable");
+  return {id:String(user.id),login:user.login}; // OAuth token is neither stored nor sent to the browser.
 }
 function mountPaperRoutes(app,{config,store,market,identity=githubIdentity}) {
   app.get("/api/paper/capabilities",(_req,res)=>res.json({enabled:!!config.enabled}));
@@ -47,7 +47,11 @@ function mountPaperRoutes(app,{config,store,market,identity=githubIdentity}) {
     if(!/^[\w-]{43}$/.test(state||"")||!equal(state,cookie(req,STATE))||typeof code!=="string"||code.length>256)
       return res.status(400).json({error:"Invalid sign-in callback. Start again from BecsBot."});
     const verifier=await store.consumeFlow(state);if(!verifier)return res.status(400).json({error:"Sign-in expired. Start again from BecsBot."});
-    if(await identity(config,code,verifier)!==config.ownerId)return res.status(403).json({error:"This paper account is private."});
+    const signedIn=await identity(config,code,verifier),identityId=typeof signedIn==="string"?signedIn:signedIn?.id;
+    if(identityId!==config.ownerId){
+      const login=typeof signedIn?.login==="string"&&signedIn.login?signedIn.login:null;
+      return res.status(403).json({error:login?"Signed in to GitHub as "+login+", but this paper account is private.":"This paper account is private."});
+    }
     await store.ensureAccount(owner);
     // Rotate an existing session when signing in again.
     if(cookie(req,SESSION))await store.logout(cookie(req,SESSION));
