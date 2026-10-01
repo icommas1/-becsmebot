@@ -28,6 +28,7 @@
 <div class="terminal-side">
   <div class="dock-panel active" data-view-panel="paper">
     <section class="side-section"><div class="rowhead"><h2>Paper wallet</h2><span id="auto-label" class="pill">Auto paper: off</span></div>
+      <p id="account-status" role="status">Checking paper account…</p><button id="account-login" class="secondary" hidden>Sign in with GitHub</button><button id="account-logout" class="secondary" hidden>Sign out to local wallet</button><button id="retry-paper" class="secondary" hidden>Retry pending action</button>
       <div class="metrics"><div class="metric"><small>Cash</small><b id="cash">—</b></div><div class="metric"><small>Open value</small><b id="open-value">—</b></div><div class="metric"><small>Paper P/L</small><b id="profit">—</b></div><div class="metric"><small>Holds</small><b id="hold-count">—</b></div></div>
       <button id="auto" class="secondary">Start auto paper</button>
       <p><small>Simulated SOL only. Auto paper follows the market tab, interval and launch filters. Buys each matching token once while this page is open. Search does not change auto buys. No real orders.</small></p><div id="message" role="status"></div>
@@ -35,8 +36,8 @@
     <section class="side-section"><h2>Selected contact</h2><div id="execution-context"></div></section>
     <section class="side-section"><h2>Paper holds</h2><p><small>Holds stay here after leaving the radar. Prices refresh separately; stale marks are labeled.</small></p><div id="paper-holds"></div></section>
   </div>
-  <div class="dock-panel" data-view-panel="activity"><section class="side-section"><h2>Paper activity</h2><p><small>Recent simulated buys, sells, and balance changes on this phone.</small></p><div id="activity"></div></section></div>
-  <div class="dock-panel" data-view-panel="settings"><section class="side-section"><h2>Paper & display settings</h2><p><small>Changes save in this browser on this phone.</small></p>
+  <div class="dock-panel" data-view-panel="activity"><section class="side-section"><h2>Paper activity</h2><p><small>Recent simulated buys, sells, and balance changes in the active paper wallet.</small></p><div id="activity"></div></section></div>
+  <div class="dock-panel" data-view-panel="settings"><section class="side-section"><h2>Paper & display settings</h2><p><small>Paper settings save to the active wallet. Display preferences stay on this browser.</small></p>
     <div class="settings">
       <label>Paper buy ($)<input data-setting="betUsd" type="number" min="0.01" step="0.01"></label>
       <label>Keep as cash (SOL)<input data-setting="reserveSol" type="number" min="0" step="0.000001"></label>

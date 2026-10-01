@@ -1,6 +1,6 @@
 # BecsBot Jupiter terminal
 
-Public full-page markets and paper trading dashboard. No login. Real transaction routes return 410; the runtime does not load a wallet signer or private key.
+Public full-page markets and paper trading dashboard. Optional private GitHub sign-in for a separate server paper account. Real transaction routes return 410; the runtime does not load a wallet signer or private key.
 
 ## Terminal interface
 
@@ -20,7 +20,7 @@ Server chart observations persist for up to 24 hours in `DATA_DIR/market-history
 
 Default buys spend $1.00 before the configurable simulated network fee. Manual and auto buys use the same fill logic and filters. Sell $1 sells up to $1 of the position before the fee; Sell all closes it. Price impact and fees are simulation settings, not executable quotes. SOL input amounts depend on the observed USD price; real exactly-$1 execution is not guaranteed.
 
-Auto source follows the selected launch tab and interval. Radar, Signals and auto buys use the same launch filters; token search respects those filters but does not change the auto source. An optional multiple target above 1 triggers one $1 paper sale per hold, using the same sale logic; 0 disables it. Auto is off after reload and runs only while the page is open. Paper balances, holds and settings save in this browser. Server market scanning and charts continue when it closes.
+Auto source follows the selected launch tab and interval. Radar, Signals and auto buys use the same launch filters; token search respects those filters but does not change the auto source. An optional multiple target above 1 triggers one $1 paper sale per hold, using the same sale logic; 0 disables it. Auto is off after reload and runs only while the page is open. Local paper balances, holds and settings save in this browser. The optional authenticated server account saves them transactionally in PostgreSQL across devices; see [setup instructions](SERVER_PAPER_SETUP.md). Server market scanning and charts continue when it closes.
 
 If browser storage is unavailable or full, failed saves are reported and paper state may not survive reload. Market requests time out after 60 seconds so a later refresh can recover; search errors remain visible in Radar.
 
@@ -49,7 +49,7 @@ npm run test:mobile
 npm run test:smoke
 ```
 
-`npm test` is offline and credential-free. Playwright starts a deterministic local Express fixture on port 4173 and tests iPhone WebKit, mobile Chromium and desktop Chromium. `npm run verify` combines syntax/schema, unit/integration and browser checks. Browser reports and traces are generated locally and ignored by git.
+`npm test` uses no production credentials. The real PostgreSQL test runs when `TEST_DATABASE_URL` points to a disposable database (CI supplies one); otherwise it is skipped. Playwright starts a deterministic local Express fixture on port 4173 and tests iPhone WebKit, mobile Chromium and desktop Chromium. `npm run verify` combines syntax/schema, unit/integration and browser checks. Browser reports and traces are generated locally and ignored by git.
 
 Smoke defaults to the public Railway origin; override `SMOKE_BASE_URL` for a fixture or staging service. It only uses GET requests and checks API contracts, the configured feeds, a recent scan, disabled live trading, terminal controls and logo. Provider degradation is reported without confusing it with a service outage; set `SMOKE_REQUIRE_MARKET_DATA=1` when a strict all-feeds/SOL readiness check is specifically wanted. `SMOKE_ATTEMPTS` allows bounded deployment warm-up retries. GitHub CI runs on PRs/main; Railway smoke runs on main, manually and every six hours. Dependabot checks npm and Actions weekly. API schemas are in `src/api/schemas.json` and validate successful responses and upstream payloads without coercion.
 

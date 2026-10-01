@@ -3,7 +3,7 @@ const {randomUUID}=require("node:crypto");
 const express=require("express");
 const { assertSchema, isValid }=require("./validation");
 
-function createApp(market) {
+function createApp(market, paperAccounts={config:{enabled:false}}) {
   const instanceId=randomUUID();
   const send = (res, name, value) => res.json(assertSchema(name, value));
   const app=express();app.set("trust proxy",1);app.disable("x-powered-by");
@@ -66,6 +66,7 @@ function createApp(market) {
     if(!isValid("priceRequest",req.body))return res.status(400).json({error:"Invalid token list"});
     try{send(res,"priceResponse",{prices:await market.paperPrices(input)});}catch(_error){res.status(503).json({error:"Market data temporarily unavailable"});}
   });
+  require("../paper/routes").mountPaperRoutes(app,{...paperAccounts,market});
   app.use((error,_req,res,_next)=>res.status(error.status||500).json({error:error.status===400?"Invalid JSON request":"Request unavailable"}));
   return app;
 }

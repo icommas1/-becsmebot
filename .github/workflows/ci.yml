@@ -18,6 +18,21 @@ jobs:
       fail-fast: false
       matrix:
         node: [22, 24]
+    services:
+      postgres:
+        image: postgres:18
+        env:
+          POSTGRES_USER: becs_test
+          POSTGRES_PASSWORD: fixture_only
+          POSTGRES_DB: becs_test
+        ports: [5432:5432]
+        options: >-
+          --health-cmd "pg_isready -U becs_test"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    env:
+      TEST_DATABASE_URL: postgresql://becs_test:fixture_only@localhost:5432/becs_test
     steps:
       - uses: actions/checkout@v7
         with:
@@ -55,3 +70,4 @@ jobs:
             playwright-report/
             test-results/
           retention-days: 7
+

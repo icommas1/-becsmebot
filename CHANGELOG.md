@@ -4,6 +4,8 @@ All notable repository-level changes are recorded here. Product strategy and pro
 
 ## Unreleased
 
+- Add an optional private GitHub-authenticated PostgreSQL paper account. Account changes and bounded idempotency receipts commit together, with safe replay after reload/restart, account revision checks and explicit retry recovery. Preserve local wallets and all existing strategy/accounting; live execution stays disabled.
+
 - Keep a bounded browser-local journal of 500 filled paper OrderIntents. Exact retries replay their results without another fill; changed requests with the same ID reject, while failed attempts remain retryable. Migrate existing holds and paper history intact.
 
 - Reject missing market contexts, invalid paper ledgers and corrupt sale cost basis at the PaperExecutor boundary before any simulated fill.

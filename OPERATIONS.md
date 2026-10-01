@@ -14,7 +14,7 @@ Railway service access, variables, volume attachment, restart policy and deploym
 
 ## Health and smoke checks
 
-`GET /health` proves process liveness and reports scan/feed state; it is not a promise that Jupiter is healthy. `npm run test:smoke` performs four read-only GET requests against `SMOKE_BASE_URL`, validates contracts and confirms that live trading remains disabled. It reports provider degradation separately. Set `SMOKE_REQUIRE_MARKET_DATA=1` only for a strict provider-readiness check.
+`GET /health` proves process liveness and reports scan/feed state; it is not a promise that Jupiter is healthy. `npm run test:smoke` performs nine read-only GET requests against `SMOKE_BASE_URL`, validates contracts and confirms that live trading remains disabled. It reports provider degradation separately. Set `SMOKE_REQUIRE_MARKET_DATA=1` only for a strict provider-readiness check.
 
 The smoke script rejects URLs containing embedded credentials, query strings or fragments. It never calls search, price POST, wallet, order, sell or pause operations.
 
@@ -25,3 +25,8 @@ The smoke script rejects URLs containing embedded credentials, query strings or 
 - Invalid provider contracts fail that operation with 503 and do not expose the provider body.
 - Missing history can be rebuilt by later scans; a persistence failure does not stop market discovery.
 - A missing API key or invalid port prevents startup rather than creating a partially configured process.
+
+
+## Optional server paper account
+
+See [SERVER_PAPER_SETUP.md](SERVER_PAPER_SETUP.md) for private PostgreSQL provisioning, OAuth setup, activation and rollback. The market health route remains independent of database availability. Server-account failures return sanitized errors and must not fall back to local fills. Keep the database volume and chart-history volume separate; backup/restore validation remains an operational follow-up.

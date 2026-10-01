@@ -1,6 +1,8 @@
 // Stable Railway entry point; runtime never loads a wallet signer.
 const {createMarket,SCAN_MS}=require("./market/market");
 const {createApp}=require("./api/app");
+const {paperConfig}=require("./paper/config");
+const {createStore}=require("./paper/store");
 
 function readConfig(env=process.env) {
   const apiKey=typeof env.JUPITER_API_KEY==="string"?env.JUPITER_API_KEY.trim():"";
@@ -13,8 +15,9 @@ function readConfig(env=process.env) {
 
 function start({env=process.env,logger=console,marketFactory=createMarket}={}) {
   const config=readConfig(env),market=marketFactory({apiKey:config.apiKey,dataDir:config.dataDir});
+  const accounts=paperConfig(env),store=accounts.enabled?createStore(accounts.databaseUrl):null;
   let interval=null,closing=null;
-  const server=createApp(market).listen(config.port,"0.0.0.0",()=>{
+  const server=createApp(market,{config:accounts,store}).listen(config.port,"0.0.0.0",()=>{
     logger.log("BecsBot public Jupiter paper terminal running on port "+server.address().port);
     market.scan();interval=setInterval(()=>market.scan(),SCAN_MS);
   });
@@ -23,7 +26,7 @@ function start({env=process.env,logger=console,marketFactory=createMarket}={}) {
     if(interval)clearInterval(interval);
     closing=new Promise((resolve,reject)=>{
       const force=setTimeout(()=>server.closeAllConnections?.(),10000);force.unref?.();
-      server.close(error=>{clearTimeout(force);if(error)reject(error);else resolve();});
+      server.close(error=>{clearTimeout(force);Promise.resolve(store?.close()).then(()=>error?reject(error):resolve(),reject);});
       server.closeIdleConnections?.();
     });
     return closing;

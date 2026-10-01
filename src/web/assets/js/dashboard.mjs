@@ -4,6 +4,7 @@ import {launchDefaults,normalizeRadarUi,
 import {freshPaper,loadPaper,recordActivity,savePaper} from "./paper-wallet.mjs";
 import {buyPaper as applyPaperBuy,sellPaper as applyPaperSale} from "./trading/paper-pipeline.mjs";
 import {autoBuyCandidates,autoExitCandidates} from "./trading/decision-engine.mjs";
+import {createServerPaper} from "./server-paper.mjs";
 import {createApiClient} from "./api-client.mjs";
 import {node as createNode} from "./dom.mjs";
 import {createRadarView} from "./radar-view.mjs";
@@ -21,8 +22,37 @@ if(!trail||typeof trail.points!=="object"||!trail.points)trail={scan:null,points
 let paper=loadPaper(storage),snapshot=null,prices={},priceTimes={},refreshing=false;
 let searchRows=[],searchTimer=null,searchStatus="";
 const api=createApiClient();
+let accountMode="loading",serverPaper=null,serverRevision=0;
+function syncAccountControls(){
+  for(const input of document.querySelectorAll("[data-setting]"))input.value=paper.settings[input.dataset.setting];
+  $("cash-input").value=paper.cashSol;
+}
+function accountStatus(){
+  $("account-status").textContent=accountMode==="server"?"Server paper account · saved across devices":accountMode==="local"?"Local paper wallet · saved on this browser":"Checking paper account…";
+  $("retry-paper").hidden=!serverPaper?.pending;
+}
+function receiveAccount(result){if(result.revision<serverRevision)return;const auto=paper.auto;paper=result.paper;paper.auto=auto;serverRevision=result.revision;syncAccountControls();accountStatus();render();}
+async function serverAction(action,retry=false){
+  try{const result=await (retry?serverPaper.retry():serverPaper.send(action));receiveAccount(result);if(result.message)message(result.message);return result.ok;}
+  catch(error){paper.auto=false;message(error.message+(serverPaper.pending?" Use Retry pending action; do not place it again.":""));render();return false;}
+  finally{accountStatus();}
+}
+async function initializeAccount(){
+  try{
+    serverPaper=createServerPaper({storage:{getItem:key=>globalThis.sessionStorage.getItem(key),setItem:(key,value)=>globalThis.sessionStorage.setItem(key,value),removeItem:key=>globalThis.sessionStorage.removeItem(key)}});
+    const capability=await serverPaper.request("/api/paper/capabilities");
+    if(!capability.enabled){accountMode="local";return;}
+    const status=await serverPaper.request("/api/auth/status");
+    if(!status.authenticated){accountMode="local";$("account-login").hidden=false;return;}
+    const result=await serverPaper.read();serverPaper.attach(result.paper);accountMode="server";
+    receiveAccount(result);$("account-logout").hidden=false;
+    if(serverPaper.pending)message("A previous paper action needs a retry to confirm its result.");
+  }catch(error){message("Paper account could not be checked. Reload to retry. "+error.message);}
+  finally{accountStatus();}
+}
+function accountReady(){if(accountMode==="loading"){message("Wait for the paper account check, or reload to retry.");return false;}return true;}
 const $=id=>document.getElementById(id);
-function save(){const persisted=savePaper(storage,paper);if(!persisted)message("Browser storage is unavailable or full; paper trades and settings may not persist.");return persisted;}
+function save(){if(accountMode!=="local")return true;const persisted=savePaper(storage,paper);if(!persisted)message("Browser storage is unavailable or full; paper trades and settings may not persist.");return persisted;}
 function saveRadar() { try { storage.setItem(RADAR_UI_STORE,JSON.stringify(radarUi)); } catch (_) {} }
 async function loadRadarHistory(s) {
   if(!s.lastScanAt||s.lastScanAt===trail.scan)return;
@@ -41,12 +71,19 @@ function node(tag,className,value){return createNode(document,tag,className,valu
 function solUsd(){return recentMark(snapshot?.solPriceAt,180000)?num(snapshot?.solUsd):null;}
 function selectedFeed(){return currentFeed(radarUi);}
 function launchRows(rows){return filterLaunchRows(rows,paper.settings,radarUi);}
-function buy(row,automatic=false,amount=paper.settings.betUsd){
+async function buy(row,automatic=false,amount=paper.settings.betUsd){
+  if(!accountReady())return false;
+  if(accountMode==="server"){
+    const ok=await serverAction({type:"buy",mint:row.mint,amount,automatic,feed:selectedFeed()});
+    if(ok&&!automatic)await refreshPrices(true);return ok;
+  }
   const result=applyPaperBuy({paper,row,amount,automatic,solRate:solUsd(),feed:selectedFeed()});
   if(!result.ok)return message(result.message);
   prices[row.mint]=result.priceRecord;const persisted=save();render();if(persisted&&result.message)message(result.message);
 }
-function sellPaper(mint,pct,dollars=null,automatic=false){
+async function sellPaper(mint,pct,dollars=null,automatic=false){
+  if(!accountReady())return false;
+  if(accountMode==="server")return serverAction({type:"sell",mint,dollars,automatic});
   const token=currentToken(),result=applyPaperSale({paper,mint,pct,dollars,automatic,solRate:solUsd(),
     mark:prices[mint],markAt:priceTimes[mint],marketCap:token?.mint===mint?token.marketCap:null});
   if(!result.ok)return message(result.message);
@@ -67,27 +104,28 @@ async function refreshPrices(force=false) {
         else {delete prices[mint];delete priceTimes[mint];}
       }
     }
-    lastMarkAt=Date.now();runAutoExits();save();render();
+    lastMarkAt=Date.now();await runAutoExits();save();render();
   }catch(error){message("Paper price update: "+error.message);}
   finally{marking=false;}
 }
-function runAutoBuys() {
+async function runAutoBuys() {
   for(const row of autoBuyCandidates({enabled:paper.auto,rows:snapshot?.radar||[],settings:paper.settings,
-    radarUi,enteredAssets:paper.bought}))buy(row,true);
+    radarUi,enteredAssets:paper.bought})){if(!paper.auto||serverPaper?.busy||serverPaper?.pending)break;await buy(row,true);}
 }
-function runAutoExits() {
+async function runAutoExits() {
   for(const hold of autoExitCandidates({enabled:paper.auto,positions:paper.holds,settings:paper.settings,prices}))
-    sellPaper(hold.mint,100,1,true);
+    {if(!paper.auto||serverPaper?.busy||serverPaper?.pending)break;await sellPaper(hold.mint,100,1,true);}
 }
 async function refresh() {
   if (refreshing) return;refreshing=true;$("refresh").disabled=true;$("refresh").setAttribute("aria-busy","true");
   try {
+    if(accountMode==="server"&&!serverPaper.busy&&!serverPaper.pending)receiveAccount(await serverPaper.read());
     const s=await api.basket();snapshot=s;await loadRadarHistory(s);
     const scanned=s.lastScanAt?new Date(s.lastScanAt).toLocaleTimeString():"pending";
     $("status").textContent=(s.paused?"Scans paused":s.running?"Scanning":"Updated")+" · "+scanned+(s.lastError?" · "+s.lastError:"");
     $("market-status").textContent="Jupiter + DexScreener scan "+scanned+(s.lastError?" · Some data delayed":" · 5m / 1h / 6h / 24h feeds");
     document.body.dataset.scanning=String(!!s.running);$("scan-state").textContent=s.running?"SCANNING":s.lastError?"DELAYED":"REST / 60s";
-    observeContacts(s);runAutoBuys();render();await refreshPrices();
+    observeContacts(s);await runAutoBuys();render();await refreshPrices();
   } catch(error) { $("status").textContent=error.message;message(error.message); }
   finally { refreshing=false;$("refresh").disabled=false;$("refresh").setAttribute("aria-busy","false"); }
 }
@@ -134,16 +172,17 @@ $('token-sheet').addEventListener('click',event=>{
 });
 function observeContacts(s){for(const row of launchRows(s.radar||[])){if(seenContacts.has(row.mint))continue;seenContacts.add(row.mint);contactTape.unshift({at:new Date().toISOString(),text:'DETECTED → '+row.symbol+' · MC '+compactUsd(row.marketCap)+' · '+selectedFeed()});}contactTape.length=Math.min(contactTape.length,50);if(seenContacts.size>5000)seenContacts.clear();}
 for(const input of document.querySelectorAll("[data-setting]")) {
-  const name=input.dataset.setting;input.value=paper.settings[name];input.addEventListener("change",()=>{
+  const name=input.dataset.setting;input.value=paper.settings[name];input.addEventListener("change",async()=>{
+    if(!accountReady()){input.value=paper.settings[name];return;}
     const value=Number(input.value);if (!Number.isFinite(value)||value<0||(name==="betUsd"&&value<=0)||(name==="impactPct"&&value>50)||(name==="minOrganicScore"&&value>100)) {input.value=paper.settings[name];return message("Enter a valid value for this setting.");}
-    const next={...paper.settings,[name]:value};if(next.maxCap&&next.minCap>next.maxCap||next.maxAge&&next.minAge>next.maxAge){input.value=paper.settings[name];return message("Minimum cannot exceed maximum.");}paper.settings=next;radarPage=0;const persisted=save();render();if(persisted)message("Shared settings saved.");
+    const next={...paper.settings,[name]:value};if(next.maxCap&&next.minCap>next.maxCap||next.maxAge&&next.minAge>next.maxAge){input.value=paper.settings[name];return message("Minimum cannot exceed maximum.");}if(accountMode==="server"){await serverAction({type:"settings",settings:{[name]:value},revision:serverRevision});syncAccountControls();return;}paper.settings=next;radarPage=0;const persisted=save();render();if(persisted)message("Shared settings saved.");
   });
 }
 $("cash-input").value=paper.cashSol;
-$("set-cash").onclick=()=>{const value=Number($("cash-input").value);if(!Number.isFinite(value)||value<0) return message("Enter a valid SOL amount.");paper.cashSol=value;recordActivity(paper,"adjust","Set paper cash to "+short(value)+" SOL");const persisted=save();render();if(persisted)message("Paper cash updated.");};
-$("reset-paper").onclick=()=>{if(!confirm("Reset paper holds, history, and bought-once list?"))return;const cash=Number($("cash-input").value);const settings=paper.settings,account=paper.account;paper={...freshPaper(),account,cashSol:Number.isFinite(cash)&&cash>=0?cash:.4,settings};prices={};priceTimes={};const persisted=save();render();if(persisted)message("Paper wallet reset.");};
-$("fresh-preset").onclick=()=>{Object.assign(paper.settings,launchDefaults);radarUi.tab="recent";radarUi.sort="age";radarUi.direction="asc";$("radar-sort").value="age";radarPage=0;for(const input of document.querySelectorAll("[data-setting]"))input.value=paper.settings[input.dataset.setting];const persisted=save();saveRadar();render();if(persisted)message("Fresh-launch filters restored.");};
-$("auto").onclick=()=>{paper.auto=!paper.auto;const persisted=save();render();if(persisted)message(paper.auto?"Auto paper on while this page is open.":"Auto paper off.");runAutoBuys();};
+$("set-cash").onclick=()=>{if(!accountReady())return;const value=Number($("cash-input").value);if(!Number.isFinite(value)||value<0) return message("Enter a valid SOL amount.");if(accountMode==="server")return serverAction({type:"cash",cashSol:value,revision:serverRevision});paper.cashSol=value;recordActivity(paper,"adjust","Set paper cash to "+short(value)+" SOL");const persisted=save();render();if(persisted)message("Paper cash updated.");};
+$("reset-paper").onclick=()=>{if(!accountReady())return;if(!confirm("Reset paper holds, history, and bought-once list?"))return;const cash=Number($("cash-input").value);if(accountMode==="server")return serverAction({type:"reset",cashSol:Number.isFinite(cash)&&cash>=0?cash:.4,revision:serverRevision});const settings=paper.settings,account=paper.account;paper={...freshPaper(),account,cashSol:Number.isFinite(cash)&&cash>=0?cash:.4,settings};prices={};priceTimes={};const persisted=save();render();if(persisted)message("Paper wallet reset.");};
+$("fresh-preset").onclick=async()=>{if(!accountReady())return;if(accountMode==="server"&&!await serverAction({type:"settings",settings:{...launchDefaults},revision:serverRevision}))return;Object.assign(paper.settings,launchDefaults);radarUi.tab="recent";radarUi.sort="age";radarUi.direction="asc";$("radar-sort").value="age";radarPage=0;for(const input of document.querySelectorAll("[data-setting]"))input.value=paper.settings[input.dataset.setting];const persisted=save();saveRadar();render();if(persisted)message("Fresh-launch filters restored.");};
+$("auto").onclick=()=>{if(!accountReady())return;if(serverPaper?.pending)return message("Resolve the pending paper action first.");paper.auto=!paper.auto;const persisted=save();render();if(persisted)message(paper.auto?"Auto paper on while this page is open.":"Auto paper off.");runAutoBuys();};
 for(const [tab,label] of [["recent","New launches"],["trending","Trending launches"],["traded","Active launches"],["organic","Organic launches"],["dex:profiles","Dex profiles"],["dex:updates","Dex updates"],["dex:takeovers","Dex takeovers"],["dex:ads","Dex paid ads"],["dex:boosts","Dex latest boosts (paid)"],["dex:top","Dex top boosts (paid)"]]) {
   const b=node("button","",label);b.dataset.tab=tab;b.onclick=()=>{radarUi.tab=tab;radarPage=0;saveRadar();render();};$("radar-tabs").append(b);
 }
@@ -194,4 +233,10 @@ for(const button of document.querySelectorAll(".view-nav [data-view]"))
   button.onclick=()=>setTerminalView(button.dataset.view);
 let terminalView="radar";try{terminalView=storage.getItem("becsTerminalView")||"radar";}catch(_error){}
 setTerminalView(terminalView);
-render();refresh();setInterval(refresh,15000);
+$("account-login").onclick=()=>{location.href="/api/auth/github";};
+$("account-logout").onclick=async()=>{
+  if(serverPaper.busy||serverPaper.pending)return message("Resolve the pending paper action before signing out.");
+  try{await serverPaper.request("/api/auth/logout",{method:"POST"});location.reload();}catch(error){message(error.message);}
+};
+$("retry-paper").onclick=()=>serverAction(null,true);
+render();await initializeAccount();refresh();setInterval(refresh,15000);

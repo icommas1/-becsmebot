@@ -2,7 +2,7 @@
 
 ## Scope
 
-BecsBot is currently a public market-data and browser-local paper-trading application. The repository contains no wallet signer or live execution engine. A change that introduces custody, signing or live-order capability is a security-sensitive product change and must not be treated as routine maintenance.
+BecsBot is currently a public market-data and paper-trading application with local wallets and an optional private GitHub-authenticated server paper account. The repository contains no wallet signer or live execution engine. A change that introduces custody, signing or live-order capability is a security-sensitive product change and must not be treated as routine maintenance.
 
 ## Reporting
 
@@ -26,3 +26,6 @@ The `main` branch is the only supported code line. Security fixes should include
 ## Deployment responsibility
 
 Railway variables, access controls, volume attachment and GitHub branch/ruleset configuration are external to this repository. Operators should restrict access, rotate provider keys when exposure is suspected, keep the persistent data volume mounted at the configured `DATA_DIR`, and review dependency alerts before merging updates.
+
+
+Server account routes require the configured GitHub numeric owner ID, opaque expiring sessions, and same-origin writes. OAuth client secrets stay in Railway; no GitHub repository scope is requested. Session tokens are HttpOnly cookies, stored only as hashes in PostgreSQL. Browser wallet data is never trusted as authenticated ownership or imported into the server ledger. Auth remains gated off until configuration is complete.
