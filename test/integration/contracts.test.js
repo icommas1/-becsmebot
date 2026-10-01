@@ -11,14 +11,14 @@ test("all public response contracts and read-only smoke work against a real HTTP
   const market=await fixtureMarket(),base=await serve(t,market);
   const stylesheet=await fetch(base+"/assets/dashboard.css");
   assert.equal(stylesheet.status,200);assert.match(stylesheet.headers.get("content-type"),/^text\/css/);
-  for(const [route,schema]of [["/health","health"],["/api/basket","snapshot"],["/api/history","historyResponse"],["/api/search?q=FRESH","searchResponse"]]){
+  for(const [route,schema]of [["/health","health"],["/api/basket","snapshot"],["/api/history","historyResponse"],["/api/wallet-intel","walletIntelResponse"],["/api/search?q=FRESH","searchResponse"]]){
     const r=await fetch(base+route);assert.equal(r.status,200);assert.ok(isValid(schema,await r.json()));
   }
   const r=await fetch(base+"/api/paper/prices",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({mints:[SOL,MINTS[0]]})});
   assert.equal(r.status,200);assert.ok(isValid("priceResponse",await r.json()));
   const called=[];await smoke(base,{request:(url,options)=>{called.push({url,method:options.method||"GET"});return fetch(url,options);}});
-  assert.deepEqual(called.map(c=>c.method),Array(9).fill("GET"));
-  assert.equal(called.length,9);
+  assert.deepEqual(called.map(c=>c.method),Array(10).fill("GET"));
+  assert.equal(called.length,10);
 });
 test("browser payloads preserve Radar and Signals while separating bounded chart history",async t=>{
   const market=await fixtureMarket(),full=market.snapshot(),base=await serve(t,market);
