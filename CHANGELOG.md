@@ -4,6 +4,8 @@ All notable repository-level changes are recorded here. Product strategy and pro
 
 ## Unreleased
 
+- Keep a bounded browser-local journal of 500 filled paper OrderIntents. Exact retries replay their results without another fill; changed requests with the same ID reject, while failed attempts remain retryable. Migrate existing holds and paper history intact.
+
 - Reject missing market contexts, invalid paper ledgers and corrupt sale cost basis at the PaperExecutor boundary before any simulated fill.
 
 - Add a paper Performance view for recorded simulated sales with per-sale basis, net return, source filtering and entry-cap chart. Older sales remain visible in ledger P/L but are excluded from return statistics.

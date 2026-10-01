@@ -1,6 +1,7 @@
 import {num,recentMark} from "./core.mjs";
 import {launchDefaults} from "./filters.mjs";
 import {createLocalAccount,validAccount} from "./trading/contracts.mjs";
+import {MAX_PAPER_RECEIPTS} from "./trading/paper-executor.mjs";
 
 export const STORE="becsPaperV1";
 export const paperDefaults=Object.freeze({
@@ -8,7 +9,7 @@ export const paperDefaults=Object.freeze({
 });
 
 export function freshPaper() {
-  return {account:createLocalAccount(),cashSol:.4,settings:{...paperDefaults},holds:{},bought:{},activity:[],realizedUsd:0,auto:false};
+  return {account:createLocalAccount(),cashSol:.4,settings:{...paperDefaults},holds:{},bought:{},activity:[],receipts:[],realizedUsd:0,auto:false};
 }
 
 export function loadPaper(storage) {
@@ -24,6 +25,7 @@ export function loadPaper(storage) {
     if(settings.impactPct>50)settings.impactPct=0;
     if(settings.minOrganicScore>100)settings.minOrganicScore=0;
     return {...freshPaper(),...old,account:validAccount(old.account)&&old.account.executionMode==="paper"?{...old.account}:createLocalAccount(),settings,activity:Array.isArray(old.activity)?old.activity:[],
+      receipts:Array.isArray(old.receipts)?old.receipts.slice(-MAX_PAPER_RECEIPTS):old.receipts===undefined?[]:old.receipts,
       realizedUsd:Number.isFinite(old.realizedUsd)?old.realizedUsd:0,auto:false};
   } catch(_error) {
     return freshPaper();

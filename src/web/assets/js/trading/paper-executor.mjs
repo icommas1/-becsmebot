@@ -1,6 +1,31 @@
 import {num,recentMark} from "../core.mjs";
 import {executionResult,validAccount,validOrderIntent} from "./contracts.mjs";
 
+export const MAX_PAPER_RECEIPTS=500;
+const MAX_SIGNATURE_LENGTH=2048;
+
+function intentSignature(intent) {
+  const {strategy,quantity,constraints,context}=intent;
+  return JSON.stringify([intent.intentId,intent.userId,intent.accountId,strategy.id,strategy.version,
+    intent.createdAt,intent.asset,intent.side,quantity.value,quantity.mode,quantity.unit,
+    constraints.orderType,constraints.reduceOnly,constraints.capToPosition,
+    context.reason,context.source,context.automatic]);
+}
+
+function validReceipts(receipts,account) {
+  if(!Array.isArray(receipts)||receipts.length>MAX_PAPER_RECEIPTS)return false;
+  const seen=new Set();
+  for(const receipt of receipts) {
+    if(!receipt||typeof receipt.intentId!=="string"||!receipt.intentId||seen.has(receipt.intentId)||
+      typeof receipt.signature!=="string"||receipt.signature.length>MAX_SIGNATURE_LENGTH||
+      receipt.result?.status!=="filled"||receipt.result.intentId!==receipt.intentId||
+      receipt.result.userId!==account.userId||receipt.result.accountId!==account.accountId||
+      receipt.result.executionMode!=="paper")return false;
+    seen.add(receipt.intentId);
+  }
+  return true;
+}
+
 /** @returns {import('./contracts.mjs').Executor} */
 export function createPaperExecutor({account,paper}) {
   if(!validAccount(account)||account.executionMode!=="paper")throw Error("Live execution is disabled");
@@ -11,19 +36,29 @@ export function createPaperExecutor({account,paper}) {
     if(!validOrderIntent(intent))return reject("invalid-intent","Invalid order intent.");
     if(!validAccount(account)||account.executionMode!=="paper"||!validAccount(paper?.account)||paper.account.executionMode!=="paper")
       return reject("execution-disabled","Live execution is disabled.");
-    if(!market||typeof market!=="object"||market.now!=null&&!validNow)
-      return reject("invalid-market","Invalid paper market context.");
     if(intent.userId!==account.userId||intent.accountId!==account.accountId||
       paper.account.userId!==account.userId||paper.account.accountId!==account.accountId)
       return reject("ownership-mismatch","Order account does not own this paper ledger.");
     if(!validLedger(paper))return reject("invalid-ledger","Paper ledger is unavailable or invalid.");
+    const signature=intentSignature(intent);
+    if(signature.length>MAX_SIGNATURE_LENGTH)return reject("invalid-intent","Invalid order intent.");
+    const prior=paper.receipts.find(receipt=>receipt.intentId===intent.intentId);
+    if(prior)return prior.signature===signature?structuredClone(prior.result):
+      reject("intent-id-conflict","Order intent ID was already used for another request.");
+    if(!market||typeof market!=="object"||market.now!=null&&!validNow)
+      return reject("invalid-market","Invalid paper market context.");
     if(intent.side==="buy"&&!market.row)return reject("missing-market","Need a current SOL and token price for a paper buy.");
     if(intent.side==="sell"&&!validHold(paper.holds[intent.asset]))
       return reject("invalid-ledger","Paper holding is unavailable or invalid.");
     const fill=intent.side==="buy"?fillBuy(paper,intent,{...market,now}):fillSale(paper,intent,{...market,now});
-    return executionResult(intent,{status:fill.ok?"filled":"rejected",reason:fill.ok?null:"paper-rejected",
+    const result=executionResult(intent,{status:fill.ok?"filled":"rejected",reason:fill.ok?null:"paper-rejected",
       message:fill.message,filledQuantity:fill.filledQuantity,filledQuoteQuantity:fill.ok?fill.gross:0,
       fillPrice:fill.fillPrice,fee:fill.fee,now});
+    if(fill.ok) {
+      paper.receipts.push({intentId:intent.intentId,signature,result:structuredClone(result)});
+      if(paper.receipts.length>MAX_PAPER_RECEIPTS)paper.receipts.shift();
+    }
+    return result;
   }});
 }
 
@@ -32,7 +67,7 @@ function validLedger(paper) {
   return Number.isFinite(paper.cashSol)&&paper.cashSol>=0&&Number.isFinite(paper.realizedUsd)&&
     paper.holds&&typeof paper.holds==="object"&&!Array.isArray(paper.holds)&&
     paper.bought&&typeof paper.bought==="object"&&!Array.isArray(paper.bought)&&
-    Array.isArray(paper.activity)&&settings&&
+    Array.isArray(paper.activity)&&validReceipts(paper.receipts,paper.account)&&settings&&
     ["feeSol","reserveSol","impactPct"].every(key=>Number.isFinite(settings[key])&&settings[key]>=0);
 }
 
