@@ -17,7 +17,9 @@ BecsBot is a single Node/Express service serving a vanilla HTML/CSS/JavaScript t
 | `src/market/market.js` | Scans, caches, single-flight requests and snapshots |
 | `src/market/history.js` | Bounded 24-hour chart persistence |
 | `src/market/signals.js` | Multiples against the first retained observation |
-| `src/web/dashboard.html` | Semantic terminal shell and self-hosted module entry point |
+| `src/web/dashboard.html` | Small launch shell and self-hosted module entry point |
+| `src/web/assets/terminal-fragment.html` | Terminal controls loaded after launch |
+| `src/web/assets/js/launch.mjs` | Loads the terminal controls before starting the dashboard |
 | `src/web/assets/dashboard.css` | Terminal layout and responsive presentation |
 | `src/web/assets/js/dashboard.mjs` | Browser startup, shared state coordination, refresh and event wiring |
 | `src/web/assets/js/core.mjs` | Shared formatting, time and signal-presentation helpers |
@@ -59,7 +61,7 @@ Normalization merges canonical mints and feeds. Positive finite prices and numer
 
 | Route | Behavior |
 | --- | --- |
-| `GET /` | Full terminal |
+| `GET /`, `GET /terminal` | Lean launch shell; same-origin fragment hydrates the full terminal |
 | `GET /assets/becs-logo.jpg` | Fixed supplied artwork |
 | `GET /health` | Liveness, feed/scan state, real trading disabled |
 | `GET /api/basket` | Validated cached market snapshot |
@@ -120,8 +122,10 @@ The execution boundary is intentionally one-way: the browser can request public 
 
 CI runs syntax/schema checks and unit/integration tests on Node 22/24, plus iPhone WebKit, mobile Chromium and desktop Chromium using a local fixture server. Failures retain traces/screenshots for seven days. No test needs a production API key.
 
-The Railway workflow runs after pushes to main, manually, and every six hours. It makes only five GET requests per attempt, allows deployment warm-up retries, validates contracts including bounded chart history, confirms all nineteen configured feeds, a recent scan, disabled live trading and terminal/asset availability. Provider freshness is reported separately so a provider outage is not misclassified as a BecsBot process outage; strict market-data readiness is available through `SMOKE_REQUIRE_MARKET_DATA=1`. It does not send orders, change settings or buy a developer plan. Dependabot opens weekly npm and Actions update PRs; updates are not automatically merged.
+The Railway workflow runs after pushes to main, manually, and every six hours. It makes only nine GET requests per attempt, allows deployment warm-up retries, validates contracts including bounded chart history, confirms all nineteen configured feeds, a recent scan, disabled live trading and terminal/asset availability. Provider freshness is reported separately so a provider outage is not misclassified as a BecsBot process outage; strict market-data readiness is available through `SMOKE_REQUIRE_MARKET_DATA=1`. It does not send orders, change settings or buy a developer plan. Dependabot opens weekly npm and Actions update PRs; updates are not automatically merged.
 
 Railway service variables, volume attachment and health-check configuration live outside this repository. The repository defines the startup command and expected variable names but cannot prove those external settings. No `railway.toml`, Dockerfile or Procfile is currently required.
 
 Market re-renders retain the currently visible mobile card by mint and preserve panel/sheet scroll. Source, sort, search, filter and page changes reset horizontal contacts. Token details use a labeled 48px close control and backdrop dismissal; closing restores focus to the stable dock token without scrolling the market.
+
+The entry response contains only a loading status, CSS and a self-hosted launch module. That module loads the static terminal fragment before starting the dashboard. A same-origin `/terminal` route and standalone web app manifest support a home-screen launch. Safari Reader eligibility and automatic Reader preferences remain browser decisions; the initial response no longer presents Radar as an article-like HTML document.

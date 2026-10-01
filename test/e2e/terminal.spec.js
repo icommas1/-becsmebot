@@ -4,14 +4,15 @@ test.beforeEach(async({page})=>{
   await page.goto("/");
   await expect(page.locator("#radar .token-contact")).toHaveCount(2);
 });
-test("market explanations stay available without filling the launch screen",async({page,isMobile})=>{
-  const note=page.locator(".panel-note");
-  await expect(note).not.toHaveAttribute("open",/.+/);
-  await expect(note.locator("p")).toBeHidden();
-  await note.locator("summary").click();
-  await expect(note.locator("p")).toBeVisible();
-  await expect(note).toContainText("ads and boosts are paid promotions");
-  if(isMobile)expect((await note.locator("summary").boundingBox()).height).toBeGreaterThanOrEqual(44);
+test("lean launch route hydrates the full terminal",async({page})=>{
+  const response=await page.request.get("/terminal");
+  expect(response.ok()).toBe(true);
+  const shell=await response.text();
+  expect(shell).not.toContain("Fresh launches");
+  expect(shell).toContain("/assets/js/launch.mjs");
+  await page.goto("/terminal");
+  await expect(page.locator("#radar .token-contact")).toHaveCount(2);
+  await expect(page.locator("#radar-tabs button").filter({hasText:"Dex paid ads"})).toBeVisible();
 });
 test("fresh filters, radar and responsive execution dock",async({page,isMobile})=>{
   await expect(page.locator("#radar")).toContainText("FRESH");

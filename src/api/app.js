@@ -17,7 +17,7 @@ function createApp(market) {
     "X-Content-Type-Options":"nosniff",
     "X-Frame-Options":"DENY"
   });next();});
-  app.get("/",(_req,res)=>res.sendFile(path.join(__dirname,"../web/dashboard.html")));
+  app.get(["/","/terminal"],(_req,res)=>res.sendFile(path.join(__dirname,"../web/dashboard.html")));
   app.use("/assets",express.static(path.join(__dirname,"../web/assets"),{
     dotfiles:"deny",fallthrough:false,index:false
   }));
