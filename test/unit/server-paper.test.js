@@ -39,6 +39,9 @@ test("server decisions and normalized intents preserve current buy/partial-sale 
   const before=structuredClone(paper);
   await assert.rejects(service.command(paper.account.userId,{...buy,priceUsd:999}),/Invalid paper/);
   assert.deepEqual(paper,before);
+  const closed=await service.command(paper.account.userId,command({type:"sell",mint:MINTS[0],dollars:null,automatic:false}));
+  assert.equal(closed.ok,true);assert.equal(paper.holds[MINTS[0]],undefined);
+  assert.deepEqual(closed.execution.requested,{value:1,mode:"position_fraction",unit:"fraction"});
 });
 test("uncertain browser response retains ID across reload; no second command can pass it",async()=>{
   const {createServerPaper}=await import("../../src/web/assets/js/server-paper.mjs");

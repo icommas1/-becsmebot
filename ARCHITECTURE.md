@@ -1,12 +1,13 @@
 # Architecture
 
-BecsBot is a single Node/Express service serving a vanilla HTML/CSS/JavaScript terminal. It reads Jupiter market data and DexScreener discovery membership and simulates trades in browser storage. It has no login, wallet signer or real execution engine.
+BecsBot is a single Node/Express service serving a vanilla HTML/CSS/JavaScript terminal. It reads Jupiter market data and DexScreener discovery membership and simulates trades in browser storage, with an optional private GitHub-authenticated PostgreSQL paper account. It has no wallet signer or real execution engine.
 
 ## Repository layout
 
 | Location | Responsibility |
 | --- | --- |
 | `src/basket.js` | Stable Railway entry point, environment and scan timer |
+| `src/paper/` | Optional GitHub authentication, bounded sessions and PostgreSQL paper transactions |
 | `src/api/app.js` | HTTP routes, limits, fixed static assets and errors |
 | `src/api/schemas.json` | Draft-07 request, response and upstream contracts |
 | `src/api/validation.js` | Strict Ajv validators and canonical Solana mint checks |
@@ -88,13 +89,13 @@ Ajv compiles schemas in strict mode without coercion or mutation. Upstream token
 | Holders | Positive finite Jupiter `holderCount`; no separate holder service is queried |
 | Launch source | Membership in configured Tokens V2 category feeds or DexScreener discovery feeds plus optional Jupiter `launchpad` metadata |
 | Wallet signals | Not implemented; no wallet history is fetched or scored |
-| Positions | Browser-local simulated holds in `becsPaperV1`; there is no server or live position store |
+| Positions | Browser-local `becsPaperV1`, or the signed-in paper account in PostgreSQL; no live positions |
 
 When multiple feeds describe one mint, feeds and ranks accumulate. Later merged non-empty fields can update metadata, while the row's price timestamp remains tied to the feed that actually supplied its retained price. This ordering is an implementation detail, not a promise that any category is globally authoritative.
 
 ## Execution and UI
 
-Browser `becsPaperV1` storage owns cash, holdings, settings, activity and buy-once records. Auto resets to off on reload. Charts and market scans continue on the server when a phone closes; paper auto requires the page to remain active. iOS background suspension can pause it. Settings migration preserves cash and holds. There is no cross-device wallet synchronization.
+Browser `becsPaperV1` storage owns cash, holdings, settings, activity and buy-once records. Auto resets to off on reload. Charts and market scans continue on the server when a phone closes; paper auto requires the page to remain active. iOS background suspension can pause it. Settings migration preserves cash and holds. The optional server account synchronizes committed state on refresh; the separate local wallet does not synchronize.
 
 The Performance panel reads only this browser's paper sale activity. New sale entries record proportional USD cost basis (including entry fees), net proceeds (after the exit fee), realized USD P/L and the position's entry market cap. Each partial exit is one sale; sale returns divide its realized P/L by that sale's basis. The panel can filter manual and automatic sales, shows net P/L, winning-sale percentage and median return, and plots sales with a known positive entry cap. Existing older activity entries do not contain a cost basis and are excluded from those statistics, while the separately labeled ledger realized total still includes them. Activity remains bounded to the newest 500 entries and resetting the local paper wallet clears it. No backtest, market-wide edge ranking, predictive recommendation or automatic setting change is inferred from these observations.
 
@@ -106,29 +107,54 @@ The Feeds panel labels each configured source as Reporting, Delayed or Pending a
 
 ### Strategy and execution boundary
 
-The production paper path is:
+The default local paper path is:
 
 `Radar / Signals -> DecisionEngine -> OrderIntent -> PaperExecutor -> browser-local paper ledger`.
 
 The modules under `trading/` do not require the DOM, browser storage, provider clients or network access. They can also be imported by Node. The decision engine evaluates the existing launch filters, selected auto source, buy-once history and optional multiple target against input snapshots. It returns no action or intent(s), without modifying cash, positions, activity or exit flags. The strategy identifier is `launch-v1`, version `1`; the strategy and its thresholds are unchanged.
 
-An OrderIntent contains a UUID `intentId`, independent `userId` and `accountId`, strategy ID/version, creation time, asset identifier, side, quantity with mode/unit, market/reduce-only/cap constraints, and decision reason/source. Dollar requests use `quote`/`USD`; percentage exits use `position_fraction`/`fraction`. Intents carry no provider routes, transaction objects, keys, RPC details, fees or fill prices. A retry retains the original intent ID. A browser-local receipt journal protects recent paper fills; server-side duplicate protection and pending-order persistence remain deferred. This synchronous paper phase must not be reused as a live execution queue.
+An OrderIntent contains a UUID `intentId`, independent `userId` and `accountId`, strategy ID/version, creation time, asset identifier, side, quantity with mode/unit, market/reduce-only/cap constraints, and decision reason/source. Dollar requests use `quote`/`USD`; percentage exits use `position_fraction`/`fraction`. Intents carry no provider routes, transaction objects, keys, RPC details, fees or fill prices. A retry retains the original intent ID. A browser-local receipt journal protects recent local fills. The optional server path adds transactional duplicate protection and tab-local pending command persistence. This synchronous paper phase must not be reused as a live execution queue.
 
-An Executor implements `execute(intent, marketContext) -> ExecutionResult`. PaperExecutor validates ownership and paper mode before touching its supplied ledger, checks fill data, and owns impact, extra fees, reserve checks, proportional cost basis, position changes, realized P/L and one-time target-exit flags. It returns requested quantity separately from filled token/quote quantities, fill price, USD fees, status/rejection reason and creation/completion timestamps. The existing price cache and UI messages use a thin compatibility adapter. Filled execution results are retained with intent signatures in the browser-local paper ledger; they are not exposed over HTTP.
+An Executor implements `execute(intent, marketContext) -> ExecutionResult`. PaperExecutor validates ownership and paper mode before touching its supplied ledger, checks fill data, and owns impact, extra fees, reserve checks, proportional cost basis, position changes, realized P/L and one-time target-exit flags. It returns requested quantity separately from filled token/quote quantities, fill price, USD fees, status/rejection reason and creation/completion timestamps. The existing price cache and UI messages use a thin compatibility adapter. Filled execution results are retained with intent signatures in the browser-local paper ledger; the optional authenticated server account returns its own results over HTTP.
 
 The journal keeps the most recent 500 filled intents, in the same `becsPaperV1` JSON save as cash and holdings. An exact retry returns a copy of its original result without needing a fresh mark or mutating the ledger. Reusing its ID with changed intent fields is rejected. Rejected attempts are not recorded, so a transient failure can retry with the same ID. Existing paper ledgers migrate with an empty journal and retain their cash, holds, activity and account identity. Wallet reset clears the journal. Evicted receipts cannot protect older sale intents; this bounded browser feature is not a durable, cross-device or live-order idempotency guarantee.
 
 The executor also rejects malformed or absent market contexts and invalid browser-ledger structures before mutation. Invalid sale holdings cannot turn cost basis or realized P/L into non-finite numbers. This is a fail-closed check on the existing paper path; it does not add an order route or change eligibility for valid ledgers.
 
-Each local ledger now carries an `account` with independent random local user and paper account IDs and an explicit execution mode. Existing `becsPaperV1` data migrates without changing cash, holds, settings, activity or buy-once records; save/reload preserves IDs, reload still disables auto, and resetting balances retains account identity. Executor instances receive their account and ledger explicitly; no singleton balance or position map is used. The current browser still exposes only one local ledger. These IDs express ownership within that ledger; they are not authenticated identities or cross-device isolation. Authentication and account-scoped server persistence must precede any real multi-user product.
+Each local ledger now carries an `account` with independent random local user and paper account IDs and an explicit execution mode. Existing `becsPaperV1` data migrates without changing cash, holds, settings, activity or buy-once records; save/reload preserves IDs, reload still disables auto, and resetting balances retains account identity. Executor instances receive their account and ledger explicitly; no singleton balance or position map is used. The current browser still exposes only one local ledger. These IDs express ownership within that ledger; they are not authenticated identities or cross-device isolation. The optional server account uses authenticated ownership instead. Full multi-user onboarding remains deferred.
 
 Trading mode belongs to account routing, not strategy identity or the intent payload. A strategy may describe a request for a future live account, but the only executor implementation is PaperExecutor, which rejects live mode both at construction and execution. There is no LiveExecutor, signing dependency, submission route or mode switch that enables real trading. A future live guard and executor require a separate phase.
 
 The execution boundary is intentionally one-way: the browser can request public market/search/price data, but the server exposes no signing route. Compatibility paths under `/api/sell` and `/api/pause` always return 410. Tests replace provider access with fixtures and assert that paper actions do not call those paths.
 
+### Optional authenticated server paper account
+
+`Authenticated command -> server market snapshot + shared DecisionEngine -> normalized OrderIntent -> PaperExecutor -> PostgreSQL transaction`.
+
+Configuration lives in `src/paper/config.js` and `.env.example`; trading defaults remain in `paper-wallet.mjs`. `PAPER_ACCOUNTS_ENABLED` defaults off and requires a database URL, HTTPS public origin, GitHub OAuth client credentials and one allowed numeric GitHub user ID when enabled. See [SERVER_PAPER_SETUP.md](SERVER_PAPER_SETUP.md).
+
+GitHub login uses state, a browser-bound HttpOnly Secure SameSite=Lax cookie, one-use database-backed PKCE and an owner allowlist. No GitHub repository scope is requested. OAuth tokens are not retained. Random session tokens are stored only as hashes in PostgreSQL, expire after seven days and are bounded to ten per user. Auth flows expire after ten minutes and are bounded to 100. Mutating routes require the authenticated owner and the exact configured Origin. Client account IDs, marks, ledger objects and execution modes are rejected by strict request schemas.
+
+The first sign-in creates a separate 0.4 simulated SOL paper account. No client ledger is imported and `becsPaperV1` is never overwritten while signed in. The browser retains presentation and page-local auto scheduling; the backend reevaluates the existing strategy with server-owned settings and market data. Sell all remains a full-position fraction intent; dollar sales retain their cap and fee behavior. Account settings, cash adjustment and reset use optimistic revision checks to avoid stale edits overwriting newer state.
+
+Each command locks its account row. Its balance/hold changes and successful request receipt commit together; rollback removes both. Exact retries return the original execution result and latest account state before market access. A changed payload with the same ID rejects. The latest 500 successful command receipts are retained, including cash/settings/reset commands. Pruning advances an account timestamp watermark so expired receipts cannot execute again after eviction or reset; equal-timestamp requests can conservatively expire. New requests are bounded to 24 hours with 30 seconds of future-clock tolerance. Rejected attempts are not retained. Ledger JSON is bounded to 5 MiB; pool/HTTP concurrency, waits and external reads are bounded. This remains paper-only, not an asynchronous live order queue.
+
+The browser persists one unresolved command per tab in session storage before sending it. An uncertain response keeps its original ID across reload; the user retries explicitly. A server failure never routes a signed-in trade through local execution. Closing the tab can discard its pending command; committed server state remains. State refreshes every 15 seconds, and auto remains off after reload. No server-side scheduled trading or automatic local-ledger migration is implemented.
+
+| Route | Behavior |
+| --- | --- |
+| `GET /api/paper/capabilities` | Feature availability, no private account data |
+| `GET /api/auth/status` | Session status, only when enabled |
+| `GET /api/auth/github`, `GET /api/auth/github/callback` | GitHub sign-in and one-use callback |
+| `POST /api/auth/logout` | Same-origin session revocation |
+| `GET /api/paper/account` | Authenticated owner's current paper account/revision |
+| `POST /api/paper/commands` | Strict paper buy/sell/settings/cash/reset command, no live mode |
+
+The existing market health route does not certify database health. When disabled, account and auth routes are absent. Enabling with missing credentials fails startup rather than weakening authentication. Database schema creation is lazy and additive; persistent storage and backup operations belong to Railway administration. The PostgreSQL volume is separate from `/app/data` chart history.
+
 ## Verification and delivery
 
-CI runs syntax/schema checks and unit/integration tests on Node 22/24, plus iPhone WebKit, mobile Chromium and desktop Chromium using a local fixture server. Failures retain traces/screenshots for seven days. No test needs a production API key.
+CI runs syntax/schema checks and unit/integration tests with a disposable PostgreSQL 18 service on Node 22/24, plus iPhone WebKit, mobile Chromium and desktop Chromium using a local fixture server. Failures retain traces/screenshots for seven days. No test needs a production API key.
 
 The Railway workflow runs after pushes to main, manually, and every six hours. It makes only nine GET requests per attempt, allows deployment warm-up retries, validates contracts including bounded chart history, confirms all nineteen configured feeds, a recent scan, disabled live trading and terminal/asset availability. Provider freshness is reported separately so a provider outage is not misclassified as a BecsBot process outage; strict market-data readiness is available through `SMOKE_REQUIRE_MARKET_DATA=1`. It does not send orders, change settings or buy a developer plan. Dependabot opens weekly npm and Actions update PRs; updates are not automatically merged.
 

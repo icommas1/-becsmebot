@@ -24,11 +24,20 @@ test("PostgreSQL: concurrent fills, restart/replay, rollback, bounded eviction, 
     await assert.rejects(service.command(owner,{...sale,dollars:2}),{status:409});
     ledger=await store.read(owner);assert.equal(ledger.revision,2);
     const before=structuredClone(ledger);
+    const old=cmd({type:"buy",mint:MINTS[1],amount:1,automatic:false,feed:"recent"});old.createdAt=new Date(Date.now()-86400001).toISOString();
+    await assert.rejects(service.command(owner,old),{status:409});
+    await assert.rejects(service.command(owner,{...old,createdAt:new Date(Date.now()+60000).toISOString()}),{status:409});
     await assert.rejects(store.command(owner,cmd({}),"failure",async paper=>{paper.cashSol=0;throw Error("simulated interruption");}),/interruption/);
     assert.deepEqual(await store.read(owner),before);
+    // A rejected order leaves no receipt, so the same ID can retry after recovery.
+    const retry=cmd({type:"buy",mint:MINTS[1],amount:1,automatic:false,feed:"recent"});
+    const unavailable=createPaperService({store,market:{terminalSnapshot:()=>({...market.terminalSnapshot(),solPriceAt:null})}});
+    assert.equal((await unavailable.command(owner,retry)).ok,false);
+    assert.equal((await service.command(owner,retry)).ok,true);
+    ledger=await store.read(owner);
     // Force receipt insertion failure AFTER ledger UPDATE to prove database rollback.
     await assert.rejects(store.command(owner,cmd({}),null,async paper=>{paper.cashSol=0;return {ok:true};}));
-    assert.deepEqual(await store.read(owner),before);
+    assert.deepEqual(await store.read(owner),ledger);
     const invalid=cmd({type:"buy",mint:MINTS[0],amount:1,automatic:false,feed:"recent",userId:other});
     await assert.rejects(service.command(owner,invalid),{status:400});
     await assert.rejects(service.command(owner,cmd({type:"cash",cashSol:1,revision:0})),{status:409});

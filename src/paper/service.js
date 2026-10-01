@@ -50,7 +50,7 @@ function createPaperService({store,market}) {
         if(input.automatic&&(input.dollars!==1||!decisions.autoExitCandidates({enabled:true,positions:paper.holds,
           settings:paper.settings,prices:{[input.mint]:mark}}).some(h=>h.mint===input.mint)))
           return {ok:false,message:"Paper target exit is not eligible."};
-        decision=decisions.decideSale({account:paper.account,positions:paper.holds,mint:input.mint,dollars:input.dollars,automatic:input.automatic,now});
+        decision=decisions.decideSale({account:paper.account,positions:paper.holds,mint:input.mint,pct:100,dollars:input.dollars,automatic:input.automatic,now});
       }
       if(!decision.intents.length)return {ok:false,message:decision.message};
       const request=decision.intents[0];

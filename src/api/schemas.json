@@ -1130,7 +1130,10 @@
               "format": "solana-mint"
             },
             "dollars": {
-              "type": "number",
+              "type": [
+                "number",
+                "null"
+              ],
               "exclusiveMinimum": 0,
               "maximum": 1000000000000.0
             },
