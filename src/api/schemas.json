@@ -1070,7 +1070,7 @@
             "amount": {
               "type": "number",
               "exclusiveMinimum": 0,
-              "maximum": 1000000000000.0
+              "maximum": 1000000000000
             },
             "automatic": {
               "type": "boolean"
@@ -1135,7 +1135,7 @@
                 "null"
               ],
               "exclusiveMinimum": 0,
-              "maximum": 1000000000000.0
+              "maximum": 1000000000000
             },
             "automatic": {
               "type": "boolean"
@@ -1173,18 +1173,18 @@
                 "betUsd": {
                   "type": "number",
                   "minimum": 0,
-                  "maximum": 1000000000000.0,
+                  "maximum": 1000000000000,
                   "exclusiveMinimum": 0
                 },
                 "reserveSol": {
                   "type": "number",
                   "minimum": 0,
-                  "maximum": 1000000000000.0
+                  "maximum": 1000000000000
                 },
                 "feeSol": {
                   "type": "number",
                   "minimum": 0,
-                  "maximum": 1000000000000.0
+                  "maximum": 1000000000000
                 },
                 "impactPct": {
                   "type": "number",
@@ -1194,32 +1194,32 @@
                 "minLiquidity": {
                   "type": "number",
                   "minimum": 0,
-                  "maximum": 1000000000000.0
+                  "maximum": 1000000000000
                 },
                 "minCap": {
                   "type": "number",
                   "minimum": 0,
-                  "maximum": 1000000000000.0
+                  "maximum": 1000000000000
                 },
                 "maxCap": {
                   "type": "number",
                   "minimum": 0,
-                  "maximum": 1000000000000.0
+                  "maximum": 1000000000000
                 },
                 "minAge": {
                   "type": "number",
                   "minimum": 0,
-                  "maximum": 1000000000000.0
+                  "maximum": 1000000000000
                 },
                 "maxAge": {
                   "type": "number",
                   "minimum": 0,
-                  "maximum": 1000000000000.0
+                  "maximum": 1000000000000
                 },
                 "minHolders": {
                   "type": "number",
                   "minimum": 0,
-                  "maximum": 1000000000000.0
+                  "maximum": 1000000000000
                 },
                 "minOrganicScore": {
                   "type": "number",
@@ -1229,12 +1229,12 @@
                 "minVolume": {
                   "type": "number",
                   "minimum": 0,
-                  "maximum": 1000000000000.0
+                  "maximum": 1000000000000
                 },
                 "exitMultiple": {
                   "type": "number",
                   "minimum": 0,
-                  "maximum": 1000000000000.0
+                  "maximum": 1000000000000
                 }
               }
             },
@@ -1271,7 +1271,7 @@
             "cashSol": {
               "type": "number",
               "minimum": 0,
-              "maximum": 1000000000000.0
+              "maximum": 1000000000000
             },
             "revision": {
               "type": "integer",
@@ -1306,7 +1306,7 @@
             "cashSol": {
               "type": "number",
               "minimum": 0,
-              "maximum": 1000000000000.0
+              "maximum": 1000000000000
             },
             "revision": {
               "type": "integer",
@@ -1316,6 +1316,183 @@
           }
         }
       ]
+    },
+    "walletIntelProvider": {
+      "type": "object",
+      "properties": {
+        "enabled": {
+          "type": "boolean"
+        },
+        "records": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 100
+        },
+        "lastSuccessAt": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "format": "date-time"
+        },
+        "lastError": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "maxLength": 300
+        }
+      },
+      "required": [
+        "enabled",
+        "records",
+        "lastSuccessAt",
+        "lastError"
+      ],
+      "additionalProperties": false
+    },
+    "walletIntelToken": {
+      "type": "object",
+      "properties": {
+        "mint": {
+          "type": "string",
+          "format": "solana-mint"
+        },
+        "symbol": {
+          "type": "string",
+          "maxLength": 32
+        },
+        "buys": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "sells": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "buyUsd": {
+          "type": "number",
+          "minimum": 0
+        },
+        "sellUsd": {
+          "type": "number",
+          "minimum": 0
+        },
+        "netUsd": {
+          "type": "number"
+        },
+        "uniqueWallets": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 100
+        },
+        "categories": {
+          "type": "array",
+          "items": {
+            "enum": [
+              "fund",
+              "smart_trader",
+              "smart_30d",
+              "smart_90d",
+              "smart_180d",
+              "whale",
+              "new_token_specialist",
+              "early_memecoin_trader"
+            ]
+          },
+          "uniqueItems": true,
+          "maxItems": 8
+        },
+        "platforms": {
+          "type": "array",
+          "items": {
+            "enum": [
+              "trojan",
+              "bullx",
+              "photon",
+              "gmgn",
+              "maestro",
+              "bloom",
+              "blood",
+              "jupiter",
+              "phantom"
+            ]
+          },
+          "uniqueItems": true,
+          "maxItems": 9
+        },
+        "lastTradeAt": {
+          "type": "string",
+          "format": "date-time"
+        }
+      },
+      "required": [
+        "mint",
+        "symbol",
+        "buys",
+        "sells",
+        "buyUsd",
+        "sellUsd",
+        "netUsd",
+        "uniqueWallets",
+        "categories",
+        "platforms",
+        "lastTradeAt"
+      ],
+      "additionalProperties": false
+    },
+    "walletIntelResponse": {
+      "type": "object",
+      "properties": {
+        "enabled": {
+          "type": "boolean"
+        },
+        "updatedAt": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "format": "date-time"
+        },
+        "lastError": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "maxLength": 300
+        },
+        "running": {
+          "type": "boolean"
+        },
+        "providers": {
+          "type": "object",
+          "properties": {
+            "nansen": {
+              "$ref": "#/definitions/walletIntelProvider"
+            }
+          },
+          "required": [
+            "nansen"
+          ],
+          "additionalProperties": false
+        },
+        "tokens": {
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/walletIntelToken"
+          },
+          "maxItems": 500
+        }
+      },
+      "required": [
+        "enabled",
+        "updatedAt",
+        "lastError",
+        "running",
+        "providers",
+        "tokens"
+      ],
+      "additionalProperties": false
     }
   }
 }
