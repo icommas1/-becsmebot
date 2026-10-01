@@ -189,3 +189,55 @@ test("Dex paid source selection filters Radar and Signals, survives reload and s
  await expect(page.locator("#paper-holds")).toContainText("HEAT");
  await expect(page.locator("#paper-holds")).not.toContainText("FRESH");
 });
+
+test("mobile refresh preserves the swiped card and panel position",async({page,isMobile})=>{
+ test.skip(!isMobile,"Horizontal contacts apply to mobile layouts");
+ const deck=page.locator("#radar"),panel=page.locator(".radar-panel");
+ await deck.locator(".token-contact").nth(1).evaluate(el=>el.scrollIntoView({block:"nearest",inline:"start"}));
+ await expect.poll(()=>deck.evaluate(el=>el.scrollLeft)).toBeGreaterThan(10);
+ const before=await deck.evaluate(el=>el.scrollLeft),top=await panel.evaluate(el=>el.scrollTop);
+ const response=page.waitForResponse(r=>r.url().endsWith("/api/basket"));
+ // Dispatching the page's normal refresh event avoids scrolling to its offscreen header.
+ await page.locator("#refresh").evaluate(el=>el.click());await response;
+ await expect(page.locator("#refresh")).toBeEnabled();
+ await expect.poll(async()=>Math.abs(await deck.evaluate(el=>el.scrollLeft)-before)).toBeLessThanOrEqual(2);
+ await expect.poll(async()=>Math.abs(await panel.evaluate(el=>el.scrollTop)-top)).toBeLessThanOrEqual(2);
+ // A launch inserted between the first and viewed token must keep that token in view.
+ const payload=await(await page.request.get("/api/basket")).json();
+ const between=(Date.parse(payload.radar.find(row=>row.mint===MINTS[0]).createdAt)+
+   Date.parse(payload.radar.find(row=>row.mint===MINTS[1]).createdAt))/2;
+ payload.radar=payload.radar.map(row=>row.mint===MINTS[2]?{...row,marketCap:50000,
+   createdAt:new Date(between).toISOString()}:row);
+ payload.lastScanAt=new Date().toISOString();
+ const heat=deck.locator('[data-mint="'+MINTS[1]+'"]');
+ const offset=await heat.evaluate(el=>el.getBoundingClientRect().left-el.parentElement.getBoundingClientRect().left);
+ await page.route("**/api/basket",route=>route.fulfill({json:payload}));
+ const changed=page.waitForResponse(r=>r.url().endsWith("/api/basket"));
+ await page.locator("#refresh").evaluate(el=>el.click());await changed;
+ await expect(page.locator("#refresh")).toBeEnabled();
+ await expect(deck.locator(".token-contact")).toHaveCount(3);
+ await expect.poll(async()=>Math.abs(await heat.evaluate(el=>el.getBoundingClientRect().left-el.parentElement.getBoundingClientRect().left)-offset)).toBeLessThanOrEqual(2);
+ await page.getByRole("button",{name:"Dex profiles",exact:true}).click();
+ await expect.poll(()=>deck.evaluate(el=>el.scrollLeft)).toBe(0);
+});
+test("mobile token details close reliably after refresh and dismiss on the backdrop",async({page,isMobile})=>{
+ test.skip(!isMobile,"Bottom sheets apply to mobile layouts");
+ await page.locator("#radar").getByRole("button",{name:"HEAT",exact:true}).click();
+ const sheet=page.locator("#token-sheet");await expect(sheet).toBeVisible();
+ await sheet.evaluate(el=>{el.style.maxHeight="240px";el.scrollTop=100;});
+ const sheetTop=await sheet.evaluate(el=>el.scrollTop);
+ expect(sheetTop).toBeGreaterThan(0);
+ const response=page.waitForResponse(r=>r.url().endsWith("/api/basket"));
+ await page.locator("#refresh").evaluate(el=>el.click());await response;
+ await expect(page.locator("#refresh")).toBeEnabled();
+ await expect.poll(()=>sheet.evaluate(el=>el.scrollTop)).toBeCloseTo(sheetTop,0);
+ await page.getByRole("button",{name:"Close token details",exact:true}).click();
+ await expect(sheet).not.toBeVisible();await expect(page.locator("#dock-token")).toBeFocused();
+ await page.locator("#dock-token").click();await expect(sheet).toBeVisible();
+ const bounds=await sheet.boundingBox();
+ await page.mouse.click(10,Math.max(1,bounds.y-20));
+ await expect(sheet).not.toBeVisible();await expect(page.locator("#dock-token")).toBeFocused();
+ await page.locator("#radar").getByRole("button",{name:"FRESH",exact:true}).click();
+ await expect(sheet).toBeVisible();await expect.poll(()=>sheet.evaluate(el=>el.scrollTop)).toBe(0);
+ await page.getByRole("button",{name:"Close token details",exact:true}).click();
+});

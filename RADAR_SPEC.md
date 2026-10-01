@@ -20,7 +20,7 @@ The selected topic and interval control membership before ranking/pagination. Ra
 
 ## Visual mapping
 
-Desktop: left signal rail, central literal radar and compact contacts, right paper/execution module, bottom activity tape and persistent execution dock. Mobile: bottom navigation, horizontal snap/swipe contacts, native detail sheet, sticky 44px execution controls. Do not shrink a desktop table into the phone viewport.
+Desktop: left signal rail, central literal radar and compact contacts, right paper/execution module, bottom activity tape and persistent execution dock. Mobile: bottom navigation, horizontal snap/swipe contacts, native detail sheet, sticky 44px execution controls. Refreshes preserve the visible card by mint and panel scroll; source/filter/search/sort/page changes reset the card deck. Details preserve their scroll during refresh, have a labeled 48px close button and dismiss from the backdrop. Closing restores dock focus without scrolling. Do not shrink a desktop table into the phone viewport.
 
 Mint-derived deterministic bearings prevent dots from randomly moving at every render. Radius encodes age with small deterministic spacing jitter; dot size represents the heuristic activity strength. It is not location, an execution price or a wallet quality score. A sweep provides visual instrumentation; `SCANNING` is tied to the server's running flag, `DELAYED` to feed errors, and the normal label states `REST / 60s`. Reduced motion disables animation.
 

@@ -13,9 +13,12 @@ export function createRadarView({document,getState,actions}) {
       " · MC "+(settings.maxCap?"≤"+usd(settings.maxCap):"any")+" · liquidity ≥"+usd(settings.minLiquidity);
   }
 
+  let radarContext=null;
+
   function tokenCard(row) {
     const {paper,prices,priceTimes,radarUi,selectedMint,trail}=getState();
     const card=node(document,"article","token-contact"+(selectedMint===row.mint?" selected":""));
+    card.dataset.mint=row.mint;
     const state=stateFor(row,paper),head=node(document,"div","contact-head");
     const select=node(document,"button","contact-select",row.symbol);select.type="button";select.onclick=()=>actions.selectToken(row);
     head.append(select,node(document,"span","state state-"+state.toLowerCase(),stateIcon(state)+" "+state),strengthBars(document,row));card.append(head);
@@ -56,7 +59,16 @@ export function createRadarView({document,getState,actions}) {
   }
 
   function renderRadar() {
-    const state=getState(),{paper,radarUi,snapshot,searchRows,searchStatus}=state,box=$("radar");box.replaceChildren();
+    const state=getState(),{paper,radarUi,snapshot,searchRows,searchStatus}=state,box=$("radar");
+    const panel=box.closest(".radar-panel"),panelTop=panel.scrollTop;
+    const bounds=box.getBoundingClientRect(),left=bounds.left,scrollLeft=box.scrollLeft;
+    const visible=[...box.children].reduce((best,card)=>{
+      if(!card.dataset.mint)return best;
+      const rect=card.getBoundingClientRect();
+      const width=Math.min(rect.right,bounds.right)-Math.max(rect.left,bounds.left);
+      return width>(best?.width||0)?{card,width,left:rect.left}:best;
+    },null);
+    const anchor=visible?{mint:visible.card.dataset.mint,offset:visible.left-left}:null;
     const query=$("radar-search").value.trim().toLowerCase(),feed=selectedFeed(radarUi);
     const allRows=query?[...new Map([...(snapshot?.radar||[]),...searchRows].map(row=>[row.mint,row])).values()]:(snapshot?.radar||[]);
     const candidates=allRows.filter(row=>query?(row.symbol.toLowerCase().includes(query)||row.name.toLowerCase().includes(query)||row.mint.toLowerCase().includes(query)):matchesTopic(row,radarUi));
@@ -64,12 +76,21 @@ export function createRadarView({document,getState,actions}) {
     rows.sort((a,b)=>{const x=sortValue(a,radarUi),y=sortValue(b,radarUi);if(x==null)return y==null?0:1;if(y==null)return -1;return (x-y)*(radarUi.direction==="desc"?-1:1);});
     const size=[10,20,50].includes(Number(radarUi.pageSize))?Number(radarUi.pageSize):20;
     const pages=Math.max(1,Math.ceil(rows.length/size)),page=Math.min(state.radarPage,pages-1);actions.setRadarPage(page);
+    const context=JSON.stringify([feed,query,radarUi.sort,radarUi.direction,radarUi.source,size,page,paper.settings]);
+    const keepPosition=context===radarContext;
+    radarContext=context;
+    box.replaceChildren();
     const feedInfo=snapshot?.feeds?.[feed];
     $("radar-count").textContent=rows.length+" matches · "+(candidates.length-rows.length)+" filtered out"+(feedInfo?.error?" · feed delayed":"");
     $("page-label").textContent="Page "+(page+1)+" of "+pages;$("previous").disabled=page===0;$("next").disabled=page>=pages-1;
     for(const row of rows.slice(page*size,(page+1)*size))box.append(tokenCard(row));
     if(!rows.length)box.append(node(document,"p","empty-state",query&&(searchStatus==="Searching Jupiter…"||searchStatus.startsWith("Search:"))?searchStatus:feedInfo?.error?"Feed delayed: "+feedInfo.error:"No fresh launches match these filters. Adjust Launch filters above."));
+    // Removing every card resets horizontal scroll in WebKit. Restore the visible
+    // mint after a refresh, even if fresh launches changed its position in the list.
+    const sameCard=keepPosition&&anchor?[...box.children].find(card=>card.dataset.mint===anchor.mint):null;
+    box.scrollLeft=keepPosition?(sameCard?box.scrollLeft+sameCard.getBoundingClientRect().left-left-anchor.offset:scrollLeft):0;
     renderInstrument(rows.slice(0,40));
+    panel.scrollTop=panelTop;
     $("radar-source").disabled=radarUi.tab.startsWith("dex:");
     for(const button of $("radar-tabs").children){button.className=button.dataset.tab===radarUi.tab?"selected":"";button.setAttribute("aria-pressed",String(button.dataset.tab===radarUi.tab));}
     $("sort-direction").textContent=radarUi.sort==="age"?(radarUi.direction==="asc"?"Newest first":"Oldest first"):(radarUi.direction==="desc"?"Highest first ↓":"Lowest first ↑");
