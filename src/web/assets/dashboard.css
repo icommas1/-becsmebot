@@ -92,3 +92,5 @@ body{grid-template-areas:"head" "main" "tape" "dock" "nav";grid-template-rows:49
 
 
 #sheet-close{min-width:72px;min-height:48px;font-size:14px;touch-action:manipulation}
+
+.token-sheet .sheet-top{position:sticky;top:0;z-index:1;background:#0c1b20}

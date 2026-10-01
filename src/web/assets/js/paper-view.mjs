@@ -56,9 +56,11 @@ export function createPaperView({document,getState,actions}) {
     if($("token-sheet").open)renderSheet();
   }
 
+  let sheetMint=null;
   function renderSheet() {
     const {paper,dockAmount,trail}=getState(),row=actions.currentToken();if(!row)return;
-    const sheet=$("token-sheet"),scrollTop=sheet.scrollTop;
+    const sheet=$("token-sheet"),scrollTop=sheetMint===row.mint?sheet.scrollTop:0;
+    sheetMint=row.mint;
     const signal=stateFor(row,paper);$("sheet-title").textContent=row.symbol+" / "+stateIcon(signal)+" "+signal;
     const box=$("sheet-content");box.replaceChildren();box.append(node(document,"p","",row.name||row.symbol),
       node(document,"p","contact-meta",ageText(row)+" · "+(row.launchpad||"Jupiter")+" · "+(row.isVerified?"Verified":"Unverified")),
