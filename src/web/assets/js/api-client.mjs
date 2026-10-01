@@ -1,25 +1,37 @@
-export function createApiClient(fetchImpl=globalThis.fetch) {
+export function createApiClient(fetchImpl=globalThis.fetch,{timeoutMs=60000}={}) {
   const conditionalCache=new Map();
+  async function request(url,options,read) {
+    const controller=new AbortController();
+    const timer=setTimeout(()=>controller.abort(),timeoutMs);
+    try {
+      return await read(await fetchImpl(url,{...options,credentials:"same-origin",signal:controller.signal}));
+    } catch(error) {
+      if(controller.signal.aborted)throw Error("Market request timed out. Try refreshing.");
+      throw error;
+    } finally {clearTimeout(timer);}
+  }
   async function call(url,options={}) {
-    const response=await fetchImpl(url,{...options,credentials:"same-origin"});
-    if(!response.ok) {
-      const body=await response.json().catch(()=>({}));
-      throw Error(body.error||"Request failed: "+response.status);
-    }
-    return response.json();
+    return request(url,options,async response=>{
+      if(!response.ok) {
+        const body=await response.json().catch(()=>({}));
+        throw Error(body.error||"Request failed: "+response.status);
+      }
+      return response.json();
+    });
   }
   async function conditionalGet(url,key) {
     const cached=conditionalCache.get(key),headers={};
     if(cached?.etag)headers["If-None-Match"]=cached.etag;
-    const response=await fetchImpl(url,{credentials:"same-origin",headers});
-    if(response.status===304&&cached)return cached.value;
-    if(!response.ok) {
-      const body=await response.json().catch(()=>({}));
-      throw Error(body.error||"Request failed: "+response.status);
-    }
-    const value=await response.json();
-    conditionalCache.set(key,{etag:response.headers?.get?.("etag")||null,value});
-    return value;
+    return request(url,{headers},async response=>{
+      if(response.status===304&&cached)return cached.value;
+      if(!response.ok) {
+        const body=await response.json().catch(()=>({}));
+        throw Error(body.error||"Request failed: "+response.status);
+      }
+      const value=await response.json();
+      conditionalCache.set(key,{etag:response.headers?.get?.("etag")||null,value});
+      return value;
+    });
   }
   const paperPrices=mints=>call("/api/paper/prices",{
     method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({mints})

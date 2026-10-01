@@ -92,6 +92,8 @@ When multiple feeds describe one mint, feeds and ranks accumulate. Later merged 
 
 Browser `becsPaperV1` storage owns cash, holdings, settings, activity and buy-once records. Auto resets to off on reload. Charts and market scans continue on the server when a phone closes; paper auto requires the page to remain active. iOS background suspension can pause it. Settings migration preserves cash and holds. There is no cross-device wallet synchronization.
 
+Browser API requests have a 60-second deadline covering both the response and its JSON body. A timeout releases refresh/marking locks through their existing `finally` paths; later refreshes can recover, and successful conditional-response caches are retained. If browser storage is blocked, the terminal still opens with session-only paper state and reports failed saves without replacing that warning with a success message. Search failures appear in the empty Radar state and recover on later queries.
+
 Manual contact actions, dock actions and auto use the same paper accounting functions. Sells require current Price V3 marks; estimated portfolio values may show labeled stale marks. See the radar and signals specs for eligibility and state rules.
 
 ### Strategy and execution boundary
