@@ -1,8 +1,9 @@
 import {compactUsd,num,recentMark,short,usd,tokenPrice} from "./core.mjs";
 import {launchDefaults,normalizeRadarUi,paperReady as rowPaperReady,passes as rowPasses,
   selectedFeed as currentFeed,launchRows as filterLaunchRows} from "./filters.mjs";
-import {freshPaper,loadPaper,recordActivity,savePaper,buyPaper as applyPaperBuy,
-  sellPaper as applyPaperSale,portfolioSummary} from "./paper-wallet.mjs";
+import {freshPaper,loadPaper,recordActivity,savePaper,portfolioSummary} from "./paper-wallet.mjs";
+import {buyPaper as applyPaperBuy,sellPaper as applyPaperSale} from "./trading/paper-pipeline.mjs";
+import {autoBuyCandidates,autoExitCandidates} from "./trading/decision-engine.mjs";
 import {createApiClient} from "./api-client.mjs";
 import {node as createNode} from "./dom.mjs";
 import {createRadarView} from "./radar-view.mjs";
@@ -39,7 +40,7 @@ function passes(row){return rowPasses(row,paper.settings);}
 function selectedFeed(){return currentFeed(radarUi);}
 function launchRows(rows){return filterLaunchRows(rows,paper.settings,radarUi);}
 function buy(row,automatic=false,amount=paper.settings.betUsd){
-  const result=applyPaperBuy({paper,row,amount,automatic,solRate:solUsd(),eligible:passes(row),feed:selectedFeed()});
+  const result=applyPaperBuy({paper,row,amount,automatic,solRate:solUsd(),feed:selectedFeed()});
   if(!result.ok)return message(result.message);
   prices[row.mint]=result.priceRecord;save();render();if(result.message)message(result.message);
 }
@@ -68,13 +69,13 @@ async function refreshPrices(force=false) {
   }catch(error){message("Paper price update: "+error.message);}
   finally{marking=false;}
 }
-function runAutoBuys() {if(paper.auto)for(const row of launchRows(snapshot?.radar||[]))if(!paper.bought[row.mint])buy(row,true);}
+function runAutoBuys() {
+  for(const row of autoBuyCandidates({enabled:paper.auto,rows:snapshot?.radar||[],settings:paper.settings,
+    radarUi,enteredAssets:paper.bought}))buy(row,true);
+}
 function runAutoExits() {
-  if(!paper.auto||paper.settings.exitMultiple<=1)return;
-  for(const h of Object.values(paper.holds))if(num(prices[h.mint]?.priceUsd)/h.entryPrice>=paper.settings.exitMultiple&&!h.autoExited) {
-    const before=h.qty;sellPaper(h.mint,100,1,true);
-    if(h.qty<before&&paper.holds[h.mint])paper.holds[h.mint].autoExited=true;
-  }
+  for(const hold of autoExitCandidates({enabled:paper.auto,positions:paper.holds,settings:paper.settings,prices}))
+    sellPaper(hold.mint,100,1,true);
 }
 async function refresh() {
   if (refreshing) return;refreshing=true;
@@ -120,7 +121,7 @@ for(const input of document.querySelectorAll("[data-setting]")) {
 }
 $("cash-input").value=paper.cashSol;
 $("set-cash").onclick=()=>{const value=Number($("cash-input").value);if(!Number.isFinite(value)||value<0) return message("Enter a valid SOL amount.");paper.cashSol=value;recordActivity(paper,"adjust","Set paper cash to "+short(value)+" SOL");save();render();message("Paper cash updated.");};
-$("reset-paper").onclick=()=>{if(!confirm("Reset paper holds, history, and bought-once list?"))return;const cash=Number($("cash-input").value);const settings=paper.settings;paper={...freshPaper(),cashSol:Number.isFinite(cash)&&cash>=0?cash:.4,settings};prices={};priceTimes={};save();render();message("Paper wallet reset.");};
+$("reset-paper").onclick=()=>{if(!confirm("Reset paper holds, history, and bought-once list?"))return;const cash=Number($("cash-input").value);const settings=paper.settings,account=paper.account;paper={...freshPaper(),account,cashSol:Number.isFinite(cash)&&cash>=0?cash:.4,settings};prices={};priceTimes={};save();render();message("Paper wallet reset.");};
 $("fresh-preset").onclick=()=>{Object.assign(paper.settings,launchDefaults);radarUi.tab="recent";radarUi.sort="age";radarUi.direction="asc";$("radar-sort").value="age";radarPage=0;for(const input of document.querySelectorAll("[data-setting]"))input.value=paper.settings[input.dataset.setting];save();saveRadar();render();message("Fresh-launch filters restored.");};
 $("auto").onclick=()=>{paper.auto=!paper.auto;save();render();message(paper.auto?"Auto paper on while this page is open.":"Auto paper off.");runAutoBuys();};
 for(const [tab,label] of [["recent","New launches"],["trending","Trending launches"],["traded","Active launches"],["organic","Organic launches"]]) {

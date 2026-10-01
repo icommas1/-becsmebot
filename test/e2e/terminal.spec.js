@@ -87,6 +87,9 @@ test("one dollar paper buy and sale survive a reload without real orders",async(
   let wallet=await page.evaluate(()=>JSON.parse(localStorage.getItem("becsPaperV1")));
   expect(wallet.holds[MINTS[0]].investedUsd).toBe(1);
   expect(wallet.cashSol).toBeCloseTo(.394995,8);
+  const account=wallet.account;
+  expect(account.executionMode).toBe("paper");
+  expect(account.userId).not.toBe(account.accountId);
   await page.reload();
   await expect(page.locator("#radar .token-contact")).toHaveCount(2);
   await page.locator("#radar").getByRole("button",{name:"FRESH",exact:true}).click();
@@ -94,6 +97,7 @@ test("one dollar paper buy and sale survive a reload without real orders",async(
   await expect(page.locator("#dock-sell")).toBeEnabled();
   await page.locator("#dock-sell").click();
   wallet=await page.evaluate(()=>JSON.parse(localStorage.getItem("becsPaperV1")));
+  expect(wallet.account).toEqual(account);
   expect(wallet.holds[MINTS[0]].qty).toBeCloseTo(50,8);
   expect(wallet.activity[0].sizeUsd).toBe(1);
   expect(wallet.auto).toBe(false);
@@ -110,6 +114,28 @@ test("automatic paper uses the same fresh filters and buys each mint once",async
   await page.getByRole("button",{name:"Refresh data"}).click();
   wallet=await page.evaluate(()=>JSON.parse(localStorage.getItem("becsPaperV1")));
   expect(wallet.activity.filter(a=>a.kind==="buy")).toHaveLength(2);
+});
+test("automatic target exits sell one dollar once and retain ownership on reload",async({page})=>{
+  await page.getByRole("button",{name:"Settings",exact:true}).click();
+  const target=page.locator('[data-setting="exitMultiple"]');
+  await target.fill("2");await target.blur();
+  await page.getByRole("button",{name:"Paper wallet",exact:true}).click();
+  await page.locator("#auto").click();
+  await page.getByRole("button",{name:"Refresh data"}).click();
+  await expect.poll(()=>page.evaluate(()=>JSON.parse(localStorage.getItem("becsPaperV1")).activity.filter(a=>a.kind==="sell").length)).toBe(2);
+  const wallet=await page.evaluate(()=>JSON.parse(localStorage.getItem("becsPaperV1")));
+  for(const hold of Object.values(wallet.holds)) {
+    expect(hold.qty).toBeCloseTo(50,8);expect(hold.autoExited).toBe(true);
+  }
+  expect(wallet.activity.filter(a=>a.kind==="sell").map(a=>a.sizeUsd)).toEqual([1,1]);
+  await page.getByRole("button",{name:"Refresh data"}).click();
+  expect(await page.evaluate(()=>JSON.parse(localStorage.getItem("becsPaperV1")).activity.filter(a=>a.kind==="sell").length)).toBe(2);
+  await page.reload();
+  await expect(page.locator("#radar .token-contact")).toHaveCount(2);
+  await expect.poll(()=>page.evaluate(()=>JSON.parse(localStorage.getItem("becsPaperV1")).auto)).toBe(false);
+  const reloaded=await page.evaluate(()=>JSON.parse(localStorage.getItem("becsPaperV1")));
+  expect(reloaded.account).toEqual(wallet.account);expect(reloaded.auto).toBe(false);
+  expect(Object.values(reloaded.holds).every(hold=>hold.autoExited)).toBe(true);
 });
 test("logo opens and reduced motion disables the scanning animation",async({page})=>{
   await page.emulateMedia({reducedMotion:"reduce"});

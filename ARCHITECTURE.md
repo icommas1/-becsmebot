@@ -21,7 +21,11 @@ BecsBot is a single Node/Express service serving a vanilla HTML/CSS/JavaScript t
 | `src/web/assets/js/dashboard.mjs` | Browser startup, shared state coordination, refresh and event wiring |
 | `src/web/assets/js/core.mjs` | Shared formatting, time and signal-presentation helpers |
 | `src/web/assets/js/filters.mjs` | Radar topic selection, launch eligibility and sort values |
-| `src/web/assets/js/paper-wallet.mjs` | Browser-local persistence, migration and paper accounting |
+| `src/web/assets/js/paper-wallet.mjs` | Browser-local persistence, ownership migration and portfolio reads |
+| `src/web/assets/js/trading/decision-engine.mjs` | Shared, DOM-free strategy decisions and automatic candidate selection |
+| `src/web/assets/js/trading/contracts.mjs` | Account, strategy, provider-neutral OrderIntent and ExecutionResult contracts |
+| `src/web/assets/js/trading/paper-executor.mjs` | Executor implementation, simulated fills, ledger mutations and activity |
+| `src/web/assets/js/trading/paper-pipeline.mjs` | Thin adapter from the existing browser ledger to decision/execution inputs |
 | `src/web/assets/js/api-client.mjs` | Same-origin read and paper-price requests |
 | `src/web/assets/js/dom.mjs` | Safe text nodes, sparklines and activity bars |
 | `src/web/assets/js/radar-view.mjs` | Radar cards/instrument and filtered Signals presentation |
@@ -89,6 +93,22 @@ When multiple feeds describe one mint, feeds and ranks accumulate. Later merged 
 Browser `becsPaperV1` storage owns cash, holdings, settings, activity and buy-once records. Auto resets to off on reload. Charts and market scans continue on the server when a phone closes; paper auto requires the page to remain active. iOS background suspension can pause it. Settings migration preserves cash and holds. There is no cross-device wallet synchronization.
 
 Manual contact actions, dock actions and auto use the same paper accounting functions. Sells require current Price V3 marks; estimated portfolio values may show labeled stale marks. See the radar and signals specs for eligibility and state rules.
+
+### Strategy and execution boundary
+
+The production paper path is:
+
+`Radar / Signals -> DecisionEngine -> OrderIntent -> PaperExecutor -> browser-local paper ledger`.
+
+The modules under `trading/` do not require the DOM, browser storage, provider clients or network access. They can also be imported by Node. The decision engine evaluates the existing launch filters, selected auto source, buy-once history and optional multiple target against input snapshots. It returns no action or intent(s), without modifying cash, positions, activity or exit flags. The strategy identifier is `launch-v1`, version `1`; the strategy and its thresholds are unchanged.
+
+An OrderIntent contains a UUID `intentId`, independent `userId` and `accountId`, strategy ID/version, creation time, asset identifier, side, quantity with mode/unit, market/reduce-only/cap constraints, and decision reason/source. Dollar requests use `quote`/`USD`; percentage exits use `position_fraction`/`fraction`. Intents carry no provider routes, transaction objects, keys, RPC details, fees or fill prices. A retry should retain the original intent ID. Durable duplicate protection and pending-order persistence are deferred; this synchronous paper phase must not be reused as a live execution queue.
+
+An Executor implements `execute(intent, marketContext) -> ExecutionResult`. PaperExecutor validates ownership and paper mode before touching its supplied ledger, checks fill data, and owns impact, extra fees, reserve checks, proportional cost basis, position changes, realized P/L and one-time target-exit flags. It returns requested quantity separately from filled token/quote quantities, fill price, USD fees, status/rejection reason and creation/completion timestamps. The existing price cache and UI messages use a thin compatibility adapter. Execution results are currently returned internally, not persisted as a separate journal or exposed over HTTP.
+
+Each local ledger now carries an `account` with independent random local user and paper account IDs and an explicit execution mode. Existing `becsPaperV1` data migrates without changing cash, holds, settings, activity or buy-once records; save/reload preserves IDs, reload still disables auto, and resetting balances retains account identity. Executor instances receive their account and ledger explicitly; no singleton balance or position map is used. The current browser still exposes only one local ledger. These IDs express ownership within that ledger; they are not authenticated identities or cross-device isolation. Authentication and account-scoped server persistence must precede any real multi-user product.
+
+Trading mode belongs to account routing, not strategy identity or the intent payload. A strategy may describe a request for a future live account, but the only executor implementation is PaperExecutor, which rejects live mode both at construction and execution. There is no LiveExecutor, signing dependency, submission route or mode switch that enables real trading. A future live guard and executor require a separate phase.
 
 The execution boundary is intentionally one-way: the browser can request public market/search/price data, but the server exposes no signing route. Compatibility paths under `/api/sell` and `/api/pause` always return 410. Tests replace provider access with fixtures and assert that paper actions do not call those paths.
 

@@ -42,7 +42,8 @@ test("paper wallet migration preserves holdings and rejects unsafe settings",asy
 test("paper accounting buys and sells the correct position without I/O",async()=>{
   const [_core,_filters,{freshPaper,buyPaper,sellPaper}]=await modules;
   const now=2_000_000_000_000,paper=freshPaper();
-  const row={mint,symbol:"TEST",priceUsd:.01,marketCap:50000,liquidityUsd:5000};
+  const row={mint,symbol:"TEST",priceUsd:.01,marketCap:50000,liquidityUsd:5000,observedAt:now,
+    createdAt:new Date(now-600000).toISOString()};
   const bought=buyPaper({paper,row,amount:1,solRate:200,eligible:true,feed:"recent",now});
   assert.equal(bought.ok,true);assert.equal(paper.holds[mint].qty,100);
   assert.equal(paper.cashSol,.4-(1/200+.000005));assert.equal(paper.activity[0].source,"manual");
