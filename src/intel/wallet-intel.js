@@ -103,7 +103,7 @@ function createWalletIntel({config=walletIntelConfig(),nansenFetch=fetchNansen,n
     try{
       const next=await nansenFetch(config.nansenApiKey);
       events=next;lastSuccessAt=new Date(now()).toISOString();lastError=null;revision++;
-    }catch(error){lastError=error?.message||"Wallet intelligence provider unavailable";}
+    }catch(error){lastError=String(error?.message||"Wallet intelligence provider unavailable").slice(0,300);revision++;}
     finally{running=false;}
     return snapshot();
   }
