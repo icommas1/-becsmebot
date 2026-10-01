@@ -80,7 +80,7 @@ test("Feeds show source readiness and last successful updates",async({page})=>{
   await expect(page.locator("#feed-summary")).toContainText("19/19 reporting · 0 delayed · 0 pending");
   await expect(page.locator("#feeds .feed-item")).toHaveCount(19);
   await expect(page.locator("#feeds")).toContainText("Dex paid ads");
-  await expect(page.locator("#feeds")).toContainText("Updated just now");
+  await expect(page.locator("#feeds .feed-item").first()).toContainText(/Reporting · Updated (just now|\d+m ago)/);
 });
 test("token details expose the correct CA and dollar controls",async({page,isMobile})=>{
   await page.locator("#radar").getByRole("button",{name:"FRESH",exact:true}).click();

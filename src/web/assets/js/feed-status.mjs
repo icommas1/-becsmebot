@@ -29,7 +29,7 @@ export function feedStatus(feeds={},now=Date.now()) {
     const state=feed?.error||valid&&age>300000?"Delayed":valid?"Reporting":"Pending";
     const count=Number.isInteger(feed?.count)&&feed.count>=0?feed.count:0;
     return {name,label:label(name),state,
-      text:label(name)+" · "+count+(state==="Delayed"?" cached":"")+" tokens · "+state+" · "+updated+(feed?.error?" · "+feed.error:"")};
+      text:label(name)+" · "+count+(state==="Delayed"?" cached":"")+(count===1?" token":" tokens")+" · "+state+" · "+updated+(feed?.error?" · "+feed.error:"")};
   });
   const reporting=rows.filter(row=>row.state==="Reporting").length;
   const delayed=rows.filter(row=>row.state==="Delayed").length;
