@@ -147,3 +147,30 @@ test("logo opens and reduced motion disables the scanning animation",async({page
   await page.getByRole("button",{name:"Close BecsBot logo"}).click();
   await expect(logo).not.toBeVisible();
 });
+
+test("blocked browser storage still allows market browsing and reports unsaved settings",async({page})=>{
+  await page.addInitScript(()=>Object.defineProperty(window,"localStorage",{
+    configurable:true,get(){throw new DOMException("Storage blocked","SecurityError");}
+  }));
+  await page.reload();
+  await expect(page.locator("#radar .token-contact")).toHaveCount(2);
+  await page.getByRole("button",{name:"Settings",exact:true}).click();
+  await page.locator('[data-setting="betUsd"]').fill("2");
+  await page.locator('[data-setting="betUsd"]').blur();
+  await expect(page.locator("#message")).toContainText(/storage.*(unavailable|full)|not persist/i);
+  await page.getByRole("button",{name:"Markets",exact:true}).click();
+  await expect(page.locator("#radar .token-contact")).toHaveCount(2);
+});
+
+test("search failures are visible and a later successful search recovers",async({page})=>{
+  await page.route("**/api/search?**",async route=>{
+    if(new URL(route.request().url()).searchParams.get("q")==="unavailable")
+      await route.fulfill({status:503,contentType:"application/json",body:JSON.stringify({error:"Market data temporarily unavailable"})});
+    else await route.continue();
+  });
+  await page.locator("#radar-search").fill("unavailable");
+  await expect(page.locator("#radar")).toContainText("Search: Market data temporarily unavailable");
+  await page.locator("#radar-search").fill("FRESH");
+  await expect(page.locator("#radar")).toContainText("FRESH");
+  await expect(page.locator("#radar")).not.toContainText("temporarily unavailable");
+});

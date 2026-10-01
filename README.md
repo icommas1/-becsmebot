@@ -22,6 +22,8 @@ Default buys spend $1.00 before the configurable simulated network fee. Manual a
 
 Auto source follows the selected launch tab and interval. Radar, Signals and auto buys use the same launch filters; token search respects those filters but does not change the auto source. An optional multiple target above 1 triggers one $1 paper sale per hold, using the same sale logic; 0 disables it. Auto is off after reload and runs only while the page is open. Paper balances, holds and settings save in this browser. Server market scanning and charts continue when it closes.
 
+If browser storage is unavailable or full, failed saves are reported and paper state may not survive reload. Market requests time out after 60 seconds so a later refresh can recover; search errors remain visible in Radar.
+
 Buys need recent Tokens V2 and SOL marks. Sells need a recent Jupiter Price V3 mark; omitted prices remain unavailable and cannot produce fills. Price refreshes cover all holds in batches. Last known marks can still appear in estimated portfolio values and are labeled stale.
 
 ## Run

@@ -68,7 +68,7 @@ export function createRadarView({document,getState,actions}) {
     $("radar-count").textContent=rows.length+" matches · "+(candidates.length-rows.length)+" filtered out"+(feedInfo?.error?" · feed delayed":"");
     $("page-label").textContent="Page "+(page+1)+" of "+pages;$("previous").disabled=page===0;$("next").disabled=page>=pages-1;
     for(const row of rows.slice(page*size,(page+1)*size))box.append(tokenCard(row));
-    if(!rows.length)box.append(node(document,"p","empty-state",query&&searchStatus==="Searching Jupiter…"?searchStatus:feedInfo?.error?"Feed delayed: "+feedInfo.error:"No fresh launches match these filters. Adjust Launch filters above."));
+    if(!rows.length)box.append(node(document,"p","empty-state",query&&(searchStatus==="Searching Jupiter…"||searchStatus.startsWith("Search:"))?searchStatus:feedInfo?.error?"Feed delayed: "+feedInfo.error:"No fresh launches match these filters. Adjust Launch filters above."));
     renderInstrument(rows.slice(0,40));
     for(const button of $("radar-tabs").children){button.className=button.dataset.tab===radarUi.tab?"selected":"";button.setAttribute("aria-pressed",String(button.dataset.tab===radarUi.tab));}
     $("sort-direction").textContent=radarUi.sort==="age"?(radarUi.direction==="asc"?"Newest first":"Oldest first"):(radarUi.direction==="desc"?"Highest first ↓":"Lowest first ↑");

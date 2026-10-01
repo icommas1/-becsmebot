@@ -96,3 +96,33 @@ test("paper price client batches oversized hold sets without live execution rout
   assert.deepEqual(calls,[100,100,5]);
   assert.equal(Object.keys(result).length,205);
 });
+
+test("stalled browser requests time out without discarding cached data and recover",async()=>{
+  const [,,, {createApiClient}]=await modules;
+  const snapshot={radar:[],signals:[]};let calls=0;
+  const client=createApiClient(async(_url,options)=>{
+    calls++;
+    if(calls===2){
+      assert.ok(options.signal instanceof AbortSignal,"request must have a cancellation signal");
+      return new Promise((_resolve,reject)=>options.signal.addEventListener("abort",()=>reject(options.signal.reason),{once:true}));
+    }
+    if(calls===3){
+      assert.equal(options.headers["If-None-Match"],'W/"saved"');
+      return {status:304,ok:false};
+    }
+    return {status:200,ok:true,headers:{get:()=> 'W/"saved"'},json:async()=>snapshot};
+  },{timeoutMs:10});
+  assert.deepEqual(await client.basket(),snapshot);
+  await assert.rejects(client.basket(),/timed out/i);
+  assert.deepEqual(await client.basket(),snapshot);
+});
+
+test("request deadlines cover stalled response bodies for history, search and paper marks",async()=>{
+  const [,,, {createApiClient}]=await modules;
+  for(const action of [client=>client.history(),client=>client.search("TEST"),client=>client.paperPrices([mint])]){
+    const client=createApiClient(async(_url,options)=>({ok:true,status:200,json:()=>
+      new Promise((_resolve,reject)=>options.signal.addEventListener("abort",()=>reject(options.signal.reason),{once:true}))
+    }),{timeoutMs:10});
+    await assert.rejects(action(client),/timed out/i);
+  }
+});
