@@ -12,7 +12,7 @@ test("lean launch route hydrates the full terminal",async({page})=>{
   expect(shell).toContain("/assets/js/launch.mjs");
   await page.goto("/terminal");
   await expect(page.locator("#radar .token-contact")).toHaveCount(2);
-  await expect(page.getByRole("checkbox",{name:"Dex paid ads"})).toBeVisible();
+  await expect(page.locator("#radar-tabs button").filter({hasText:"Dex paid ads"})).toBeVisible();
 });
 test("fresh filters, radar and responsive execution dock",async({page,isMobile})=>{
   await expect(page.locator("#radar")).toContainText("FRESH");
