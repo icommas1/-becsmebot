@@ -1,6 +1,7 @@
 import {ageMinutes,ageText,compactUsd,short,signalState,signalStrength,stateIcon,tokenPrice,usd} from "./core.mjs";
 import {matchesTopic,passes,selectedFeed,sortValue,launchRows} from "./filters.mjs";
 import {node,sparkline,strengthBars} from "./dom.mjs";
+import {feedStatus} from "./feed-status.mjs";
 
 export function createRadarView({document,getState,actions}) {
   const $=id=>document.getElementById(id);
@@ -106,8 +107,9 @@ export function createRadarView({document,getState,actions}) {
         node(document,"small","",ageText(signal)+" · MC "+compactUsd(signal.marketCap)),chart(signal.mint,trail));box.append(item);
     }
     if(!box.children.length)box.append(node(document,"p","empty-state","No launches match this source and filters."));
-    const feeds=$("feeds");feeds.replaceChildren();
-    for(const [name,status] of Object.entries(snapshot?.feeds||{}))feeds.append(node(document,"div","item",name+" · "+(status.count??0)+" tokens · "+(status.error||status.at||"pending")));
+    const feeds=$("feeds"),status=feedStatus(snapshot?.feeds||{});feeds.replaceChildren();
+    $("feed-summary").textContent=status.summary;
+    for(const row of status.rows)feeds.append(node(document,"div","item feed-item feed-"+row.state.toLowerCase(),row.text));
   }
 
   return Object.freeze({renderFilterSummary,renderRadar,renderSignals});

@@ -10,6 +10,24 @@ const modules=Promise.all([
 ]);
 const mint="So11111111111111111111111111111111111111112";
 
+test("feed diagnostics distinguish current, delayed and unknown sources",async()=>{
+  const {feedStatus}=await import("../../src/web/assets/js/feed-status.mjs");
+  const now=2_000_000_000_000,at=ms=>new Date(now-ms).toISOString();
+  const view=feedStatus({
+    recent:{count:2,at:at(30000),error:null},
+    "dex:ads":{count:3,at:at(180000),error:"DexScreener unavailable"},
+    "organic:1h":{count:0,at:null,error:null},
+    "dex:profiles":{count:5,at:at(-1000),error:null},
+    "trending:5m":{count:4,at:at(360000),error:null}
+  },now);
+  assert.equal(view.summary,"1/5 reporting · 2 delayed · 2 pending");
+  assert.match(view.rows[0].text,/New launches · 2 tokens · Reporting · Updated just now/);
+  assert.match(view.rows[1].text,/Dex paid ads · 3 cached tokens · Delayed · Updated 3m ago · DexScreener unavailable/);
+  assert.match(view.rows[2].text,/Organic · 1h · 0 tokens · Pending · No successful scan yet/);
+  assert.match(view.rows[3].text,/Pending · Scan time unavailable/);
+  assert.match(view.rows[4].text,/Trending · 5m · 4 cached tokens · Delayed · Updated 6m ago/);
+});
+
 test("dashboard filters remain shared, strict and deterministic",async()=>{
   const [core,filters,paperModule]=await modules;
   const now=2_000_000_000_000,settings={...paperModule.paperDefaults};
