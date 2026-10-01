@@ -1737,6 +1737,12 @@
         },
         "proofsValid": {
           "type": "boolean"
+        },
+        "metadataValid": {
+          "type": "boolean"
+        },
+        "proofsComplete": {
+          "type": "boolean"
         }
       },
       "required": [
@@ -1745,9 +1751,11 @@
         "eventCount",
         "verifiedEvents",
         "headHash",
+        "metadataValid",
         "proofProvider",
         "proofsChecked",
-        "proofsValid"
+        "proofsValid",
+        "proofsComplete"
       ],
       "additionalProperties": false
     }
