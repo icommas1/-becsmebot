@@ -34,6 +34,8 @@ for(const scenario of baseline.scenarios)test("production equivalence: "+scenari
     assert.equal(entry.entryCap,row.marketCap);
   }
   const baselineLedger=structuredClone(ledger);
+  assert.equal(ledger.receipts.length,scenario.outcomes.filter(outcome=>outcome.ok).length);
+  delete baselineLedger.receipts;
   for(const entry of baselineLedger.activity)if(entry.kind==="sell")
     for(const field of ["basisUsd","netUsd","realizedUsd","entryCap"])delete entry[field];
   assert.deepEqual(baselineLedger,scenario.ledger);
@@ -152,7 +154,7 @@ test("legacy storage migration adds stable ownership without losing paper histor
   let stored=JSON.stringify({...legacy,auto:true});
   const storage={getItem:()=>stored,setItem:(_key,value)=>{stored=value;}};
   const loaded=wallet.loadPaper(storage),{account,...ledger}=loaded;
-  assert.deepEqual(ledger,legacy);assert.notEqual(account.userId,account.accountId);
+  assert.deepEqual(ledger,{...legacy,receipts:[]});assert.notEqual(account.userId,account.accountId);
   wallet.savePaper(storage,loaded);
   assert.deepEqual(wallet.loadPaper(storage).account,account);
   assert.notEqual(wallet.freshPaper().account.accountId,account.accountId);
