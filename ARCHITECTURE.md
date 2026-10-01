@@ -100,6 +100,8 @@ Browser API requests have a 60-second deadline covering both the response and it
 
 Manual contact actions, dock actions and auto use the same paper accounting functions. Sells require current Price V3 marks; estimated portfolio values may show labeled stale marks. See the radar and signals specs for eligibility and state rules.
 
+The Feeds panel labels each configured source as Reporting, Delayed or Pending and shows the last successful update relative to the browser clock. The five-minute freshness cutoff matches the read-only production smoke check. A delayed source may retain its previous token count and timestamp; the UI labels that count as cached. These are observation labels, not new launch eligibility thresholds.
+
 ### Strategy and execution boundary
 
 The production paper path is:
