@@ -69,6 +69,7 @@ Normalization merges canonical mints and feeds. Positive finite prices and numer
 | `GET /api/history` | Validated, bounded chart trails, independent from signal history |
 | `GET /api/search?q=...` | Trimmed 2–80-character query; one-minute cache |
 | `POST /api/paper/prices` | Strict `{mints:[...]}` body, max 100 canonical mints, upstream chunks of 50 |
+| `GET /api/wallet-intel` | Read-only aggregate Smart Money flow; never returns provider wallet addresses or transaction hashes |
 | `/api/sell/*`, `/api/pause/*` | 410 compatibility blocks |
 
 Price cache TTL is 20 seconds; search cache TTL is one minute. Concurrent identical lookups share a job. Search and price requests share limits of 30/minute per IP and 40/minute globally; busy responses include `Retry-After: 60`. Input errors return 400, malformed JSON 400, oversized bodies 413, provider/contract failures 503 and unexpected failures 500. No private upstream body or credentials are logged. Unknown response data never becomes a fill.
@@ -88,10 +89,20 @@ Ajv compiles schemas in strict mode without coercion or mutation. Upstream token
 | Token age | Jupiter `createdAt`, falling back to `firstPool.createdAt`; interpreted by the browser |
 | Holders | Positive finite Jupiter `holderCount`; no separate holder service is queried |
 | Launch source | Membership in configured Tokens V2 category feeds or DexScreener discovery feeds plus optional Jupiter `launchpad` metadata |
-| Wallet signals | Not implemented; no wallet history is fetched or scored |
+| Wallet signals | Optional Nansen Smart Money DEX trades normalized into aggregate token flow; disabled unless `NANSEN_API_KEY` is configured |
 | Positions | Browser-local `becsPaperV1`, or the signed-in paper account in PostgreSQL; no live positions |
 
 When multiple feeds describe one mint, feeds and ranks accumulate. Later merged non-empty fields can update metadata, while the row's price timestamp remains tied to the feed that actually supplied its retained price. This ordering is an implementation detail, not a promise that any category is globally authoritative.
+
+## Smart wallet intelligence
+
+The first wallet-intelligence phase is read-only and provider-neutral. When `NANSEN_API_KEY` is configured, BecsBot polls Nansen's documented Solana Smart Money DEX Trades endpoint and normalizes up to 100 recent trades per scan. Provider wallet addresses and transaction hashes remain server-internal; the public `/api/wallet-intel` contract exposes only token-level buy/sell counts, USD flow, unique-wallet counts and explicit provider labels.
+
+Classification separates three concepts: the intelligence provider (currently Nansen), the provider's Smart Money category (for example fund or smart trader), and an execution/client platform label (for example Trojan, BullX, Photon, GMGN, Maestro, Bloom, Blood Solutions, Jupiter or Phantom). Platform attribution is recorded only when a provider label explicitly contains that platform; BecsBot does not infer that a normal Solana address is a Phantom, Trojan or other client wallet. This avoids fabricating provenance.
+
+Jupiter's SmartMoney UI is not scraped because no stable documented SmartMoney feed API has been established for this integration. Phantom's documented developer products provide wallet connection/embedded-wallet capabilities rather than a public Smart Money leaderboard. Trojan is treated as an execution-platform label when an upstream intelligence provider identifies it. Additional providers such as Birdeye can be added behind the same normalization boundary without changing strategy or execution.
+
+Wallet intelligence does not change Radar eligibility, Signals, sizing, DecisionEngine behavior or paper fills in this phase. It is observational data to be measured before it is allowed to become strategy input.
 
 ## Execution and UI
 
