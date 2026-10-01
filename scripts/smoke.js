@@ -33,7 +33,15 @@ async function smoke(base,{request=fetch,now=Date.now,maxAgeMs=300000,requireMar
   }
   if(requireMarketData)assert.ok(solFresh,"SOL USD mark is stale or missing");
   const html=await(await get("/")).text();
-  for(const id of ["radar-map","dock-buy","dock-sell","brand-logo"])assert.ok(html.includes('id="'+id+'"'),"Missing UI "+id);
+  assert.ok(html.includes('src="/assets/js/launch.mjs"'),"Missing launch module");
+  assert.ok(!html.includes("Fresh launches"),"Launch shell includes article-like Radar content");
+  assert.ok((await(await get("/terminal")).text()).includes('src="/assets/js/launch.mjs"'),"Missing terminal route");
+  const fragment=await(await get("/assets/terminal-fragment.html")).text();
+  for(const id of ["radar-map","dock-buy","dock-sell","brand-logo"])assert.ok(fragment.includes('id="'+id+'"'),"Missing UI "+id);
+  const launcher=await(await get("/assets/js/launch.mjs")).text();
+  assert.ok(launcher.includes('import("./dashboard.mjs")'),"Missing dashboard boot");
+  const manifest=await(await get("/assets/manifest.webmanifest")).json();
+  assert.equal(manifest.start_url,"/terminal","Home-screen route");
   const logo=await get("/assets/becs-logo.jpg");
   assert.ok(logo.headers.get("content-type")?.startsWith("image/jpeg"),"Logo MIME type");
   assert.ok((await logo.arrayBuffer()).byteLength>100,"Logo is empty");
@@ -51,4 +59,3 @@ if(require.main===module){
   }})().catch(error=>{console.error("Smoke failed: "+error.message);process.exitCode=1;});
 }
 module.exports={smoke};
-

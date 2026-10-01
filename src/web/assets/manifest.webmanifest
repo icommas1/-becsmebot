@@ -1,0 +1,10 @@
+{
+  "name": "BecsBot Terminal",
+  "short_name": "BecsBot",
+  "id": "/terminal",
+  "start_url": "/terminal",
+  "scope": "/",
+  "display": "standalone",
+  "theme_color": "#080e16",
+  "background_color": "#080e16"
+}

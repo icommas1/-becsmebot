@@ -4,6 +4,8 @@ All notable repository-level changes are recorded here. Product strategy and pro
 
 ## Unreleased
 
+- Route the terminal through a lean launch shell and `/terminal` home-screen web app entry; remove the long Radar note from initial presentation.
+
 - Preserve mobile card/panel/detail scroll during refresh and improve token-sheet close targets, backdrop dismissal and focus restoration.
 
 
