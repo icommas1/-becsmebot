@@ -87,5 +87,5 @@ BEGIN
       BEFORE UPDATE OR DELETE ON becs_event_proofs
       FOR EACH ROW EXECUTE FUNCTION becs_reject_append_only_mutation();
   END IF;
-END
-$$;
+END;
+$;
