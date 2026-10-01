@@ -4,6 +4,9 @@ All notable repository-level changes are recorded here. Product strategy and pro
 
 ## Unreleased
 
+- Preserve mobile card/panel/detail scroll during refresh and improve token-sheet close targets, backdrop dismissal and focus restoration.
+
+
 - Add six bounded, independently failing DexScreener discovery feeds with Jupiter mint enrichment, explicit paid labels and shared Radar/Signals/auto filters. Expand contracts and read-only readiness checks to nineteen feeds.
 
 - Add browser request deadlines and recovery, resilient startup with blocked storage, persistent failed-save warnings, and visible search failures.

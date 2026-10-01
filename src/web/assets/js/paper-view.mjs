@@ -58,6 +58,7 @@ export function createPaperView({document,getState,actions}) {
 
   function renderSheet() {
     const {paper,dockAmount,trail}=getState(),row=actions.currentToken();if(!row)return;
+    const sheet=$("token-sheet"),scrollTop=sheet.scrollTop;
     const signal=stateFor(row,paper);$("sheet-title").textContent=row.symbol+" / "+stateIcon(signal)+" "+signal;
     const box=$("sheet-content");box.replaceChildren();box.append(node(document,"p","",row.name||row.symbol),
       node(document,"p","contact-meta",ageText(row)+" · "+(row.launchpad||"Jupiter")+" · "+(row.isVerified?"Verified":"Unverified")),
@@ -66,6 +67,7 @@ export function createPaperView({document,getState,actions}) {
       node(document,"p","micro-note","Feeds: "+(row.feeds||[]).join(" / ")));infoLinks(box,row.mint);
     $("sheet-buy").disabled=$("dock-buy").disabled;$("sheet-sell").disabled=$("dock-sell").disabled;
     $("sheet-buy").textContent="Paper buy $"+short(dockAmount);$("sheet-sell").textContent="Paper sell $"+short(dockAmount);
+    sheet.scrollTop=scrollTop;
   }
 
   function renderTape() {
@@ -77,3 +79,4 @@ export function createPaperView({document,getState,actions}) {
 
   return Object.freeze({renderWallet,renderHolds,renderDock,renderSheet,renderTape});
 }
+

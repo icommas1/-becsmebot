@@ -79,7 +79,7 @@ function runAutoExits() {
     sellPaper(hold.mint,100,1,true);
 }
 async function refresh() {
-  if (refreshing) return;refreshing=true;
+  if (refreshing) return;refreshing=true;$("refresh").disabled=true;$("refresh").setAttribute("aria-busy","true");
   try {
     const s=await api.basket();snapshot=s;await loadRadarHistory(s);
     const scanned=s.lastScanAt?new Date(s.lastScanAt).toLocaleTimeString():"pending";
@@ -88,7 +88,7 @@ async function refresh() {
     document.body.dataset.scanning=String(!!s.running);$("scan-state").textContent=s.running?"SCANNING":s.lastError?"DELAYED":"REST / 60s";
     observeContacts(s);runAutoBuys();render();await refreshPrices();
   } catch(error) { $("status").textContent=error.message;message(error.message); }
-  finally { refreshing=false; }
+  finally { refreshing=false;$("refresh").disabled=false;$("refresh").setAttribute("aria-busy","false"); }
 }
 let selectedMint=null,selectedFallback=null,dockAmount=1;
 
@@ -113,6 +113,15 @@ function selectToken(row,forceSheet=false){selectedMint=row.mint;selectedFallbac
 for(const amount of [1,5,10]){const button=node('button','','$'+amount);button.dataset.amount=String(amount);button.onclick=()=>{dockAmount=amount;$('dock-amount').value=amount;paperView.renderDock();};$('dock-sizes').append(button);}
 $('dock-amount').onchange=()=>{const amount=Number($('dock-amount').value);if(!Number.isFinite(amount)||amount<=0){$('dock-amount').value=dockAmount;return message('Enter a positive dollar amount.');}dockAmount=amount;paperView.renderDock();};
 $('dock-token').onclick=()=>{const row=currentToken();if(row)selectToken(row,true);else setTerminalView('radar');};$('dock-buy').onclick=executeBuy;$('dock-sell').onclick=executeSell;$('sheet-buy').onclick=executeBuy;$('sheet-sell').onclick=executeSell;$('sheet-close').onclick=()=>$('token-sheet').close?.();
+// Closing a refreshed sheet must not return focus to a discarded card or scroll
+// the underlying market panel. The dock token is stable across all refreshes.
+$('token-sheet').addEventListener('close',()=>$('dock-token').focus({preventScroll:true}));
+$('token-sheet').addEventListener('click',event=>{
+  if(event.target!==$('token-sheet'))return;
+  const bounds=$('token-sheet').getBoundingClientRect();
+  if(event.clientX<bounds.left||event.clientX>bounds.right||event.clientY<bounds.top||event.clientY>bounds.bottom)
+    $('token-sheet').close();
+});
 function observeContacts(s){for(const row of launchRows(s.radar||[])){if(seenContacts.has(row.mint))continue;seenContacts.add(row.mint);contactTape.unshift({at:new Date().toISOString(),text:'DETECTED → '+row.symbol+' · MC '+compactUsd(row.marketCap)+' · '+selectedFeed()});}contactTape.length=Math.min(contactTape.length,50);if(seenContacts.size>5000)seenContacts.clear();}
 for(const input of document.querySelectorAll("[data-setting]")) {
   const name=input.dataset.setting;input.value=paper.settings[name];input.addEventListener("change",()=>{

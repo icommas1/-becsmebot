@@ -89,3 +89,6 @@ body{grid-template-areas:"head" "main" "tape" "dock" "nav";grid-template-rows:49
 @media(prefers-reduced-motion:reduce){.radar-map:before,.live-dot{animation:none!important}.token-deck{scroll-behavior:auto}}
 
 .brand-logo{display:grid;place-items:center;flex:none;width:44px;height:44px;min-height:44px;padding:6px;margin:-6px 0;border:0;background:transparent;border-radius:3px}.brand-logo img{display:block;width:32px;height:32px;object-fit:cover;object-position:85% 70%;border:1px solid #407b71;border-radius:3px}.brand-logo:focus-visible{outline:2px solid var(--accent);outline-offset:1px}.brand-sheet{width:min(600px,calc(100vw - 24px));max-height:85dvh;padding:0;border:1px solid var(--line);background:var(--bg);color:inherit}.brand-sheet::backdrop{background:#000b}.brand-sheet .sheet-top{padding:8px 12px}.brand-sheet h2{margin:0;font-size:16px}.brand-sheet button{min-width:44px;min-height:44px}.brand-sheet>img{display:block;width:100%;height:auto}
+
+
+#sheet-close{min-width:72px;min-height:48px;font-size:14px;touch-action:manipulation}
