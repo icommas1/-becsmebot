@@ -4,6 +4,8 @@ All notable repository-level changes are recorded here. Product strategy and pro
 
 ## Unreleased
 
+- Reject missing market contexts, invalid paper ledgers and corrupt sale cost basis at the PaperExecutor boundary before any simulated fill.
+
 - Add a paper Performance view for recorded simulated sales with per-sale basis, net return, source filtering and entry-cap chart. Older sales remain visible in ledger P/L but are excluded from return statistics.
 
 - Show a readable 19-feed readiness count and per-source last-success status in the Feeds panel, including retained data for delayed sources.
