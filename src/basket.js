@@ -23,10 +23,16 @@ function start({env=process.env,logger=console,marketFactory=createMarket,wallet
   const archiveSettings=archiveConfig(env);
   const archive=archiveSettings.enabled?archiveFactory(archiveSettings.databaseUrl,{streamId:archiveSettings.streamId}):null;
   let interval=null,walletInterval=null,closing=null,marketJob=false,walletJob=false;
+  const archivedKinds=new Set();
   const archiveFailure=(kind,error)=>logger.error?.("Research archive "+kind+" failed: "+String(error?.message||error).slice(0,300));
   async function record(kind,source,payload,occurredAt,metadata={}) {
     if(!archive||!payload)return;
-    try{await archive.record({kind,source,payload,occurredAt,metadata});}
+    try{
+      const receipt=await archive.record({kind,source,payload,occurredAt,metadata});
+      if(!archivedKinds.has(kind)){
+        archivedKinds.add(kind);logger.log("Research archive "+kind+" committed sequence "+receipt.sequence);
+      }
+    }
     catch(error){archiveFailure(kind,error);}
   }
   async function scanMarket(){
