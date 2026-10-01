@@ -1035,6 +1035,284 @@
         },
         "additionalProperties": true
       }
+    },
+    "paperCommand": {
+      "oneOf": [
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "requestId",
+            "createdAt",
+            "type",
+            "mint",
+            "amount",
+            "automatic",
+            "feed"
+          ],
+          "properties": {
+            "requestId": {
+              "type": "string",
+              "pattern": "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-4[0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}$"
+            },
+            "createdAt": {
+              "type": "string",
+              "format": "date-time",
+              "maxLength": 30
+            },
+            "type": {
+              "const": "buy"
+            },
+            "mint": {
+              "type": "string",
+              "format": "solana-mint"
+            },
+            "amount": {
+              "type": "number",
+              "exclusiveMinimum": 0,
+              "maximum": 1000000000000.0
+            },
+            "automatic": {
+              "type": "boolean"
+            },
+            "feed": {
+              "type": "string",
+              "enum": [
+                "recent",
+                "trending:5m",
+                "trending:1h",
+                "trending:6h",
+                "trending:24h",
+                "traded:5m",
+                "traded:1h",
+                "traded:6h",
+                "traded:24h",
+                "organic:5m",
+                "organic:1h",
+                "organic:6h",
+                "organic:24h",
+                "dex:profiles",
+                "dex:updates",
+                "dex:takeovers",
+                "dex:ads",
+                "dex:boosts",
+                "dex:top"
+              ]
+            }
+          }
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "requestId",
+            "createdAt",
+            "type",
+            "mint",
+            "dollars",
+            "automatic"
+          ],
+          "properties": {
+            "requestId": {
+              "type": "string",
+              "pattern": "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-4[0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}$"
+            },
+            "createdAt": {
+              "type": "string",
+              "format": "date-time",
+              "maxLength": 30
+            },
+            "type": {
+              "const": "sell"
+            },
+            "mint": {
+              "type": "string",
+              "format": "solana-mint"
+            },
+            "dollars": {
+              "type": "number",
+              "exclusiveMinimum": 0,
+              "maximum": 1000000000000.0
+            },
+            "automatic": {
+              "type": "boolean"
+            }
+          }
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "requestId",
+            "createdAt",
+            "type",
+            "settings",
+            "revision"
+          ],
+          "properties": {
+            "requestId": {
+              "type": "string",
+              "pattern": "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-4[0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}$"
+            },
+            "createdAt": {
+              "type": "string",
+              "format": "date-time",
+              "maxLength": 30
+            },
+            "type": {
+              "const": "settings"
+            },
+            "settings": {
+              "type": "object",
+              "additionalProperties": false,
+              "minProperties": 1,
+              "properties": {
+                "betUsd": {
+                  "type": "number",
+                  "minimum": 0,
+                  "maximum": 1000000000000.0,
+                  "exclusiveMinimum": 0
+                },
+                "reserveSol": {
+                  "type": "number",
+                  "minimum": 0,
+                  "maximum": 1000000000000.0
+                },
+                "feeSol": {
+                  "type": "number",
+                  "minimum": 0,
+                  "maximum": 1000000000000.0
+                },
+                "impactPct": {
+                  "type": "number",
+                  "minimum": 0,
+                  "maximum": 50
+                },
+                "minLiquidity": {
+                  "type": "number",
+                  "minimum": 0,
+                  "maximum": 1000000000000.0
+                },
+                "minCap": {
+                  "type": "number",
+                  "minimum": 0,
+                  "maximum": 1000000000000.0
+                },
+                "maxCap": {
+                  "type": "number",
+                  "minimum": 0,
+                  "maximum": 1000000000000.0
+                },
+                "minAge": {
+                  "type": "number",
+                  "minimum": 0,
+                  "maximum": 1000000000000.0
+                },
+                "maxAge": {
+                  "type": "number",
+                  "minimum": 0,
+                  "maximum": 1000000000000.0
+                },
+                "minHolders": {
+                  "type": "number",
+                  "minimum": 0,
+                  "maximum": 1000000000000.0
+                },
+                "minOrganicScore": {
+                  "type": "number",
+                  "minimum": 0,
+                  "maximum": 100
+                },
+                "minVolume": {
+                  "type": "number",
+                  "minimum": 0,
+                  "maximum": 1000000000000.0
+                },
+                "exitMultiple": {
+                  "type": "number",
+                  "minimum": 0,
+                  "maximum": 1000000000000.0
+                }
+              }
+            },
+            "revision": {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 9007199254740991
+            }
+          }
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "requestId",
+            "createdAt",
+            "type",
+            "cashSol",
+            "revision"
+          ],
+          "properties": {
+            "requestId": {
+              "type": "string",
+              "pattern": "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-4[0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}$"
+            },
+            "createdAt": {
+              "type": "string",
+              "format": "date-time",
+              "maxLength": 30
+            },
+            "type": {
+              "const": "cash"
+            },
+            "cashSol": {
+              "type": "number",
+              "minimum": 0,
+              "maximum": 1000000000000.0
+            },
+            "revision": {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 9007199254740991
+            }
+          }
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "requestId",
+            "createdAt",
+            "type",
+            "cashSol",
+            "revision"
+          ],
+          "properties": {
+            "requestId": {
+              "type": "string",
+              "pattern": "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-4[0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}$"
+            },
+            "createdAt": {
+              "type": "string",
+              "format": "date-time",
+              "maxLength": 30
+            },
+            "type": {
+              "const": "reset"
+            },
+            "cashSol": {
+              "type": "number",
+              "minimum": 0,
+              "maximum": 1000000000000.0
+            },
+            "revision": {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 9007199254740991
+            }
+          }
+        }
+      ]
     }
   }
 }
