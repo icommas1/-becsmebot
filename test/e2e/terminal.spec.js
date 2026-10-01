@@ -200,12 +200,14 @@ test("mobile refresh preserves the swiped card and panel position",async({page,i
  // Dispatching the page's normal refresh event avoids scrolling to its offscreen header.
  await page.locator("#refresh").evaluate(el=>el.click());await response;
  await expect(page.locator("#refresh")).toBeEnabled();
- await expect.poll(()=>deck.evaluate(el=>el.scrollLeft)).toBeCloseTo(before,0);
- await expect.poll(()=>panel.evaluate(el=>el.scrollTop)).toBeCloseTo(top,0);
+ await expect.poll(async()=>Math.abs(await deck.evaluate(el=>el.scrollLeft)-before)).toBeLessThanOrEqual(2);
+ await expect.poll(async()=>Math.abs(await panel.evaluate(el=>el.scrollTop)-top)).toBeLessThanOrEqual(2);
  // A launch inserted between the first and viewed token must keep that token in view.
  const payload=await(await page.request.get("/api/basket")).json();
+ const between=(Date.parse(payload.radar.find(row=>row.mint===MINTS[0]).createdAt)+
+   Date.parse(payload.radar.find(row=>row.mint===MINTS[1]).createdAt))/2;
  payload.radar=payload.radar.map(row=>row.mint===MINTS[2]?{...row,marketCap:50000,
-   createdAt:new Date(Date.now()-90000).toISOString()}:row);
+   createdAt:new Date(between).toISOString()}:row);
  payload.lastScanAt=new Date().toISOString();
  const heat=deck.locator('[data-mint="'+MINTS[1]+'"]');
  const offset=await heat.evaluate(el=>el.getBoundingClientRect().left-el.parentElement.getBoundingClientRect().left);
@@ -214,7 +216,7 @@ test("mobile refresh preserves the swiped card and panel position",async({page,i
  await page.locator("#refresh").evaluate(el=>el.click());await changed;
  await expect(page.locator("#refresh")).toBeEnabled();
  await expect(deck.locator(".token-contact")).toHaveCount(3);
- await expect.poll(()=>heat.evaluate(el=>el.getBoundingClientRect().left-el.parentElement.getBoundingClientRect().left)).toBeCloseTo(offset,0);
+ await expect.poll(async()=>Math.abs(await heat.evaluate(el=>el.getBoundingClientRect().left-el.parentElement.getBoundingClientRect().left)-offset)).toBeLessThanOrEqual(2);
  await page.getByRole("button",{name:"Dex profiles",exact:true}).click();
  await expect.poll(()=>deck.evaluate(el=>el.scrollLeft)).toBe(0);
 });

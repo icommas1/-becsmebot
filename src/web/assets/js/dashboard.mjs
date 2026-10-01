@@ -109,7 +109,15 @@ function executeSell(){if(selectedMint)sellPaper(selectedMint,100,dockAmount);pa
 
 function canSell(mint){return Boolean(paper.holds[mint]&&solUsd()&&prices[mint]?.source==='jupiter-v3'&&num(prices[mint]?.priceUsd)&&recentMark(priceTimes[mint],120000));}
 function currentToken(){return (snapshot?.radar||[]).find(row=>row.mint===selectedMint)||searchRows.find(row=>row.mint===selectedMint)||selectedFallback;}
-function selectToken(row,forceSheet=false){selectedMint=row.mint;selectedFallback=row;paperView.renderDock();paperView.renderSheet();if(forceSheet||typeof matchMedia==='undefined'||matchMedia('(max-width:800px)').matches)$('token-sheet').showModal?.();}
+function selectToken(row,forceSheet=false){
+  const changed=selectedMint!==row.mint;selectedMint=row.mint;selectedFallback=row;
+  paperView.renderDock();paperView.renderSheet();
+  if(forceSheet||typeof matchMedia==='undefined'||matchMedia('(max-width:800px)').matches){
+    const sheet=$('token-sheet');sheet.showModal?.();
+    // Browsers can restore a dialog's previous scroll when it enters the top layer.
+    if(changed)sheet.scrollTop=0;
+  }
+}
 for(const amount of [1,5,10]){const button=node('button','','$'+amount);button.dataset.amount=String(amount);button.onclick=()=>{dockAmount=amount;$('dock-amount').value=amount;paperView.renderDock();};$('dock-sizes').append(button);}
 $('dock-amount').onchange=()=>{const amount=Number($('dock-amount').value);if(!Number.isFinite(amount)||amount<=0){$('dock-amount').value=dockAmount;return message('Enter a positive dollar amount.');}dockAmount=amount;paperView.renderDock();};
 $('dock-token').onclick=()=>{const row=currentToken();if(row)selectToken(row,true);else setTerminalView('radar');};$('dock-buy').onclick=executeBuy;$('dock-sell').onclick=executeSell;$('sheet-buy').onclick=executeBuy;$('sheet-sell').onclick=executeSell;$('sheet-close').onclick=()=>$('token-sheet').close?.();
