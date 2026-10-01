@@ -16,7 +16,7 @@ function createMarket({ apiKey, dataDir, request, dexRequest }) {
     solPriceAt:null, radar:[], feeds:{}, scanIntervalMs:SCAN_MS };
   const feedTokens = {}, priceCache = new Map(), searchCache = new Map();
   const priceJobs = new Map(), searchJobs = new Map();
-  let apiRevision = 0, compactSignals = [];
+  let apiRevision = 0, compactSignals = [], lastResearch = null;
   const touch = () => { apiRevision++; };
 
   async function paperPrices(mints) {
@@ -120,8 +120,15 @@ function createMarket({ apiKey, dataDir, request, dexRequest }) {
     finally{
       state.lastScanAt=new Date().toISOString();state.running=false;
       const trails=history.snapshot(state.radar.map(row=>row.mint));
-      compactSignals=rankSignals(state.radar,trails).map(({mint,firstSeenAt,observedAt,multiple,peakMultiple})=>
+      const rankedSignals=rankSignals(state.radar,trails);
+      compactSignals=rankedSignals.map(({mint,firstSeenAt,observedAt,multiple,peakMultiple})=>
         ({mint,firstSeenAt,observedAt,multiple,peakMultiple}));
+      lastResearch={
+        schemaVersion:1,scanAt:state.lastScanAt,solUsd:state.solUsd,solPriceAt:state.solPriceAt,
+        lastError:state.lastError,feeds:structuredClone(state.feeds),
+        providerRows:structuredClone(successful),radar:structuredClone(state.radar),
+        signals:structuredClone(rankedSignals)
+      };
       touch();
     }
   }
@@ -135,7 +142,8 @@ function createMarket({ apiKey, dataDir, request, dexRequest }) {
   function chartHistory() {
     return {scanAt:state.lastScanAt,trails:history.chartSnapshot(state.radar.map(row=>row.mint))};
   }
-  return {snapshot,terminalSnapshot,chartHistory,snapshotRevision:()=>apiRevision,
+  function researchSnapshot(){return lastResearch?structuredClone(lastResearch):null;}
+  return {snapshot,terminalSnapshot,chartHistory,researchSnapshot,snapshotRevision:()=>apiRevision,
     historyRevision:()=>history.revision(),scan,search,paperPrices};
 }
 
