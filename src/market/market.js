@@ -1,4 +1,5 @@
 const { FEEDS, marketRows, positive } = require("./tokens");
+const { DEX_FEEDS, discoveryMints, createDexClient } = require("./dexscreener");
 const { createJupiterClient } = require("./client");
 const { createPriceHistory } = require("./history");
 const { rankSignals } = require("./signals");
@@ -7,8 +8,9 @@ const SOL = "So11111111111111111111111111111111111111112";
 const SCAN_MS = 60000;
 const PRICE_CACHE_MS = 20000;
 
-function createMarket({ apiKey, dataDir, request }) {
+function createMarket({ apiKey, dataDir, request, dexRequest }) {
   const jupiter = request || createJupiterClient({ apiKey });
+  const dex = dexRequest || createDexClient();
   const history = createPriceHistory({ dataDir });
   const state = { lastScanAt:null, lastError:null, running:false, solUsd:null,
     solPriceAt:null, radar:[], feeds:{}, scanIntervalMs:SCAN_MS };
@@ -64,6 +66,11 @@ function createMarket({ apiKey, dataDir, request }) {
     if(state.running)return;
     state.running=true;touch();
     const successful={},errors=[];
+    // Independent discovery requests cannot block Jupiter category reads.
+    const discovery = Promise.all(DEX_FEEDS.map(async ([name,url]) => {
+      try { return {name,mints:discoveryMints(await dex(url))}; }
+      catch(error) { return {name,error:error.message}; }
+    }));
     try {
       try {
         const prices=await jupiter("/price/v3?ids="+SOL);
@@ -79,6 +86,29 @@ function createMarket({ apiKey, dataDir, request }) {
           successful[name]=tokens;feedTokens[name]=tokens;
           state.feeds[name]={count:tokens.length,at:new Date().toISOString()};touch();
         }catch(error){errors.push(name+": "+error.message);state.feeds[name]={...state.feeds[name],error:error.message};touch();}
+      }
+      const discovered=await discovery;
+      const mints=[...new Set(discovered.flatMap(feed=>feed.mints||[]))];
+      const metadata=new Map();
+      let enrichmentError=null;
+      try {
+        for(let i=0;i<mints.length;i+=100) {
+          const chunk=mints.slice(i,i+100);
+          const tokens=await jupiter("/tokens/v2/search?query="+encodeURIComponent(chunk.join(",")));
+          assertSchema("upstreamTokens",tokens);
+          for(const token of tokens)if(chunk.includes(token.id))metadata.set(token.id,token);
+        }
+      }catch(error){enrichmentError="Jupiter enrichment: "+error.message;}
+      for(const feed of discovered) {
+        const error=feed.error||(feed.mints.length?enrichmentError:null);
+        if(error){errors.push(feed.name+": "+error);state.feeds[feed.name]={...state.feeds[feed.name],error};}
+        else {
+          // Dex supplies membership/rank only. All market metrics remain Jupiter data.
+          const tokens=feed.mints.map(id=>metadata.get(id)||{id});
+          successful[feed.name]=tokens;feedTokens[feed.name]=tokens;
+          state.feeds[feed.name]={count:tokens.length,at:new Date().toISOString()};
+        }
+        touch();
       }
       // Merge older feeds first so successful fresh metadata wins.
       const ordered=Object.fromEntries(Object.entries(feedTokens).sort(([a],[b])=>
@@ -110,3 +140,4 @@ function createMarket({ apiKey, dataDir, request }) {
 }
 
 module.exports={createMarket,SCAN_MS};
+

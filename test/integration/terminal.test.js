@@ -28,21 +28,21 @@ test('chart revision changes when retained points expire',()=>{
  h.sample([{mint:SOL,priceUsd:1}]);const revision=h.revision();
  time+=86400001;assert.ok(h.revision()>revision);assert.deepEqual(h.snapshot([SOL]),{});
 });
-test('market merges 13 feeds, preserves delayed feed timestamps and omitted V3 marks',async()=>{
+test('market merges 19 feeds, preserves delayed feed timestamps and omitted V3 marks',async()=>{
  let failed=false,calls=[];
- const market=createMarket({request:async url=>{calls.push(url);if(url.startsWith('/price'))return {[SOL]:{usdPrice:200,blockId:42}};
+ const market=createMarket({dexRequest:async()=>[],request:async url=>{calls.push(url);if(url.startsWith('/price'))return {[SOL]:{usdPrice:200,blockId:42}};
  if(failed&&url.includes('toptrending'))throw Error('fixture delay');
  return [{id:SOL,symbol:'SOL',usdPrice:200,stats24h:{priceChange:2}}];}});
- await market.scan();const first=market.snapshot();assert.equal(Object.keys(first.feeds).length,13);assert.equal(first.radar.length,1);assert.equal(first.signals[0].multiple,1);assert.equal(calls.length,14);
+ await market.scan();const first=market.snapshot();assert.equal(Object.keys(first.feeds).length,19);assert.equal(first.radar.length,1);assert.equal(first.signals[0].multiple,1);assert.equal(calls.length,14);
  failed=true;await market.scan();const second=market.snapshot();assert.match(second.lastError,/fixture delay/);assert.equal(second.feeds['trending:5m'].at,first.feeds['trending:5m'].at);assert.equal(second.radar.length,1);
  const other='EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGkZwyTDt1v';const marks=await market.paperPrices([SOL,other]);assert.equal(marks[other],null);assert.equal(marks[SOL].blockId,42);
 });
 test('fresh metadata cannot refresh a cached older price',async()=>{
- const market=createMarket({request:async url=>url.startsWith('/price')?{[SOL]:{usdPrice:200}}:url.includes('toptrending/5m')?[{id:SOL,symbol:'SOL',usdPrice:200}]:[{id:SOL,symbol:'SOL'}]});
+ const market=createMarket({dexRequest:async()=>[],request:async url=>url.startsWith('/price')?{[SOL]:{usdPrice:200}}:url.includes('toptrending/5m')?[{id:SOL,symbol:'SOL',usdPrice:200}]:[{id:SOL,symbol:'SOL'}]});
  await market.scan();const s=market.snapshot();assert.equal(s.radar[0].priceFeed,'trending:5m');assert.equal(s.radar[0].observedAt,Date.parse(s.feeds['trending:5m'].at));
 });
 test('public APIs reject signing, invalid inputs and excessive requests',async()=>{
- const app=createApp({snapshot:()=>createMarket({request:async()=>[]}).snapshot(),search:async()=>[],paperPrices:async mints=>Object.fromEntries(mints.map(m=>[m,null]))});
+ const app=createApp({snapshot:()=>createMarket({dexRequest:async()=>[],request:async()=>[]}).snapshot(),search:async()=>[],paperPrices:async mints=>Object.fromEntries(mints.map(m=>[m,null]))});
  const server=app.listen(0,'127.0.0.1');await new Promise(r=>server.once('listening',r));const base='http://127.0.0.1:'+server.address().port;
  try {
  const basket=await fetch(base+'/api/basket');assert.equal(basket.status,200);
@@ -58,3 +58,4 @@ test('public APIs reject signing, invalid inputs and excessive requests',async()
  let response;for(let i=0;i<31;i++)response=await fetch(base+'/api/search?q=SOL');assert.equal(response.status,429);
  }finally{await new Promise(r=>server.close(r));}
 });
+

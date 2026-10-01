@@ -41,7 +41,7 @@ test("browser payloads preserve Radar and Signals while separating bounded chart
 test("ETags from a previous server instance cannot suppress changed market data after restart",async t=>{
   const markets=[];
   for(const price of [200,250]){
-    const market=createMarket({request:async url=>url.startsWith("/price")?{[SOL]:{usdPrice:price}}:[{id:SOL,symbol:"SOL",usdPrice:price}]});
+    const market=createMarket({dexRequest:async()=>[],request:async url=>url.startsWith("/price")?{[SOL]:{usdPrice:price}}:[{id:SOL,symbol:"SOL",usdPrice:price}]});
     await market.scan();markets.push(market);
   }
   const first=await serve(t,markets[0]),restarted=await serve(t,markets[1]);
@@ -70,7 +70,7 @@ test("a provider-facing route failure does not take down cached read-only routes
 });
 test("malformed upstream feeds retain their actual prior data and timestamp",async()=>{
   let invalid=false;
-  const market=createMarket({request:async url=>url.startsWith("/price")?{[SOL]:{usdPrice:200}}:invalid?{bad:true}:[{id:SOL,usdPrice:200}]});
+  const market=createMarket({dexRequest:async()=>[],request:async url=>url.startsWith("/price")?{[SOL]:{usdPrice:200}}:invalid?{bad:true}:[{id:SOL,usdPrice:200}]});
   await market.scan();const first=market.snapshot();invalid=true;await market.scan();const second=market.snapshot();
   assert.equal(second.radar[0].priceUsd,200);
   assert.equal(second.radar[0].observedAt,first.radar[0].observedAt);
@@ -78,14 +78,14 @@ test("malformed upstream feeds retain their actual prior data and timestamp",asy
   assert.ok(isValid("snapshot",second));
 });
 test("omitted provider prices are cached as unavailable and duplicate mint jobs are coalesced",async()=>{
-  let calls=0;const market=createMarket({request:async()=>{calls++;await new Promise(r=>setImmediate(r));return {};}});
+  let calls=0;const market=createMarket({dexRequest:async()=>[],request:async()=>{calls++;await new Promise(r=>setImmediate(r));return {};}});
   const [a,b]=await Promise.all([market.paperPrices([SOL,SOL]),market.paperPrices([SOL])]);
   assert.equal(calls,1);assert.deepEqual(a,{[SOL]:null});assert.deepEqual(a,b);
   await market.paperPrices([SOL]);assert.equal(calls,1);
 });
 test("explicit null provider prices degrade to unavailable without rejecting valid siblings",async()=>{
   const other=MINTS[0];
-  const market=createMarket({request:async()=>({[SOL]:null,[other]:{usdPrice:"2.5",blockId:7}})});
+  const market=createMarket({dexRequest:async()=>[],request:async()=>({[SOL]:null,[other]:{usdPrice:"2.5",blockId:7}})});
   const result=await market.paperPrices([SOL,other]);
   assert.equal(result[SOL],null);assert.equal(result[other].priceUsd,2.5);assert.equal(result[other].blockId,7);
   assert.ok(Number.isInteger(result[other].observedAt));
@@ -116,3 +116,4 @@ test("smoke distinguishes service health from optional provider readiness",async
   const result=await smoke(base);assert.equal(result.marketData.degraded,true);assert.equal(result.marketData.healthyFeeds,0);
   await assert.rejects(smoke(base,{requireMarketData:true}),/feed is delayed/);
 });
+

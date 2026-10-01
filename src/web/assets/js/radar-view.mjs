@@ -19,7 +19,7 @@ export function createRadarView({document,getState,actions}) {
     const state=stateFor(row,paper),head=node(document,"div","contact-head");
     const select=node(document,"button","contact-select",row.symbol);select.type="button";select.onclick=()=>actions.selectToken(row);
     head.append(select,node(document,"span","state state-"+state.toLowerCase(),stateIcon(state)+" "+state),strengthBars(document,row));card.append(head);
-    card.append(node(document,"div","contact-meta",ageText(row)+" · "+(row.launchpad||"Jupiter")+" · "+(row.isVerified?"Verified":"Unverified")));
+    card.append(node(document,"div","contact-meta",ageText(row)+" · "+(row.launchpad||(radarUi.tab.startsWith("dex:")?"DexScreener · Jupiter metrics":"Jupiter"))+" · "+(row.isVerified?"Verified":"Unverified")));
     const stats=node(document,"div","contact-stats");
     for(const [label,value] of [["MC",compactUsd(row.marketCap)],["LIQ",compactUsd(row.liquidityUsd)],
       ["VOL "+radarUi.source,compactUsd(row["volume"+radarUi.source])],["ORGANIC",row.organicScore==null?"—":short(row.organicScore)+"/100"]]) {
@@ -70,6 +70,7 @@ export function createRadarView({document,getState,actions}) {
     for(const row of rows.slice(page*size,(page+1)*size))box.append(tokenCard(row));
     if(!rows.length)box.append(node(document,"p","empty-state",query&&(searchStatus==="Searching Jupiter…"||searchStatus.startsWith("Search:"))?searchStatus:feedInfo?.error?"Feed delayed: "+feedInfo.error:"No fresh launches match these filters. Adjust Launch filters above."));
     renderInstrument(rows.slice(0,40));
+    $("radar-source").disabled=radarUi.tab.startsWith("dex:");
     for(const button of $("radar-tabs").children){button.className=button.dataset.tab===radarUi.tab?"selected":"";button.setAttribute("aria-pressed",String(button.dataset.tab===radarUi.tab));}
     $("sort-direction").textContent=radarUi.sort==="age"?(radarUi.direction==="asc"?"Newest first":"Oldest first"):(radarUi.direction==="desc"?"Highest first ↓":"Lowest first ↑");
   }

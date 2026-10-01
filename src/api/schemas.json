@@ -273,7 +273,7 @@
         },
         "feeds": {
           "type": "object",
-          "maxProperties": 13,
+          "maxProperties": 19,
           "propertyNames": {
             "enum": [
               "recent",
@@ -288,7 +288,13 @@
               "organic:5m",
               "organic:1h",
               "organic:6h",
-              "organic:24h"
+              "organic:24h",
+              "dex:profiles",
+              "dex:updates",
+              "dex:takeovers",
+              "dex:ads",
+              "dex:boosts",
+              "dex:top"
             ]
           },
           "additionalProperties": {
@@ -343,7 +349,7 @@
         },
         "feeds": {
           "type": "object",
-          "maxProperties": 13,
+          "maxProperties": 19,
           "propertyNames": {
             "enum": [
               "recent",
@@ -358,7 +364,13 @@
               "organic:5m",
               "organic:1h",
               "organic:6h",
-              "organic:24h"
+              "organic:24h",
+              "dex:profiles",
+              "dex:updates",
+              "dex:takeovers",
+              "dex:ads",
+              "dex:boosts",
+              "dex:top"
             ]
           },
           "additionalProperties": {
@@ -1001,6 +1013,28 @@
         "trails"
       ],
       "additionalProperties": false
+    },
+    "upstreamDexDiscovery": {
+      "type": "array",
+      "maxItems": 1000,
+      "items": {
+        "type": "object",
+        "required": [
+          "chainId",
+          "tokenAddress"
+        ],
+        "properties": {
+          "chainId": {
+            "type": "string",
+            "maxLength": 40
+          },
+          "tokenAddress": {
+            "type": "string",
+            "maxLength": 100
+          }
+        },
+        "additionalProperties": true
+      }
     }
   }
 }

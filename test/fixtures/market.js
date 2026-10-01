@@ -9,7 +9,7 @@ async function fixtureMarket() {
     createdAt:new Date(Date.now()-(i===3?48*3600000:(i+1)*60000)).toISOString(),
     ...(i===4?{audit:{isSus:true}}:{}),
     stats5m:{priceChange:i===1?8:1,buyVolume:1000,sellVolume:500} }));
-  const market=createMarket({request:async url => {
+  const market=createMarket({dexRequest:async()=>[{chainId:"solana",tokenAddress:MINTS[1]}],request:async url => {
     if(url.startsWith("/price"))return Object.fromEntries(url.split("ids=")[1].split(",")
       .filter(mint=>mint===SOL||MINTS.includes(mint)).map(mint=>[mint,{usdPrice:mint===SOL?200:.02,blockId:42}]));
     return tokens;
@@ -18,3 +18,4 @@ async function fixtureMarket() {
   return market;
 }
 module.exports={fixtureMarket,SOL,MINTS};
+

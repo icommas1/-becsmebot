@@ -174,3 +174,18 @@ test("search failures are visible and a later successful search recovers",async(
   await expect(page.locator("#radar")).toContainText("FRESH");
   await expect(page.locator("#radar")).not.toContainText("temporarily unavailable");
 });
+
+test("Dex paid source selection filters Radar and Signals, survives reload and scopes auto buys",async({page})=>{
+ await page.getByRole("button",{name:"Dex top boosts (paid)",exact:true}).click();
+ await expect(page.locator("#radar-source")).toBeDisabled();
+ await expect(page.locator("#radar .token-contact")).toHaveCount(1);
+ await expect(page.locator("#radar")).toContainText("HEAT");
+ await expect(page.locator("#signals .rail-contact")).toHaveCount(1);
+ await page.reload();
+ await expect(page.getByRole("button",{name:"Dex top boosts (paid)",exact:true})).toHaveAttribute("aria-pressed","true");
+ await expect(page.locator("#radar .token-contact")).toHaveCount(1);
+ await page.getByRole("button",{name:"Paper wallet",exact:true}).click();
+ await page.getByRole("button",{name:"Start auto paper",exact:true}).click();
+ await expect(page.locator("#paper-holds")).toContainText("HEAT");
+ await expect(page.locator("#paper-holds")).not.toContainText("FRESH");
+});

@@ -1,6 +1,6 @@
 # Architecture
 
-BecsBot is a single Node/Express service serving a vanilla HTML/CSS/JavaScript terminal. It reads Jupiter market data and simulates trades in browser storage. It has no login, wallet signer or real execution engine.
+BecsBot is a single Node/Express service serving a vanilla HTML/CSS/JavaScript terminal. It reads Jupiter market data and DexScreener discovery membership and simulates trades in browser storage. It has no login, wallet signer or real execution engine.
 
 ## Repository layout
 
@@ -11,6 +11,7 @@ BecsBot is a single Node/Express service serving a vanilla HTML/CSS/JavaScript t
 | `src/api/schemas.json` | Draft-07 request, response and upstream contracts |
 | `src/api/validation.js` | Strict Ajv validators and canonical Solana mint checks |
 | `src/market/client.js` | Serialized Jupiter queue, timeout and bounded 429 retry |
+| `src/market/dexscreener.js` | Bounded public DexScreener discovery transport and Solana membership |
 | `src/market/mint.js` | Canonical base58 mint validation without a wallet SDK |
 | `src/market/tokens.js` | Feed definitions and token normalization |
 | `src/market/market.js` | Scans, caches, single-flight requests and snapshots |
@@ -38,6 +39,7 @@ BecsBot is a single Node/Express service serving a vanilla HTML/CSS/JavaScript t
 ## Data path
 
 ```text
+DexScreener discovery -> Jupiter mint enrichment
 Jupiter Price V3 / Tokens V2
   -> strict upstream schemas
   -> canonical-mint normalization and feed deduplication
@@ -47,7 +49,7 @@ Jupiter Price V3 / Tokens V2
   -> browser presentation and browser-local paper accounting
 ```
 
-The process scans SOL Price V3 and thirteen Tokens V2 feeds once a minute. Jupiter requests are serialized with a 2.2-second gap, a ten-second timeout, a 24-request pending bound and at most one 429 retry. The scan cannot overlap itself. Successful feed data replaces its prior cache; failed feeds retain their prior timestamps and an error. Schema failures follow the same failure path. Fresh metadata cannot refresh a cached price timestamp.
+The process scans SOL Price V3, thirteen Tokens V2 feeds and six DexScreener discovery feeds once a minute. Dex discovery runs independently while Jupiter category reads proceed. Each Dex request has a ten-second timeout, a 1 MiB body bound and no retry; at most six are in flight. Valid Solana mints deduplicate, with at most 50 per Dex feed and 300 per scan. They are enriched using Jupiter Tokens V2 mint search in batches of at most 100. Only exact requested mints can supply metadata. Dex fields never supply prices, cap, liquidity, age, verification or organic scores. Missing Jupiter data stays unavailable; failed discovery or enrichment retains the affected feed’s prior data and timestamp. Paid ads/boosts are labeled and do not represent the proprietary DexScreener Trending Score. Jupiter requests are serialized with a 2.2-second gap, a ten-second timeout, a 24-request pending bound and at most one 429 retry. The scan cannot overlap itself. Successful feed data replaces its prior cache; failed feeds retain their prior timestamps and an error. Schema failures follow the same failure path. Fresh metadata cannot refresh a cached price timestamp.
 
 Normalization merges canonical mints and feeds. Positive finite prices and numeric metrics are retained; absence stays unavailable. The server retains full observed history for signal ranking. `GET /api/basket` sends feed timestamps, Radar rows and compact Signals references; the browser joins each signal to its Radar row by mint. `GET /api/history` sends chart trails separately, downsampled to at most 120 points per mint while retaining endpoints and bucket extrema. The browser revalidates the basket every 15 seconds and requests chart history only after `lastScanAt` changes. ETags return 304 for unchanged basket/history revisions. Market scans remain once per minute; REST polling does not make scans faster or turn them into a stream.
 
@@ -82,7 +84,7 @@ Ajv compiles schemas in strict mode without coercion or mutation. Upstream token
 | Volume | Sum of nonnegative buy and sell volume for the corresponding Jupiter interval |
 | Token age | Jupiter `createdAt`, falling back to `firstPool.createdAt`; interpreted by the browser |
 | Holders | Positive finite Jupiter `holderCount`; no separate holder service is queried |
-| Launch source | Membership in configured Tokens V2 category feeds plus optional Jupiter `launchpad` metadata |
+| Launch source | Membership in configured Tokens V2 category feeds or DexScreener discovery feeds plus optional Jupiter `launchpad` metadata |
 | Wallet signals | Not implemented; no wallet history is fetched or scored |
 | Positions | Browser-local simulated holds in `becsPaperV1`; there is no server or live position store |
 
@@ -118,6 +120,6 @@ The execution boundary is intentionally one-way: the browser can request public 
 
 CI runs syntax/schema checks and unit/integration tests on Node 22/24, plus iPhone WebKit, mobile Chromium and desktop Chromium using a local fixture server. Failures retain traces/screenshots for seven days. No test needs a production API key.
 
-The Railway workflow runs after pushes to main, manually, and every six hours. It makes only five GET requests per attempt, allows deployment warm-up retries, validates contracts including bounded chart history, confirms all thirteen configured feeds, a recent scan, disabled live trading and terminal/asset availability. Provider freshness is reported separately so a Jupiter outage is not misclassified as a BecsBot process outage; strict market-data readiness is available through `SMOKE_REQUIRE_MARKET_DATA=1`. It does not send orders, change settings or buy a developer plan. Dependabot opens weekly npm and Actions update PRs; updates are not automatically merged.
+The Railway workflow runs after pushes to main, manually, and every six hours. It makes only five GET requests per attempt, allows deployment warm-up retries, validates contracts including bounded chart history, confirms all nineteen configured feeds, a recent scan, disabled live trading and terminal/asset availability. Provider freshness is reported separately so a provider outage is not misclassified as a BecsBot process outage; strict market-data readiness is available through `SMOKE_REQUIRE_MARKET_DATA=1`. It does not send orders, change settings or buy a developer plan. Dependabot opens weekly npm and Actions update PRs; updates are not automatically merged.
 
 Railway service variables, volume attachment and health-check configuration live outside this repository. The repository defines the startup command and expected variable names but cannot prove those external settings. No `railway.toml`, Dockerfile or Procfile is currently required.

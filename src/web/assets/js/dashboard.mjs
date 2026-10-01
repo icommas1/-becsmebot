@@ -84,7 +84,7 @@ async function refresh() {
     const s=await api.basket();snapshot=s;await loadRadarHistory(s);
     const scanned=s.lastScanAt?new Date(s.lastScanAt).toLocaleTimeString():"pending";
     $("status").textContent=(s.paused?"Scans paused":s.running?"Scanning":"Updated")+" · "+scanned+(s.lastError?" · "+s.lastError:"");
-    $("market-status").textContent="Jupiter scan "+scanned+(s.lastError?" · Some data delayed":" · 5m / 1h / 6h / 24h feeds");
+    $("market-status").textContent="Jupiter + DexScreener scan "+scanned+(s.lastError?" · Some data delayed":" · 5m / 1h / 6h / 24h feeds");
     document.body.dataset.scanning=String(!!s.running);$("scan-state").textContent=s.running?"SCANNING":s.lastError?"DELAYED":"REST / 60s";
     observeContacts(s);runAutoBuys();render();await refreshPrices();
   } catch(error) { $("status").textContent=error.message;message(error.message); }
@@ -125,7 +125,7 @@ $("set-cash").onclick=()=>{const value=Number($("cash-input").value);if(!Number.
 $("reset-paper").onclick=()=>{if(!confirm("Reset paper holds, history, and bought-once list?"))return;const cash=Number($("cash-input").value);const settings=paper.settings,account=paper.account;paper={...freshPaper(),account,cashSol:Number.isFinite(cash)&&cash>=0?cash:.4,settings};prices={};priceTimes={};const persisted=save();render();if(persisted)message("Paper wallet reset.");};
 $("fresh-preset").onclick=()=>{Object.assign(paper.settings,launchDefaults);radarUi.tab="recent";radarUi.sort="age";radarUi.direction="asc";$("radar-sort").value="age";radarPage=0;for(const input of document.querySelectorAll("[data-setting]"))input.value=paper.settings[input.dataset.setting];const persisted=save();saveRadar();render();if(persisted)message("Fresh-launch filters restored.");};
 $("auto").onclick=()=>{paper.auto=!paper.auto;const persisted=save();render();if(persisted)message(paper.auto?"Auto paper on while this page is open.":"Auto paper off.");runAutoBuys();};
-for(const [tab,label] of [["recent","New launches"],["trending","Trending launches"],["traded","Active launches"],["organic","Organic launches"]]) {
+for(const [tab,label] of [["recent","New launches"],["trending","Trending launches"],["traded","Active launches"],["organic","Organic launches"],["dex:profiles","Dex profiles"],["dex:updates","Dex updates"],["dex:takeovers","Dex takeovers"],["dex:ads","Dex paid ads"],["dex:boosts","Dex latest boosts (paid)"],["dex:top","Dex top boosts (paid)"]]) {
   const b=node("button","",label);b.dataset.tab=tab;b.onclick=()=>{radarUi.tab=tab;radarPage=0;saveRadar();render();};$("radar-tabs").append(b);
 }
 $("radar-search").oninput=()=>{

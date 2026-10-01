@@ -8,7 +8,7 @@ export const launchDefaults=Object.freeze({
 export function normalizeRadarUi(stored={}) {
   let ui={tab:"recent",source:"5m",sort:"age",direction:"asc",size:"regular",pageSize:20,...stored};
   if(ui.launchVersion!==2)ui={...ui,tab:"recent",sort:"age",direction:"asc",launchVersion:2};
-  if(!["trending","traded","organic","recent"].includes(ui.tab))ui.tab="recent";
+  if(!["trending","traded","organic","recent","dex:profiles","dex:updates","dex:takeovers","dex:ads","dex:boosts","dex:top"].includes(ui.tab))ui.tab="recent";
   if(!["5m","1h","6h","24h"].includes(ui.source))ui.source="5m";
   return ui;
 }
@@ -31,7 +31,7 @@ export function passes(row,settings,now=Date.now()) {
 }
 
 export function selectedFeed(radarUi) {
-  return radarUi.tab==="recent"?"recent":radarUi.tab+":"+radarUi.source;
+  return radarUi.tab==="recent"||radarUi.tab.startsWith("dex:")?radarUi.tab:radarUi.tab+":"+radarUi.source;
 }
 
 export function matchesTopic(row,radarUi) {
@@ -43,12 +43,13 @@ export function launchRows(rows,settings,radarUi,now=Date.now()) {
 }
 
 export function sortValue(row,radarUi,now=Date.now()) {
-  const interval=radarUi.source,feed=radarUi.tab+":"+interval;
+  const interval=radarUi.source,feed=selectedFeed(radarUi);
   switch(radarUi.sort) {
-    case "rank":return -(row.ranks?.[radarUi.tab==="recent"?"recent":feed]||999);
+    case "rank":return -(row.ranks?.[feed]||999);
     case "change":return row["change"+interval];
     case "volume":return row["volume"+interval];
     case "age":return ageMinutes(row,now);
     default:return row[radarUi.sort];
   }
 }
+
