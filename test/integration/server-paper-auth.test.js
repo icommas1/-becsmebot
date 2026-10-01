@@ -10,7 +10,7 @@ test("GitHub flow requires state+cookie, one-use PKCE and the configured owner; 
     ensureAccount:async id=>{assert.equal(id,"github:123");created++;},createSession:async id=>{sessions.set(token,id);return token;},
     session:async t=>sessions.get(t)||null,logout:async t=>sessions.delete(t),read:async id=>({owner:id}),
     command:async()=>{throw Error("invalid or unauthorized commands must not execute");}};
-  const app=createApp(await fixtureMarket(),{config,store,identity:async(_config,_code,verifier)=>{verifierSeen=verifier;return allowed?"123":"456";}});
+  const app=createApp(await fixtureMarket(),{config,store,identity:async(_config,_code,verifier)=>{verifierSeen=verifier;return {id:allowed?"123":"456",login:allowed?"owner":"other"};}});
   const server=app.listen(0,"127.0.0.1");await new Promise(r=>server.once("listening",r));
   const base="http://127.0.0.1:"+server.address().port;
   const call=(path,options={})=>fetch(base+path,{redirect:"manual",...options});
@@ -37,7 +37,9 @@ test("GitHub flow requires state+cookie, one-use PKCE and the configured owner; 
     assert.equal((await call("/api/auth/logout",{method:"POST",headers:{Cookie:cookie,Origin:config.origin}})).status,200);
     assert.equal((await call("/api/paper/account",{headers:{Cookie:cookie}})).status,401);
     allowed=false;flow=await start();
-    assert.equal((await call("/api/auth/github/callback?state="+flow.state+"&code=fixture",{headers:{Cookie:flow.cookie}})).status,403);
+    const mismatch=await call("/api/auth/github/callback?state="+flow.state+"&code=fixture",{headers:{Cookie:flow.cookie}});
+    assert.equal(mismatch.status,403);
+    assert.deepEqual(await mismatch.json(),{error:"Signed in to GitHub as other, but this paper account is private."});
     assert.equal(created,1);
   }finally{await new Promise(r=>server.close(r));}
 });
