@@ -4,7 +4,7 @@
   <button id="refresh" class="secondary" aria-label="Refresh data">↻ Refresh</button>
 </header>
 <nav class="view-nav" aria-label="Terminal panels">
-  <button data-view="radar" class="selected">Markets</button><button data-view="paper">Paper wallet</button><button data-view="activity">Activity</button><button data-view="settings">Settings</button><button data-view="signals">Signals</button><button data-view="connections">Feeds</button>
+  <button data-view="radar" class="selected">Markets</button><button data-view="performance">Performance</button><button data-view="paper">Paper wallet</button><button data-view="activity">Activity</button><button data-view="settings">Settings</button><button data-view="signals">Signals</button><button data-view="connections">Feeds</button>
 </nav>
 <main id="terminal-grid" class="terminal-grid">
 <aside class="signal-rail"><div class="rail-heading"><span class="live-dot"></span><h2>Signal stream</h2></div><small id="signal-scope"></small><p class="micro-note">Observed momentum · shared launch filters</p><div id="signals"></div></aside>
@@ -52,6 +52,13 @@
   </section></div>
   <div class="dock-panel" data-view-panel="connections"><section class="side-section"><h2>Data feeds</h2><p><small>Jupiter and DexScreener REST scans run every minute, including while your phone is closed. Paper auto runs only while this page is open. This public terminal cannot send real transactions.</small></p><div id="feed-summary" role="status"></div><div id="feeds"></div></section></div>
 </div>
+<section id="performance-panel" class="performance-panel" aria-labelledby="performance-title">
+  <div class="rowhead"><div><h2 id="performance-title">Paper performance</h2><p>Actual simulated sales recorded on this browser.</p></div><label>Source<select id="performance-source"><option value="all">All sales</option><option value="manual">Manual paper</option><option value="auto">Auto paper</option></select></label></div>
+  <div class="metrics performance-metrics"><div class="metric"><small>Recorded sales</small><b id="performance-count">0</b></div><div class="metric"><small>Net P/L in recorded sales</small><b id="performance-realized">—</b></div><div class="metric"><small>Winning sales</small><b id="performance-winrate">—</b></div><div class="metric"><small>Median sale return</small><b id="performance-median">—</b></div></div>
+  <p class="performance-note">A partial exit counts as one sale. Returns include simulated entry and exit fees. Older sales lack cost basis, so they are excluded from these four figures. Ledger realized P/L including older sales: <strong id="performance-ledger-total">—</strong>. Activity keeps the most recent 500 events; resetting the paper wallet clears it.</p>
+  <section class="performance-section"><div class="rowhead"><h3>Return vs entry market cap</h3><small>Recorded paper sales with a known entry cap</small></div><div id="performance-chart"></div><small>Horizontal scale is logarithmic. Each dot is one sale; returns are net of simulated fees.</small></section>
+  <section class="performance-section"><h3>Sale memory</h3><div id="performance-sales"></div></section>
+</section>
 </main>
 <div class="live-tape"><b>TAPE <span class="live-dot"></span></b><div id="trade-tape" role="log" aria-label="Observed signal and paper trade tape"></div></div>
 <footer class="execution-dock" aria-label="Paper execution dock"><button id="dock-token" class="dock-token secondary">Select token</button><span class="dock-mode">PAPER</span><div id="dock-sizes" class="dock-sizes"></div><label class="dock-custom">Custom $<input id="dock-amount" type="number" min="0.01" step="0.01" value="1" aria-label="Custom paper trade dollars"></label><button id="dock-buy">BUY $1</button><button id="dock-sell" class="secondary">SELL $1</button><small id="dock-status">Select a launch · real trading off</small></footer>

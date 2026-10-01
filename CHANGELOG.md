@@ -4,6 +4,8 @@ All notable repository-level changes are recorded here. Product strategy and pro
 
 ## Unreleased
 
+- Add a paper Performance view for recorded simulated sales with per-sale basis, net return, source filtering and entry-cap chart. Older sales remain visible in ledger P/L but are excluded from return statistics.
+
 - Show a readable 19-feed readiness count and per-source last-success status in the Feeds panel, including retained data for delayed sources.
 
 - Route the terminal through a lean launch shell and `/terminal` home-screen web app entry; remove the long Radar note from initial presentation.
