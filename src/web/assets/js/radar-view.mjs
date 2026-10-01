@@ -61,9 +61,14 @@ export function createRadarView({document,getState,actions}) {
   function renderRadar() {
     const state=getState(),{paper,radarUi,snapshot,searchRows,searchStatus}=state,box=$("radar");
     const panel=box.closest(".radar-panel"),panelTop=panel.scrollTop;
-    const left=box.getBoundingClientRect().left,scrollLeft=box.scrollLeft;
-    const visible=[...box.children].find(card=>card.dataset.mint&&card.getBoundingClientRect().right>left+1);
-    const anchor=visible?{mint:visible.dataset.mint,offset:visible.getBoundingClientRect().left-left}:null;
+    const bounds=box.getBoundingClientRect(),left=bounds.left,scrollLeft=box.scrollLeft;
+    const visible=[...box.children].reduce((best,card)=>{
+      if(!card.dataset.mint)return best;
+      const rect=card.getBoundingClientRect();
+      const width=Math.min(rect.right,bounds.right)-Math.max(rect.left,bounds.left);
+      return width>(best?.width||0)?{card,width,left:rect.left}:best;
+    },null);
+    const anchor=visible?{mint:visible.card.dataset.mint,offset:visible.left-left}:null;
     const query=$("radar-search").value.trim().toLowerCase(),feed=selectedFeed(radarUi);
     const allRows=query?[...new Map([...(snapshot?.radar||[]),...searchRows].map(row=>[row.mint,row])).values()]:(snapshot?.radar||[]);
     const candidates=allRows.filter(row=>query?(row.symbol.toLowerCase().includes(query)||row.name.toLowerCase().includes(query)||row.mint.toLowerCase().includes(query)):matchesTopic(row,radarUi));

@@ -202,10 +202,10 @@ test("mobile refresh preserves the swiped card and panel position",async({page,i
  await expect(page.locator("#refresh")).toBeEnabled();
  await expect.poll(()=>deck.evaluate(el=>el.scrollLeft)).toBeCloseTo(before,0);
  await expect.poll(()=>panel.evaluate(el=>el.scrollTop)).toBeCloseTo(top,0);
- // A fresh launch inserted ahead of the viewed token must keep that token in view.
+ // A launch inserted between the first and viewed token must keep that token in view.
  const payload=await(await page.request.get("/api/basket")).json();
  payload.radar=payload.radar.map(row=>row.mint===MINTS[2]?{...row,marketCap:50000,
-   createdAt:new Date(Date.now()-10000).toISOString()}:row);
+   createdAt:new Date(Date.now()-90000).toISOString()}:row);
  payload.lastScanAt=new Date().toISOString();
  const heat=deck.locator('[data-mint="'+MINTS[1]+'"]');
  const offset=await heat.evaluate(el=>el.getBoundingClientRect().left-el.parentElement.getBoundingClientRect().left);
