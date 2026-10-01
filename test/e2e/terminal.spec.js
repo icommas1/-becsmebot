@@ -63,7 +63,7 @@ test("unchanged refreshes revalidate the basket without refetching chart history
 });
 test("all terminal navigation panels remain reachable",async({page})=>{
   for(const [button,view,content] of [
-    ["Markets","radar","FRESH"],["Paper wallet","paper","Paper wallet"],
+    ["Markets","radar","FRESH"],["Performance","performance","Paper performance"],["Paper wallet","paper","Paper wallet"],
     ["Activity","activity","Paper activity"],["Settings","settings","Paper & display settings"],
     ["Signals","signals","FRESH"],["Feeds","connections","Data feeds"]
   ]){
@@ -71,6 +71,7 @@ test("all terminal navigation panels remain reachable",async({page})=>{
     await expect(page.locator("body")).toHaveAttribute("data-view",view);
     if(view==="radar")await expect(page.locator("#radar")).toContainText(content);
     else if(view==="signals")await expect(page.locator("#signals")).toContainText(content);
+    else if(view==="performance")await expect(page.locator("#performance-panel")).toContainText(content);
     else await expect(page.locator(`[data-view-panel="${view}"]`)).toContainText(content);
   }
   expect(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth)).toBe(true);
@@ -117,7 +118,15 @@ test("one dollar paper buy and sale survive a reload without real orders",async(
   expect(wallet.account).toEqual(account);
   expect(wallet.holds[MINTS[0]].qty).toBeCloseTo(50,8);
   expect(wallet.activity[0].sizeUsd).toBe(1);
+  expect(wallet.activity[0].basisUsd).toBeGreaterThan(0);
+  expect(wallet.activity[0].realizedUsd).toBeCloseTo(wallet.activity[0].netUsd-wallet.activity[0].basisUsd,8);
   expect(wallet.auto).toBe(false);
+  await page.getByRole("button",{name:"Performance",exact:true}).click();
+  await expect(page.locator("#performance-count")).toHaveText("1");
+  await expect(page.locator("#performance-sales")).toContainText("FRESH");
+  await expect(page.locator("#performance-chart circle")).toHaveCount(1);
+  await page.locator("#performance-source").selectOption("auto");
+  await expect(page.locator("#performance-count")).toHaveText("0");
   await page.getByRole("button",{name:"Activity",exact:true}).click();
   await expect(page.locator("#activity")).toContainText("Paper sold $1.00 FRESH");
   expect(realRequests).toEqual([]);

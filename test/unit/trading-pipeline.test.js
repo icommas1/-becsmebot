@@ -27,7 +27,16 @@ for(const scenario of baseline.scenarios)test("production equivalence: "+scenari
     if(execution)assert.equal(execution.status,result.ok?"filled":"rejected");
   }
   const {account,...ledger}=paper;
-  assert.deepEqual(ledger,scenario.ledger);
+  for(const entry of ledger.activity)if(entry.kind==="sell"){
+    assert.ok(entry.basisUsd>0);
+    assert.ok(entry.netUsd>=0);
+    assert.ok(Math.abs(entry.realizedUsd-(entry.netUsd-entry.basisUsd))<1e-10);
+    assert.equal(entry.entryCap,row.marketCap);
+  }
+  const baselineLedger=structuredClone(ledger);
+  for(const entry of baselineLedger.activity)if(entry.kind==="sell")
+    for(const field of ["basisUsd","netUsd","realizedUsd","entryCap"])delete entry[field];
+  assert.deepEqual(baselineLedger,scenario.ledger);
   assert.equal(account.executionMode,"paper");
 });
 

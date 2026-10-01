@@ -97,3 +97,13 @@ body{grid-template-areas:"head" "main" "tape" "dock" "nav";grid-template-rows:49
 #sheet-close{min-width:72px;min-height:48px;font-size:14px;touch-action:manipulation}
 
 .token-sheet .sheet-top{position:sticky;top:0;z-index:1;background:#0c1b20}
+
+/* Research starts with the browser's actual paper-sale journal. */
+.performance-panel{display:none;min-height:0;overflow-y:auto;overscroll-behavior:contain;background:#080f13;padding:20px clamp(12px,4vw,42px) 38px!important;margin:0!important;border:0!important;border-radius:0!important}
+body[data-view="performance"] main.terminal-grid{grid-template-columns:minmax(0,1fr)}
+body[data-view="performance"] .signal-rail,body[data-view="performance"] .radar-panel,body[data-view="performance"] .terminal-side{display:none!important}
+body[data-view="performance"] .performance-panel{display:block}
+.performance-panel>.rowhead{align-items:end}.performance-panel h2{font-size:24px;margin:0}.performance-panel h3{font-size:15px}.performance-panel>.rowhead p{margin:3px 0 0}.performance-panel>.rowhead label{width:min(190px,46vw)}
+.performance-metrics{grid-template-columns:repeat(4,minmax(0,1fr));gap:10px;margin:18px 0 10px}.performance-metrics .metric{padding:14px!important;background:#101d21;border:1px solid #294047;border-radius:9px}.performance-metrics .metric b{font-size:19px}.performance-note{max-width:850px;font-size:12px}
+.performance-section{max-width:1100px;background:#0d191d;border:1px solid #294047;border-radius:10px;padding:16px;margin:18px 0}.performance-section .rowhead{margin-bottom:8px}.performance-chart{min-height:160px}.performance-chart svg{display:block;width:100%;max-height:350px;overflow:visible}.performance-chart line{stroke:#395258;stroke-width:1}.performance-chart text{fill:#97b2b7;font:12px ui-monospace,monospace}.performance-chart circle{stroke:#d6f8e5;stroke-width:1;opacity:.85}.performance-chart .sale-positive{fill:#59d6a2}.performance-chart .sale-negative{fill:#ed9a79}.performance-sale .name{font-size:14px}.performance-sale .meta{font-size:11px}
+@media(max-width:800px){.view-nav{justify-content:flex-start}.view-nav button{flex:0 0 auto;min-width:68px}body[data-view="performance"] .performance-panel{height:100%;padding:16px 12px 28px!important}.performance-metrics{grid-template-columns:repeat(2,minmax(0,1fr))}.performance-metrics .metric b{font-size:16px}.performance-section{padding:12px}}

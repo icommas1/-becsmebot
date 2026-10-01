@@ -8,6 +8,7 @@ import {createApiClient} from "./api-client.mjs";
 import {node as createNode} from "./dom.mjs";
 import {createRadarView} from "./radar-view.mjs";
 import {createPaperView} from "./paper-view.mjs";
+import {createPerformanceView} from "./paper-performance.mjs";
 
 const RADAR_UI_STORE = "becsRadarUiV1", TRAIL_STORE = "becsRadarTrailV1";
 const storage=(()=>{try{return globalThis.localStorage;}catch(_error){return {
@@ -53,7 +54,7 @@ function sellPaper(mint,pct,dollars=null,automatic=false){
 }
 function renderRadar(){radarView.renderRadar();}
 function renderSignals(){radarView.renderSignals();}
-function render(){radarView.renderFilterSummary();renderRadar();renderSignals();paperView.renderWallet();paperView.renderHolds();paperView.renderDock();paperView.renderTape();}
+function render(){radarView.renderFilterSummary();renderRadar();renderSignals();paperView.renderWallet();paperView.renderHolds();paperView.renderDock();paperView.renderTape();performanceView.render();}
 let marking=false,lastMarkAt=0;
 async function refreshPrices(force=false) {
   const mints=Object.keys(paper.holds);if(!mints.length||marking||!force&&Date.now()-lastMarkAt<30000)return;
@@ -97,6 +98,7 @@ const getState=()=>({paper,snapshot,prices,priceTimes,radarUi,trail,searchRows,s
 const paperView=createPaperView({document,getState,actions:{
   solUsd,currentToken:()=>currentToken(),canSell:(mint)=>canSell(mint),sell:(...args)=>sellPaper(...args),message
 }});
+const performanceView=createPerformanceView({document,getPaper:()=>paper});
 const radarView=createRadarView({document,getState,actions:{
   solUsd,currentToken:()=>currentToken(),canSell:(mint)=>canSell(mint),sell:(...args)=>sellPaper(...args),
   buy:(...args)=>buy(...args),refreshPrices:(...args)=>refreshPrices(...args),
@@ -174,7 +176,7 @@ $("refresh").onclick=refresh;
 $("brand-logo").onclick=()=>$("brand-sheet").showModal();
 $("brand-close").onclick=()=>$("brand-sheet").close();
 function setTerminalView(view) {
-  const valid=["radar","paper","activity","settings","signals","connections"];
+  const valid=["radar","performance","paper","activity","settings","signals","connections"];
   view=valid.includes(view)?view:"radar";
   document.body.dataset.view=view;
   $("mode-label").textContent="PAPER MODE";

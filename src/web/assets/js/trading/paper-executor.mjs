@@ -60,13 +60,16 @@ function fillSale(paper,intent,{solRate,mark,markAt,marketCap=null,now}) {
   if(net<=0)return {ok:false,message:"Paper sale amount is smaller than the estimated fee."};
   const filledQuantity=hold.qty*fraction;
   const basis=hold.investedUsd*fraction+hold.feesUsd*fraction;
+  const entryCap=hold.entryCap;
+  const realizedUsd=net-basis;
   paper.cashSol+=net/solRate;
-  paper.realizedUsd+=net-basis;
+  paper.realizedUsd+=realizedUsd;
   hold.qty*=1-fraction;hold.investedUsd*=1-fraction;hold.feesUsd*=1-fraction;
   if(fraction===1||hold.qty<1e-12)delete paper.holds[mint];
   if(automatic&&paper.holds[mint])paper.holds[mint].autoExited=true;
   recordActivity(paper,"sell",(automatic?"Auto ":"")+"Paper sold "+formatUsd(gross)+" "+hold.symbol+" · "+formatUsd(net)+" after fee",
-    {mint,symbol:hold.symbol,sizeUsd:gross,marketCap,source:automatic?"auto target":"manual"},now);
+    {mint,symbol:hold.symbol,sizeUsd:gross,marketCap,source:automatic?"auto target":"manual",
+      entryCap,basisUsd:basis,netUsd:net,realizedUsd},now);
   return {ok:true,filledQuantity,fillPrice:unit,fee,message:"Paper sold "+formatUsd(gross)+" of "+hold.symbol+".",gross,remaining:paper.holds[mint]?.qty||0};
 }
 
