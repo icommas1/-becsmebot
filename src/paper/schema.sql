@@ -72,17 +72,12 @@ CREATE INDEX IF NOT EXISTS becs_event_proofs_stream ON becs_event_proofs(stream_
 CREATE OR REPLACE FUNCTION becs_reject_append_only_mutation() RETURNS trigger
 LANGUAGE plpgsql AS 'BEGIN RAISE EXCEPTION ''BecsEvent records are append-only''; END;';
 
-DO $$
-BEGIN
-  IF NOT EXISTS (SELECT 1 FROM pg_trigger WHERE tgname='becs_events_append_only') THEN
-    CREATE TRIGGER becs_events_append_only
-      BEFORE UPDATE OR DELETE ON becs_events
-      FOR EACH ROW EXECUTE FUNCTION becs_reject_append_only_mutation();
-  END IF;
-  IF NOT EXISTS (SELECT 1 FROM pg_trigger WHERE tgname='becs_event_proofs_append_only') THEN
-    CREATE TRIGGER becs_event_proofs_append_only
-      BEFORE UPDATE OR DELETE ON becs_event_proofs
-      FOR EACH ROW EXECUTE FUNCTION becs_reject_append_only_mutation();
-  END IF;
-END;
-$;
+DROP TRIGGER IF EXISTS becs_events_append_only ON becs_events;
+CREATE TRIGGER becs_events_append_only
+  BEFORE UPDATE OR DELETE ON becs_events
+  FOR EACH ROW EXECUTE FUNCTION becs_reject_append_only_mutation();
+
+DROP TRIGGER IF EXISTS becs_event_proofs_append_only ON becs_event_proofs;
+CREATE TRIGGER becs_event_proofs_append_only
+  BEFORE UPDATE OR DELETE ON becs_event_proofs
+  FOR EACH ROW EXECUTE FUNCTION becs_reject_append_only_mutation();
