@@ -21,3 +21,20 @@ test("production runtime starts, scans and shuts down cleanly",async()=>{
   assert.equal(response.status,200);
   await runtime.shutdown();assert.equal(runtime.server.listening,false);
 });
+
+test("wallet intelligence polling stays disabled without a key and starts when configured",async()=>{
+  const market=await fixtureMarket();let scans=0;
+  const walletIntelFactory=({config})=>({
+    scanMs:config.scanMs,scan:async()=>{scans++;},
+    snapshot:()=>({enabled:config.enabled,updatedAt:null,lastError:null,running:false,
+      providers:{nansen:{enabled:config.enabled,records:0,lastSuccessAt:null,lastError:null}},tokens:[]}),
+    revision:()=>0
+  });
+  let runtime=start({env:{JUPITER_API_KEY:"fixture",PORT:"0"},marketFactory:()=>market,walletIntelFactory,logger:{log:()=>{}}});
+  if(!runtime.server.listening)await once(runtime.server,"listening");
+  await new Promise(resolve=>setImmediate(resolve));assert.equal(scans,0);await runtime.shutdown();
+
+  runtime=start({env:{JUPITER_API_KEY:"fixture",NANSEN_API_KEY:"nansen-fixture",PORT:"0"},marketFactory:()=>market,walletIntelFactory,logger:{log:()=>{}}});
+  if(!runtime.server.listening)await once(runtime.server,"listening");
+  await new Promise(resolve=>setImmediate(resolve));assert.equal(scans,1);await runtime.shutdown();
+});
