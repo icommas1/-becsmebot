@@ -3,7 +3,10 @@ const {randomUUID}=require("node:crypto");
 const express=require("express");
 const { assertSchema, isValid }=require("./validation");
 
-function createApp(market, paperAccounts={config:{enabled:false}}) {
+function createApp(market, paperAccounts={config:{enabled:false}}, walletIntel={snapshot:()=>({
+  enabled:false,updatedAt:null,lastError:null,running:false,
+  providers:{nansen:{enabled:false,records:0,lastSuccessAt:null,lastError:null}},tokens:[]
+}),revision:()=>0}) {
   const instanceId=randomUUID();
   const send = (res, name, value) => res.json(assertSchema(name, value));
   const app=express();app.set("trust proxy",1);app.disable("x-powered-by");
@@ -42,9 +45,13 @@ function createApp(market, paperAccounts={config:{enabled:false}}) {
     send(res,"snapshot",market.terminalSnapshot?market.terminalSnapshot():market.snapshot());
   });
   app.get("/api/history",(req,res)=>{
-    if(conditional(req,res,market.historyRevision?`W/\"history-${instanceId}-${market.historyRevision()}\"`:null))return;
+    if(conditional(req,res,market.historyRevision?`W/"history-${instanceId}-${market.historyRevision()}"`:null))return;
     const value=market.chartHistory?market.chartHistory():{scanAt:null,trails:{}};
     send(res,"historyResponse",value);
+  });
+  app.get("/api/wallet-intel",(req,res)=>{
+    if(conditional(req,res,`W/"wallet-${instanceId}-${walletIntel.revision?.()??0}"`))return;
+    send(res,"walletIntelResponse",walletIntel.snapshot());
   });
   const requests=new Map();let globalRequests=[];
   function limit(req,res,next) {
