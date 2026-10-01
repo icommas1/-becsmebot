@@ -7,7 +7,9 @@ BecsBot is a single Node/Express service serving a vanilla HTML/CSS/JavaScript t
 | Location | Responsibility |
 | --- | --- |
 | `src/basket.js` | Stable Railway entry point, environment and scan timer |
-| `src/paper/` | Optional GitHub authentication, bounded sessions and PostgreSQL paper transactions |
+| `src/paper/` | Optional GitHub authentication, bounded sessions, PostgreSQL paper transactions and BecsEvent persistence |
+| `src/events/` | Canonical BecsEvent hashing, materialization and chain verification |
+| `src/proof/` | Provider-neutral proof contract and local Merkle-hash provider; XYO adapter point |
 | `src/api/app.js` | HTTP routes, limits, fixed static assets and errors |
 | `src/api/schemas.json` | Draft-07 request, response and upstream contracts |
 | `src/api/validation.js` | Strict Ajv validators and canonical Solana mint checks |
@@ -70,6 +72,9 @@ Normalization merges canonical mints and feeds. Positive finite prices and numer
 | `GET /api/search?q=...` | Trimmed 2–80-character query; one-minute cache |
 | `POST /api/paper/prices` | Strict `{mints:[...]}` body, max 100 canonical mints, upstream chunks of 50 |
 | `GET /api/wallet-intel` | Read-only aggregate Smart Money flow; never returns provider wallet addresses or transaction hashes |
+| `GET /api/paper/events` | Authenticated append-only server-paper BecsEvents, newest first |
+| `GET /api/paper/proofs` | Authenticated local proof batches for the server-paper event stream |
+| `GET /api/paper/verify` | Authenticated hash-chain and local-proof verification summary |
 | `/api/sell/*`, `/api/pause/*` | 410 compatibility blocks |
 
 Price cache TTL is 20 seconds; search cache TTL is one minute. Concurrent identical lookups share a job. Search and price requests share limits of 30/minute per IP and 40/minute globally; busy responses include `Retry-After: 60`. Input errors return 400, malformed JSON 400, oversized bodies 413, provider/contract failures 503 and unexpected failures 500. No private upstream body or credentials are logged. Unknown response data never becomes a fill.
@@ -103,6 +108,16 @@ Classification separates three concepts: the intelligence provider (currently Na
 Jupiter's SmartMoney UI is not scraped because no stable documented SmartMoney feed API has been established for this integration. Phantom's documented developer products provide wallet connection/embedded-wallet capabilities rather than a public Smart Money leaderboard. Trojan is treated as an execution-platform label when an upstream intelligence provider identifies it. Additional providers such as Birdeye can be added behind the same normalization boundary without changing strategy or execution.
 
 Wallet intelligence does not change Radar eligibility, Signals, sizing, DecisionEngine behavior or paper fills in this phase. It is observational data to be measured before it is allowed to become strategy input.
+
+## BecsEvent ledger and proof boundary
+
+Committed authenticated server-paper actions emit versioned `BecsEvent` records in the same PostgreSQL transaction as the account mutation and request receipt. A successful buy or sell records the bounded decision evidence, normalized `OrderIntent`, and `ExecutionResult`; settings, cash adjustments and resets record their committed before/after state. Replayed request IDs return their original result and do not append duplicate audit events. Rejected or rolled-back commands do not produce committed BecsEvents.
+
+Each paper account has a pseudonymous stream ID derived from its authenticated user ID. Events have monotonically increasing sequence numbers, canonical SHA-256 payload hashes, the previous event hash, and an envelope hash covering event identity, type, source, timestamp, account/strategy references and payload hash. PostgreSQL triggers reject UPDATE and DELETE on event and proof rows. The mutable stream-head row is only an index; verification recomputes event hashes and checks the stored head.
+
+`ProofProvider` is deliberately separate from trading and persistence. The first provider, `local-hash-v1`, creates Merkle roots over contiguous event ranges. Batches are created after at least 32 unproved events, up to 128 at a time; an internal force-seal operation exists for tests/administration. Proof rows are append-only. A future XYO provider can attest the same event ranges without changing DecisionEngine, OrderIntent, PaperExecutor or the BecsEvent contract.
+
+This layer is non-blocking with respect to future external proof networks: PostgreSQL remains the operational ledger and local hashes remain independently verifiable. No XYO SDK, wallet, gas token, live signing path or network dependency is introduced in this phase.
 
 ## Execution and UI
 
@@ -160,6 +175,9 @@ The browser persists one unresolved command per tab in session storage before se
 | `POST /api/auth/logout` | Same-origin session revocation |
 | `GET /api/paper/account` | Authenticated owner's current paper account/revision |
 | `POST /api/paper/commands` | Strict paper buy/sell/settings/cash/reset command, no live mode |
+| `GET /api/paper/events` | Private append-only committed-event history |
+| `GET /api/paper/proofs` | Private local proof-batch history |
+| `GET /api/paper/verify` | Private chain/proof integrity summary |
 
 The existing market health route does not certify database health. When disabled, account and auth routes are absent. Enabling with missing credentials fails startup rather than weakening authentication. Database schema creation is lazy and additive; persistent storage and backup operations belong to Railway administration. The PostgreSQL volume is separate from `/app/data` chart history.
 
