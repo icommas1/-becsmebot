@@ -69,11 +69,8 @@ CREATE TABLE IF NOT EXISTS becs_event_proofs (
 );
 CREATE INDEX IF NOT EXISTS becs_event_proofs_stream ON becs_event_proofs(stream_id,last_sequence DESC);
 
-CREATE OR REPLACE FUNCTION becs_reject_append_only_mutation() RETURNS trigger AS $$
-BEGIN
-  RAISE EXCEPTION 'BecsEvent records are append-only';
-END;
-$$ LANGUAGE plpgsql;
+CREATE OR REPLACE FUNCTION becs_reject_append_only_mutation() RETURNS trigger
+LANGUAGE plpgsql AS 'BEGIN RAISE EXCEPTION ''BecsEvent records are append-only''; END;';
 
 DO $$
 BEGIN
