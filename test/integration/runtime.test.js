@@ -38,3 +38,18 @@ test("wallet intelligence polling stays disabled without a key and starts when c
   if(!runtime.server.listening)await once(runtime.server,"listening");
   await new Promise(resolve=>setImmediate(resolve));assert.equal(scans,1);await runtime.shutdown();
 });
+
+test("enabled research archive commits runtime and completed scans with startup diagnostics",async()=>{
+  const market=await fixtureMarket(),records=[],logs=[];
+  const {encode}=require("../../src/archive/store");
+  const runtime=start({env:{JUPITER_API_KEY:"fixture",PORT:"0",RESEARCH_ARCHIVE_ENABLED:"true",DATABASE_URL:"fixture"},
+    marketFactory:()=>market,logger:{log:value=>logs.push(value),error:value=>assert.fail(value)},
+    archiveFactory:()=>({record:async record=>{encode(record.payload);records.push(record);return {sequence:records.length};},close:async()=>{}})});
+  try{
+    if(!runtime.server.listening)await once(runtime.server,"listening");
+    await new Promise(resolve=>setImmediate(resolve));
+    assert.deepEqual(records.map(record=>record.kind),["runtime.started","market.scan"]);
+    assert.ok(logs.some(line=>line==="Research archive market.scan committed sequence 2"));
+    assert.ok(records[1].payload.radar.length>0);
+  }finally{await runtime.shutdown();}
+});
