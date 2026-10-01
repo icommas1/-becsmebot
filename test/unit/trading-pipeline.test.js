@@ -113,6 +113,27 @@ test("executor rechecks market data, reserve and disabled execution before mutat
   assert.deepEqual(paper.holds,{});
 });
 
+test("paper execution rejects missing context and corrupt local ledger without a fill",async()=>{
+  const [engine,,executor,pipeline,wallet]=await modules,paper=wallet.freshPaper();
+  const intent=engine.decideBuy({account:paper.account,row,amount:1,settings:paper.settings,
+    enteredAssets:paper.bought,now}).intents[0];
+  const before=structuredClone(paper),exec=executor.createPaperExecutor({account:paper.account,paper});
+  assert.equal(exec.execute(intent,null).status,"rejected");
+  assert.equal(exec.execute(intent,{row,solRate,now:1e20}).reason,"invalid-market");
+  assert.deepEqual(paper,before);
+  assert.equal(exec.execute({...intent,quantity:{value:1,mode:"quote",unit:"fraction"}},{row,solRate,now}).reason,"invalid-intent");
+  assert.deepEqual(paper,before);
+
+  pipeline.buyPaper({paper,row,amount:1,solRate,feed:"recent",now});
+  const sale=engine.decideSale({account:paper.account,positions:paper.holds,mint:row.mint,pct:100,now}).intents[0];
+  paper.holds[row.mint].investedUsd=NaN;
+  const corrupt=structuredClone(paper);
+  const rejected=exec.execute(sale,{mark:{priceUsd:.02,source:"jupiter-v3"},markAt:now,solRate,now});
+  assert.equal(rejected.status,"rejected");
+  assert.deepEqual(paper,corrupt);
+  assert.equal(Number.isFinite(paper.realizedUsd),true);
+});
+
 test("sale intent stays separate from a capped fill and stale rejection",async()=>{
   const [engine,,executor,pipeline,wallet]=await modules,paper=wallet.freshPaper();
   pipeline.buyPaper({paper,row,amount:1,solRate,feed:"recent",now});
