@@ -23,7 +23,7 @@ Verified baseline: merged main `a63296f09ad1840c2f4888ba868a0fd92fd7c692` (PR #5
 - **Smart Wallet activation:** requires a provider credential and any required subscription. Existing normalization and tests are complete; enabling it is not possible without that input.
 - **Long-horizon outcomes, rejection research, Memory/Lab recommendations:** require an approved collection scope and evidence. These remain deferred under the stop-storage instruction; no new strategy thresholds or research claims have been invented.
 - **Real signing/live execution:** explicitly excluded, including live executors, wallet routing and tiny-value live tests. Completing safe phases does not authorize activation.
-- **Reported stale display:** two consecutive production scans updated all nineteen feeds, 171 prices and twenty new-launch entries. No specific client-side failure has been reproduced; a screenshot or named stale value is still needed to trace that report.
+- **Feed freshness:** production scans updated all nineteen feeds. A confirmed browser issue left the last Reporting labels frozen after failed or stalled requests; the follow-up freshness change makes those labels age, shows cached/disconnected status, and revalidates on tab/network recovery. The original specific stale screen has not been identified, so no provider-side outage is claimed.
 
 ## Branch reconciliation
 

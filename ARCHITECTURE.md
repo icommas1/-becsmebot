@@ -129,7 +129,7 @@ Browser API requests have a 60-second deadline covering both the response and it
 
 Manual contact actions, dock actions and auto use the same paper accounting functions. Sells require current Price V3 marks; estimated portfolio values may show labeled stale marks. See the radar and signals specs for eligibility and state rules.
 
-The Feeds panel labels each configured source as Reporting, Delayed or Pending and shows the last successful update relative to the browser clock. The five-minute freshness cutoff matches the read-only production smoke check. A delayed source may retain its previous token count and timestamp; the UI labels that count as cached. These are observation labels, not new launch eligibility thresholds.
+The Feeds panel labels each configured source as Reporting, Delayed or Pending and shows the last successful update relative to the browser clock. The five-minute freshness cutoff matches the read-only production smoke check. A delayed source may retain its previous token count and timestamp; the UI labels that count as cached. Feed ages refresh every polling tick even while a prior request is waiting. Failed basket requests or a browser offline event label retained feeds as cached/Delayed, show the connection failure, and stop the scanning indicator. A visible returning tab or online event immediately revalidates through the existing single-request guard; only a successful response (including HTTP 304) clears the connection warning, and old provider timestamps can still remain Delayed. Cached cards, charts, paper holdings and conditional-response data are preserved. These are observation labels, not new launch eligibility thresholds.
 
 ### Strategy and execution boundary
 

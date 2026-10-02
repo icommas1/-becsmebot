@@ -19,7 +19,7 @@ function saved(key,fallback) { try { return JSON.parse(storage.getItem(key)) || 
 let radarUi=normalizeRadarUi(saved(RADAR_UI_STORE,{}));
 let trail=saved(TRAIL_STORE,{scan:null,points:{}}),radarPage=0;
 if(!trail||typeof trail.points!=="object"||!trail.points)trail={scan:null,points:{}};
-let paper=loadPaper(storage),snapshot=null,prices={},priceTimes={},refreshing=false;
+let paper=loadPaper(storage),snapshot=null,prices={},priceTimes={},refreshing=false,marketUnavailable=false;
 let searchRows=[],searchTimer=null,searchStatus="";
 const api=createApiClient();
 let accountMode="loading",serverPaper=null,serverRevision=0,accountRefreshing=false,accountError=null;
@@ -129,21 +129,33 @@ async function runAutoExits() {
   for(const hold of autoExitCandidates({enabled:paper.auto,positions:paper.holds,settings:paper.settings,prices}))
     {if(!paper.auto||serverPaper?.busy||serverPaper?.pending)break;await sellPaper(hold.mint,100,1,true);}
 }
+function renderMarketStatus() {
+  radarView.renderFeeds();
+  if(marketUnavailable){
+    $("market-status").textContent=snapshot?"Market connection unavailable · Showing cached data":"Market connection unavailable · Waiting for data";
+    document.body.dataset.scanning="false";$("scan-state").textContent="DISCONNECTED";
+    return;
+  }
+  if(!snapshot)return;
+  const s=snapshot,scanned=s.lastScanAt?new Date(s.lastScanAt).toLocaleTimeString():"pending";
+  $("status").textContent=(s.paused?"Scans paused":s.running?"Scanning":"Updated")+" · "+scanned+(s.lastError?" · "+s.lastError:"");
+  $("market-status").textContent="Jupiter + DexScreener scan "+scanned+(s.lastError?" · Some data delayed":" · 5m / 1h / 6h / 24h feeds");
+  document.body.dataset.scanning=String(!!s.running);$("scan-state").textContent=s.running?"SCANNING":s.lastError?"DELAYED":"REST / 60s";
+}
 async function refresh() {
+  // Age cached observations even when an earlier request is still waiting.
+  renderMarketStatus();
   if (refreshing) return;refreshing=true;$("refresh").disabled=true;$("refresh").setAttribute("aria-busy","true");
   try {
-    const s=await api.basket();snapshot=s;await loadRadarHistory(s);
-    const scanned=s.lastScanAt?new Date(s.lastScanAt).toLocaleTimeString():"pending";
-    $("status").textContent=(s.paused?"Scans paused":s.running?"Scanning":"Updated")+" · "+scanned+(s.lastError?" · "+s.lastError:"");
-    $("market-status").textContent="Jupiter + DexScreener scan "+scanned+(s.lastError?" · Some data delayed":" · 5m / 1h / 6h / 24h feeds");
-    document.body.dataset.scanning=String(!!s.running);$("scan-state").textContent=s.running?"SCANNING":s.lastError?"DELAYED":"REST / 60s";
+    const s=await api.basket().catch(error=>{marketUnavailable=true;throw error;});
+    snapshot=s;marketUnavailable=false;renderMarketStatus();await loadRadarHistory(s);
     observeContacts(s);await runAutoBuys();render();await refreshPrices();
-  } catch(error) { $("status").textContent=error.message;message(error.message); }
+  } catch(error) { renderMarketStatus();$("status").textContent=error.message;message(error.message); }
   finally { refreshing=false;$("refresh").disabled=false;$("refresh").setAttribute("aria-busy","false"); }
 }
 let selectedMint=null,selectedFallback=null,dockAmount=1;
 
-const getState=()=>({paper,snapshot,prices,priceTimes,radarUi,trail,searchRows,searchStatus,radarPage,
+const getState=()=>({paper,snapshot,prices,priceTimes,radarUi,trail,searchRows,searchStatus,radarPage,marketUnavailable,
   selectedMint,dockAmount,contactTape});
 const paperView=createPaperView({document,getState,actions:{
   solUsd,currentToken:()=>currentToken(),canSell:(mint)=>canSell(mint),sell:(...args)=>sellPaper(...args),message
@@ -251,5 +263,9 @@ $("account-logout").onclick=async()=>{
   try{await serverPaper.request("/api/auth/logout",{method:"POST"});location.reload();}catch(error){message(error.message);}
 };
 $("retry-paper").onclick=()=>serverAction(null,true);
+// A returning phone tab revalidates immediately; only success clears disconnection.
+document.addEventListener("visibilitychange",()=>{if(document.visibilityState==="visible")refresh();});
+window.addEventListener("online",refresh);
+window.addEventListener("offline",()=>{marketUnavailable=true;renderMarketStatus();});
 // Private account availability must never gate public market rendering or polling.
 render();refreshAccount();refresh();setInterval(refreshAccount,15000);setInterval(refresh,15000);

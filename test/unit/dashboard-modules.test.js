@@ -28,6 +28,19 @@ test("feed diagnostics distinguish current, delayed and unknown sources",async()
   assert.match(view.rows[4].text,/Trending · 5m · 4 cached tokens · Delayed · Updated 6m ago/);
 });
 
+test("feed diagnostics mark disconnected caches and preserve their real update times",async()=>{
+  const {feedStatus}=await import("../../src/web/assets/js/feed-status.mjs");
+  const now=2_000_000_000_000,feeds={recent:{count:2,at:new Date(now-30000).toISOString()}};
+  const saved=structuredClone(feeds);
+  const disconnected=feedStatus(feeds,now,{connectionUnavailable:true});
+  assert.match(disconnected.summary,/Connection unavailable/);
+  assert.match(disconnected.rows[0].text,/2 cached tokens · Delayed · Updated just now · Connection unavailable/);
+  assert.match(feedStatus(feeds,now+360000,{connectionUnavailable:true}).rows[0].text,/Updated 6m ago/);
+  assert.equal(feedStatus(feeds,now).rows[0].state,"Reporting","a successful revalidation restores a fresh feed");
+  assert.equal(feedStatus(feeds,now+360000).rows[0].state,"Delayed","reconnection cannot make old observations fresh");
+  assert.deepEqual(feeds,saved,"display state must never modify provider timestamps");
+});
+
 test("dashboard filters remain shared, strict and deterministic",async()=>{
   const [core,filters,paperModule]=await modules;
   const now=2_000_000_000_000,settings={...paperModule.paperDefaults};

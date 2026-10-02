@@ -107,10 +107,15 @@ export function createRadarView({document,getState,actions}) {
         node(document,"small","",ageText(signal)+" · MC "+compactUsd(signal.marketCap)),chart(signal.mint,trail));box.append(item);
     }
     if(!box.children.length)box.append(node(document,"p","empty-state","No launches match this source and filters."));
-    const feeds=$("feeds"),status=feedStatus(snapshot?.feeds||{});feeds.replaceChildren();
+    renderFeeds();
+  }
+
+  function renderFeeds() {
+    const {snapshot,marketUnavailable}=getState();
+    const feeds=$("feeds"),status=feedStatus(snapshot?.feeds||{},Date.now(),{connectionUnavailable:marketUnavailable});feeds.replaceChildren();
     $("feed-summary").textContent=status.summary;
     for(const row of status.rows)feeds.append(node(document,"div","item feed-item feed-"+row.state.toLowerCase(),row.text));
   }
 
-  return Object.freeze({renderFilterSummary,renderRadar,renderSignals});
+  return Object.freeze({renderFilterSummary,renderRadar,renderSignals,renderFeeds});
 }
