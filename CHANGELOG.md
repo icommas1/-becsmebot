@@ -1,5 +1,11 @@
 # Changelog
 
+## Research provenance
+
+- Archive deployed code/dependency fingerprints and actual non-secret runtime defaults; link every new scan to its runtime/configuration evidence.
+- Require archive health and matching deployed commit in the existing production smoke workflow.
+
+
 ## Archive delivery reliability
 
 - Persist pending research evidence, retry idempotently across restart, drain scans on shutdown, and expose aggregate archive health with incremental integrity verification.

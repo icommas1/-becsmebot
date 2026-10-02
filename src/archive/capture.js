@@ -4,7 +4,7 @@ const {gunzipSync}=require("node:zlib");
 const {encode,MAX_PAYLOAD_BYTES}=require("./store");
 
 const MAX_QUEUE_BYTES=128*1024*1024;
-const disabledStatus=()=>({enabled:false,healthy:false,pendingRecords:0,pendingBytes:0,blockedRecords:0,
+const disabledStatus=()=>({runtimeEvidence:null,enabled:false,healthy:false,pendingRecords:0,pendingBytes:0,blockedRecords:0,
   lastCommittedAt:null,lastMarketAt:null,lastSequence:0,verifiedThrough:0,verificationComplete:false,failures:0,lastError:null});
 
 // This spool is delivery state, not a second permanent archive. Delete only after a DB receipt.

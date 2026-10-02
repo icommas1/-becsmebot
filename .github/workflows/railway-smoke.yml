@@ -27,3 +27,5 @@ jobs:
         env:
           SMOKE_BASE_URL: https://becsbot-production.up.railway.app
           SMOKE_ATTEMPTS: '24'
+          SMOKE_REQUIRE_ARCHIVE: '1'
+          SMOKE_EXPECT_COMMIT: ${{ github.sha }}

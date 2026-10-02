@@ -50,11 +50,15 @@ test("enabled research archive commits runtime and completed scans with startup 
     archiveFactory:()=>({record:async record=>{encode(record.payload);records.push(record);return {sequence:records.length};},close:async()=>{}})});
   try{
     if(!runtime.server.listening)await once(runtime.server,"listening");
+    await runtime.ready();
     await new Promise(resolve=>setImmediate(resolve));
     await runtime.shutdown();
     assert.deepEqual(records.map(record=>record.kind),["runtime.started","market.scan"]);
     assert.ok(logs.some(line=>line==="Research archive market.scan committed sequence 2"));
     assert.ok(records[1].payload.radar.length>0);
+    assert.equal(records[0].payload.configuration.paperAccountsEnabled,false);
+    assert.equal(records[1].metadata.runtimeEvidence.evidenceHash,require("../../src/events/becs-event").digest(records[0].payload));
+    assert.deepEqual(runtime.archiveStatus().runtimeEvidence,records[1].metadata.runtimeEvidence);
   }finally{await runtime.shutdown();rmSync(dataDir,{recursive:true,force:true});}
 });
 
@@ -67,6 +71,7 @@ test("shutdown waits for in-flight market evidence before closing the archive",a
     archiveFactory:()=>({record:async value=>{assert.equal(closed,false);records.push(value);return {sequence:records.length};},close:async()=>{closed=true;}})});
   try{
     if(!runtime.server.listening)await once(runtime.server,"listening");
+    await runtime.ready();
     const stopping=runtime.shutdown();await new Promise(resolve=>setImmediate(resolve));assert.equal(closed,false);
     release();await stopping;assert.equal(closed,true);assert.ok(records.some(value=>value.kind==="market.scan"));
   }finally{release?.();await runtime.shutdown();rmSync(dataDir,{recursive:true,force:true});}
@@ -81,5 +86,22 @@ test("archive health exposes aggregate verification state without private eviden
     const response=await fetch("http://127.0.0.1:"+server.address().port+"/health/archive");
     assert.equal(response.status,503);assert.deepEqual(await response.json(),state);
     assert.equal((await fetch("http://127.0.0.1:"+server.address().port+"/health")).status,200);
+  }finally{await new Promise(resolve=>server.close(resolve));}
+});
+
+test("production smoke verifies archive health and deployed revision using GETs only",async()=>{
+  const {createApp}=require("../../src/api/app"),{disabledStatus}=require("../../src/archive/capture");
+  const {smoke}=require("../../scripts/smoke"),{runtimeEvidence}=require("../../src/archive/runtime-evidence");
+  const commit="a".repeat(40),provenance=await runtimeEvidence({env:{RAILWAY_GIT_COMMIT_SHA:commit},marketScanMs:60000,
+    walletIntelEnabled:false,walletIntelScanMs:60000,paperAccountsEnabled:false,streamId:"test"});
+  const state={...disabledStatus(),enabled:true,healthy:true,runtimeEvidence:provenance.reference};
+  const server=createApp(await fixtureMarket(),undefined,undefined,()=>state).listen(0,"127.0.0.1");
+  await once(server,"listening");
+  try{
+    const base="http://127.0.0.1:"+server.address().port,request=(url,options)=>{
+      assert.equal(options.method,undefined);assert.ok(!url.includes("/api/paper/commands"));return fetch(url,options);
+    };
+    const result=await smoke(base,{request,requireArchive:true,expectedCommit:commit});assert.equal(result.archive.healthy,true);
+    await assert.rejects(smoke(base,{request,requireArchive:true,expectedCommit:"b".repeat(40)}),/Deployed commit/);
   }finally{await new Promise(resolve=>server.close(resolve));}
 });
