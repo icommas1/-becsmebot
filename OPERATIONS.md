@@ -14,7 +14,9 @@ Railway service access, variables, volume attachment, restart policy and deploym
 
 ## Health and smoke checks
 
-`GET /health` proves process liveness and reports scan/feed state; it is not a promise that Jupiter is healthy. `npm run test:smoke` performs ten read-only GET requests (eleven with archive health enabled) against `SMOKE_BASE_URL`, validates contracts and confirms that live trading remains disabled. It reports provider degradation separately. Set `SMOKE_REQUIRE_MARKET_DATA=1` only for a strict provider-readiness check.
+`GET /health` proves process liveness and reports scan/feed state and `release.commit`; it is not a promise that Jupiter is healthy. The commit is a validated Railway commit SHA or null, available even when research capture is disabled. `npm run test:smoke` performs eleven read-only GET requests against `SMOKE_BASE_URL`, validates contracts and confirms that live trading remains disabled. It reports provider degradation separately. Set `SMOKE_REQUIRE_MARKET_DATA=1` only for a strict provider-readiness check.
+
+`SMOKE_ARCHIVE_MODE=required` requires enabled, current, verified research capture; `disabled` requires capture to remain off; the default `auto` verifies it if enabled. The legacy `SMOKE_REQUIRE_ARCHIVE=1` still requires capture and conflicts with an explicit disabled mode. `SMOKE_EXPECT_COMMIT` always checks `/health` independently of archive mode. The production workflow currently expects `disabled`, honoring the owner's stop-storage instruction; an unexpected reactivation fails the check.
 
 The smoke script rejects URLs containing embedded credentials, query strings or fragments. It never calls search, price POST, wallet, order, sell or pause operations.
 
@@ -39,7 +41,15 @@ Monitor both volume usage and queue growth. There is no permanent archive TTL or
 
 Independent, encrypted off-provider backups plus a tested restore remain required. The current repository does not configure an external backup destination, payment, or retention policy. A healthy archive endpoint verifies the primary copy only and must not be presented as proof of an independent backup.
 
-The deployed runtime evidence is available as hashes and commit in `/health/archive`. `SMOKE_REQUIRE_ARCHIVE=1 SMOKE_EXPECT_COMMIT=<merged-sha> npm run test:smoke` verifies both capture/integrity and release identity. The existing Railway smoke workflow now applies these checks automatically. The code revision comes only from Railway's built-in `RAILWAY_GIT_COMMIT_SHA`; it is never substituted with an invented value. Runtime/configuration payloads stay private in PostgreSQL.
+When collecting, runtime evidence is available as hashes and commit in `/health/archive`. `SMOKE_ARCHIVE_MODE=required SMOKE_EXPECT_COMMIT=<merged-sha> npm run test:smoke` verifies both capture/integrity and release identity. While intentionally paused, use `SMOKE_ARCHIVE_MODE=disabled`; `/health` still verifies the release. The code revision comes only from Railway's built-in `RAILWAY_GIT_COMMIT_SHA`; it is never substituted with an invented value. Runtime/configuration payloads stay private in PostgreSQL.
+
+## Owner-requested storage pause — 2026-10-02
+
+Production `RESEARCH_ARCHIVE_ENABLED=false`. Keep it off until the owner explicitly requests collection again. No history was deleted. Market/Radar/Signals scanning, the bounded chart cache and operational paper-account persistence continue. Paused market scans skip retaining/cloning research-only provider evidence; existing research delivery files remain untouched. Compression experiments were stopped without deploying a new archive encoding.
+
+PostgreSQL settings were adjusted without a database restart: `min_wal_size=32MB`, `max_wal_size=64MB`, and `wal_compression=on` (pglz). `fsync`, `full_page_writes` and `synchronous_commit` remain on. WAL limits are soft limits, not a storage guarantee; no measured disk reduction was established. Earlier values were 80MB, 1GB and off respectively. No table was vacuum-full rewritten, truncated or removed. Temporary maintenance deployment hooks were cleared.
+
+`STORAGE_VERIFY_DATABASE_URL` and `npm run verify:storage` run an independent read-only check of existing history even while capture is off. It verifies every research payload/envelope/chain, every BecsEvent from sequence one, local proof ranges, paper ownership/basic balance shape, and retained request receipts. The deterministic fingerprint includes complete paper ledger/receipt contents for restore comparison. It is a consistency check, not an independent external attestation of the original data. See [BACKUP_RESTORE.md](BACKUP_RESTORE.md) for the tested restore boundary and remaining destination requirement.
 
 
 ## Audit checkpoint — 2026-10-02

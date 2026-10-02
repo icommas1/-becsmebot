@@ -19,3 +19,6 @@ blob-report/
 *.key
 wallet*.json
 keypair*.json
+backups/
+*.dump
+*.backup

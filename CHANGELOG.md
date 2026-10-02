@@ -1,5 +1,12 @@
 # Changelog
 
+## Paused research and recovery verification
+
+- Preserve the owner's disabled research state in release checks and skip research-only scan snapshots while paused.
+- Expose the validated deployed commit independently of archival provenance.
+- Add a read-only full-history verifier and disposable PostgreSQL dump/restore fingerprint comparison in CI.
+- Reconcile delivered phases and document actual credential, backup-destination and storage dependencies without reactivating collection or live execution.
+
 ## Research provenance
 
 - Archive deployed code/dependency fingerprints and actual non-secret runtime defaults; link every new scan to its runtime/configuration evidence.
