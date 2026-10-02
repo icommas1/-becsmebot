@@ -159,3 +159,22 @@ test("legacy storage migration adds stable ownership without losing paper histor
   assert.deepEqual(wallet.loadPaper(storage).account,account);
   assert.notEqual(wallet.freshPaper().account.accountId,account.accountId);
 });
+
+test("finite inputs that overflow fill arithmetic reject without changing the ledger",async()=>{
+  const [engine,,executor,pipeline,wallet]=await modules;
+  for(const priceUsd of [Number.MIN_VALUE,Number.MAX_VALUE]){
+    const paper=wallet.freshPaper();paper.settings.impactPct=50;
+    const intent=engine.decideBuy({account:paper.account,row,amount:1,settings:paper.settings,enteredAssets:paper.bought,now}).intents[0];
+    const before=structuredClone(paper);
+    const result=executor.createPaperExecutor({account:paper.account,paper}).execute(intent,{row:{...row,priceUsd},solRate,now});
+    assert.equal(result.status,"rejected");assert.deepEqual(paper,before);
+  }
+  for(const context of [{priceUsd:Number.MAX_VALUE,solRate},{priceUsd:.02,solRate:Number.MIN_VALUE}]){
+    const paper=wallet.freshPaper();pipeline.buyPaper({paper,row,amount:1,solRate,feed:"recent",now});
+    const intent=engine.decideSale({account:paper.account,positions:paper.holds,mint:row.mint,pct:100,now}).intents[0];
+    const before=structuredClone(paper);
+    const result=executor.createPaperExecutor({account:paper.account,paper}).execute(intent,{
+      mark:{priceUsd:context.priceUsd,source:"jupiter-v3"},markAt:now,solRate:context.solRate,now});
+    assert.equal(result.status,"rejected");assert.deepEqual(paper,before);
+  }
+});
