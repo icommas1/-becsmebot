@@ -3,7 +3,7 @@ const {FEEDS}=require("../src/market/tokens");
 const {DEX_FEEDS}=require("../src/market/dexscreener");
 const feedNames=[...FEEDS,...DEX_FEEDS].map(([name])=>name);
 const {assertSchema}=require("../src/api/validation");
-async function smoke(base,{request=fetch,now=Date.now,maxAgeMs=300000,requireMarketData=false,requireArchive=false}={}){
+async function smoke(base,{request=fetch,now=Date.now,maxAgeMs=300000,requireMarketData=false,requireArchive=false,expectedCommit=null}={}){
   const url=new URL(base);
   if(!["https:","http:"].includes(url.protocol)||url.username||url.password||url.search||url.hash)
     throw Error("Use a plain HTTP(S) origin without credentials");
@@ -21,6 +21,8 @@ async function smoke(base,{request=fetch,now=Date.now,maxAgeMs=300000,requireMar
     archive=assertSchema("archiveHealth",await(await get("/health/archive")).json());
     assert.equal(archive.enabled,true,"Research archive is disabled");
     assert.equal(archive.healthy,true,"Research archive is not verified and current");
+    assert.ok(archive.runtimeEvidence,"Missing runtime provenance");
+    if(expectedCommit)assert.equal(archive.runtimeEvidence.commit,expectedCommit,"Deployed commit differs from expected main");
   }
   assert.equal(health.tradingEnabled,false,"Health unexpectedly enables real trading");
   assert.equal(snapshot.tradingEnabled,false,"Snapshot unexpectedly enables real trading");
@@ -61,7 +63,7 @@ if(require.main===module){
   const retries=Math.min(24,Math.max(1,Number(process.env.SMOKE_ATTEMPTS)||1));
   const requireMarketData=process.env.SMOKE_REQUIRE_MARKET_DATA==="1";
   (async()=>{for(let i=0;i<retries;i++){
-    try{console.log("Smoke passed",await smoke(base,{requireMarketData,requireArchive:process.env.SMOKE_REQUIRE_ARCHIVE==="1"}));return;}
+    try{console.log("Smoke passed",await smoke(base,{requireMarketData,requireArchive:process.env.SMOKE_REQUIRE_ARCHIVE==="1",expectedCommit:process.env.SMOKE_EXPECT_COMMIT||null}));return;}
     catch(error){if(i===retries-1)throw error;console.log("Waiting for a healthy deployment ("+(i+1)+"/"+retries+")");await new Promise(r=>setTimeout(r,5000));}
   }})().catch(error=>{console.error("Smoke failed: "+error.message);process.exitCode=1;});
 }

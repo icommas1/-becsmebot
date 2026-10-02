@@ -8,6 +8,7 @@ const {archiveConfig}=require("./archive/config");
 const {createResearchArchive}=require("./archive/store");
 const {createArchiveCapture,disabledStatus}=require("./archive/capture");
 const path=require("node:path");
+const {runtimeEvidence}=require("./archive/runtime-evidence");
 
 function readConfig(env=process.env) {
   const apiKey=typeof env.JUPITER_API_KEY==="string"?env.JUPITER_API_KEY.trim():"";
@@ -26,9 +27,10 @@ function start({env=process.env,logger=console,marketFactory=createMarket,wallet
   const archive=archiveSettings.enabled?archiveFactory(archiveSettings.databaseUrl,{streamId:archiveSettings.streamId}):null;
   const capture=archive?createArchiveCapture({archive,dataDir:config.dataDir||path.join(process.cwd(),"data"),logger}):null;
   let interval=null,walletInterval=null,archiveInterval=null,closing=null,stopping=false;
-  let marketJob=null,walletJob=null;
+  let marketJob=null,walletJob=null,runtimeJob=null,provenance=null;
+  const archiveStatus=()=>({...capture?.status()||disabledStatus(),runtimeEvidence:provenance?.reference||null});
   async function record(kind,source,payload,occurredAt,metadata={}) {
-    if(capture&&payload)await capture.capture({kind,source,payload,occurredAt,metadata});
+    if(capture&&payload)await capture.capture({kind,source,payload,occurredAt,metadata:{...metadata,runtimeEvidence:provenance?.reference||null}});
   }
   function scanMarket(){
     if(stopping||marketJob||capture&&!capture.canCapture())return marketJob;
@@ -48,16 +50,21 @@ function start({env=process.env,logger=console,marketFactory=createMarket,wallet
     })().catch(()=>logger.error?.("Wallet intelligence capture unavailable")).finally(()=>{walletJob=null;});
     return walletJob;
   }
-  const server=createApp(market,{config:accounts,store},walletIntel,()=>capture?.status()||disabledStatus()).listen(config.port,"0.0.0.0",()=>{
+  const server=createApp(market,{config:accounts,store},walletIntel,archiveStatus).listen(config.port,"0.0.0.0",()=>{
     logger.log("BecsBot public Jupiter paper terminal running on port "+server.address().port);
-    if(archive){
-      logger.log("Permanent research archive enabled");
-      record("runtime.started","runtime",{schemaVersion:1,tradingEnabled:false,marketScanMs:SCAN_MS,
-        walletIntelEnabled:walletIntel.snapshot().enabled,walletIntelScanMs:walletIntel.scanMs},Date.now());
-    }
-    if(capture){archiveInterval=setInterval(()=>capture.flush(),10000);}
-    scanMarket();interval=setInterval(scanMarket,SCAN_MS);
-    if(walletIntel.snapshot().enabled){scanWalletIntel();walletInterval=setInterval(scanWalletIntel,walletIntel.scanMs);}
+    runtimeJob=(async()=>{
+      if(archive){
+        logger.log("Permanent research archive enabled");
+        provenance=await runtimeEvidence({env,marketScanMs:SCAN_MS,walletIntelEnabled:walletIntel.snapshot().enabled,
+          walletIntelScanMs:walletIntel.scanMs,paperAccountsEnabled:accounts.enabled,streamId:archiveSettings.streamId});
+        await record("runtime.started","runtime",provenance.payload,Date.now());
+        logger.log("Research runtime provenance prepared for commit "+(provenance.reference.commit||"unavailable"));
+        archiveInterval=setInterval(()=>capture.flush(),10000);
+      }
+      if(stopping)return;
+      scanMarket();interval=setInterval(scanMarket,SCAN_MS);
+      if(walletIntel.snapshot().enabled){scanWalletIntel();walletInterval=setInterval(scanWalletIntel,walletIntel.scanMs);}
+    })().catch(()=>logger.error?.("Runtime evidence initialization unavailable"));
   });
   function shutdown() {
     if(closing)return closing;
@@ -66,14 +73,17 @@ function start({env=process.env,logger=console,marketFactory=createMarket,wallet
     closing=new Promise((resolve,reject)=>{
       const force=setTimeout(()=>server.closeAllConnections?.(),10000);force.unref?.();
       server.close(error=>{clearTimeout(force);
-        Promise.all([marketJob,walletJob]).then(()=>capture?.flush())
+        Promise.resolve(runtimeJob).then(()=>{
+          if(archiveInterval)clearInterval(archiveInterval);
+          return Promise.all([marketJob,walletJob]);
+        }).then(()=>capture?.flush())
           .then(()=>Promise.all([store?.close(),archive?.close()])).then(()=>error?reject(error):resolve(),reject);
       });
       server.closeIdleConnections?.();
     });
     return closing;
   }
-  return {server,market,archive,archiveStatus:()=>capture?.status()||disabledStatus(),shutdown};
+  return {server,market,archive,archiveStatus,ready:()=>runtimeJob,shutdown};
 }
 
 if(require.main===module) {
