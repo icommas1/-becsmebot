@@ -4,7 +4,7 @@ const {createApp}=require("./api/app");
 const {paperConfig}=require("./paper/config");
 const {createStore}=require("./paper/store");
 const {createWalletIntel,walletIntelConfig}=require("./intel/wallet-intel");
-const {archiveConfig}=require("./archive/config");
+const {archiveConfig,archiveIntervals}=require("./archive/config");
 const {createResearchArchive}=require("./archive/store");
 const {createArchiveCapture,disabledStatus}=require("./archive/capture");
 const path=require("node:path");
@@ -29,6 +29,13 @@ function start({env=process.env,logger=console,marketFactory=createMarket,wallet
   let interval=null,walletInterval=null,archiveInterval=null,closing=null,stopping=false;
   let marketJob=null,walletJob=null,runtimeJob=null,provenance=null;
   const archiveStatus=()=>({...capture?.status()||disabledStatus(),runtimeEvidence:provenance?.reference||null});
+  function scheduleArchiveFlush(){
+    if(stopping)return;
+    const status=capture.status();
+    const delay=!status.lastError&&!status.verificationComplete?archiveIntervals.catchupMs:archiveIntervals.retryMs;
+    // Keep ten-record pages and one job at a time. Only healthy catch-up runs faster.
+    archiveInterval=setTimeout(async()=>{await capture.flush();scheduleArchiveFlush();},delay);
+  }
   async function record(kind,source,payload,occurredAt,metadata={}) {
     if(capture&&payload)await capture.capture({kind,source,payload,occurredAt,metadata:{...metadata,runtimeEvidence:provenance?.reference||null}});
   }
@@ -59,7 +66,7 @@ function start({env=process.env,logger=console,marketFactory=createMarket,wallet
           walletIntelScanMs:walletIntel.scanMs,paperAccountsEnabled:accounts.enabled,streamId:archiveSettings.streamId});
         await record("runtime.started","runtime",provenance.payload,Date.now());
         logger.log("Research runtime provenance prepared for commit "+(provenance.reference.commit||"unavailable"));
-        archiveInterval=setInterval(()=>capture.flush(),10000);
+        scheduleArchiveFlush();
       }
       if(stopping)return;
       scanMarket();interval=setInterval(scanMarket,SCAN_MS);
@@ -69,12 +76,12 @@ function start({env=process.env,logger=console,marketFactory=createMarket,wallet
   function shutdown() {
     if(closing)return closing;
     stopping=true;
-    if(interval)clearInterval(interval);if(walletInterval)clearInterval(walletInterval);if(archiveInterval)clearInterval(archiveInterval);
+    if(interval)clearInterval(interval);if(walletInterval)clearInterval(walletInterval);if(archiveInterval)clearTimeout(archiveInterval);
     closing=new Promise((resolve,reject)=>{
       const force=setTimeout(()=>server.closeAllConnections?.(),10000);force.unref?.();
       server.close(error=>{clearTimeout(force);
         Promise.resolve(runtimeJob).then(()=>{
-          if(archiveInterval)clearInterval(archiveInterval);
+          if(archiveInterval)clearTimeout(archiveInterval);
           return Promise.all([marketJob,walletJob]);
         }).then(()=>capture?.flush())
           .then(()=>Promise.all([store?.close(),archive?.close()])).then(()=>error?reject(error):resolve(),reject);
