@@ -83,6 +83,54 @@ test("Feeds show source readiness and last successful updates",async({page})=>{
   await expect(page.locator("#feeds")).toContainText("Dex paid ads");
   await expect(page.locator("#feeds .feed-item").first()).toContainText(/Reporting · Updated (just now|\d+m ago)/);
 });
+test("failed refresh labels cached feeds and successful revalidation recovers without clearing data",async({page})=>{
+  await expect(page.locator("#account-status")).toContainText("Local paper wallet");
+  const paper=await page.evaluate(()=>localStorage.getItem("becsPaperV1"));
+  await page.getByRole("button",{name:"Feeds",exact:true}).click();
+  let fail=true;const requests=[];
+  await page.route("**/api/basket",async route=>{
+    requests.push(route.request().headers());
+    if(fail)await route.fulfill({status:503,contentType:"application/json",body:JSON.stringify({error:"Fixture connection failure"})});
+    else await route.fulfill({status:304});
+  });
+  await page.locator("#refresh").click();
+  await expect(page.locator("#feed-summary")).toContainText("Connection unavailable · 0/19 reporting · 19 delayed");
+  await expect(page.locator("#feeds .feed-delayed")).toHaveCount(19);
+  await expect(page.locator("#feeds .feed-item").first()).toContainText("cached tokens");
+  await expect(page.locator("#market-status")).toContainText("Showing cached data");
+  await expect(page.locator("#scan-state")).toHaveText("DISCONNECTED");
+  await expect(page.locator("#radar .token-contact")).toHaveCount(2);
+  fail=false;
+  await page.evaluate(()=>window.dispatchEvent(new Event("online")));
+  await expect(page.locator("#feed-summary")).toContainText("19/19 reporting · 0 delayed");
+  await expect(page.locator("#market-status")).not.toContainText("Connection unavailable");
+  await expect(page.locator("#radar .token-contact")).toHaveCount(2);
+  expect(requests.length).toBeGreaterThanOrEqual(2);
+  expect(requests.every(headers=>/^W\/"basket-/.test(headers["if-none-match"]))).toBe(true);
+  expect(await page.evaluate(()=>localStorage.getItem("becsPaperV1"))).toBe(paper);
+});
+
+test("cached feed ages advance while a request is stalled without overlapping refreshes",async({page})=>{
+  await page.getByRole("button",{name:"Feeds",exact:true}).click();
+  let release,requests=0;const gate=new Promise(resolve=>{release=resolve;});
+  await page.route("**/api/basket",async route=>{requests++;await gate;await route.fulfill({status:304});});
+  try{
+    await page.locator("#refresh").click();
+    await expect.poll(()=>requests).toBe(1);
+    await page.evaluate(()=>{
+      window.fixtureOriginalNow=Date.now;Date.now=()=>window.fixtureOriginalNow()+360000;
+      window.dispatchEvent(new Event("online"));
+    });
+    await expect(page.locator("#feed-summary")).toContainText("0/19 reporting · 19 delayed");
+    await expect(page.locator("#feeds .feed-item").first()).toContainText(/Updated [6-9]m ago/);
+    expect(requests).toBe(1);
+    await expect(page.locator("#refresh")).toBeDisabled();
+  }finally{
+    await page.evaluate(()=>{if(window.fixtureOriginalNow)Date.now=window.fixtureOriginalNow;});release();
+  }
+  await expect(page.locator("#refresh")).toBeEnabled();
+});
+
 test("token details expose the correct CA and dollar controls",async({page,isMobile})=>{
   await page.locator("#radar").getByRole("button",{name:"FRESH",exact:true}).click();
   if(!isMobile)await page.locator("#dock-token").click();

@@ -1,5 +1,11 @@
 # Changelog
 
+## Browser feed freshness
+
+- Label cached feed data and stop the scanning indicator when browser connectivity fails.
+- Advance displayed feed ages during stalled requests and revalidate when the tab returns or connectivity recovers, without overlapping requests or clearing cached data.
+- Preserve provider timestamps, strategy thresholds, paper balances and the disabled research/live-execution state.
+
 ## Paused research and recovery verification
 
 - Preserve the owner's disabled research state in release checks and skip research-only scan snapshots while paused.

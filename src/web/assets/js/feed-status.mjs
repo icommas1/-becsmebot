@@ -20,18 +20,18 @@ function lastSuccess(at,now) {
   return minutes<60?"Updated "+minutes+"m ago":"Updated "+Math.floor(minutes/60)+"h ago";
 }
 
-export function feedStatus(feeds={},now=Date.now()) {
+export function feedStatus(feeds={},now=Date.now(),{connectionUnavailable=false}={}) {
   const rows=Object.entries(feeds).map(([name,feed])=>{
     const updated=lastSuccess(feed?.at,now);
     const age=now-Date.parse(feed?.at);
     const valid=Number.isFinite(age)&&age>=0;
     // Match the operational five-minute feed freshness used by production smoke.
-    const state=feed?.error||valid&&age>300000?"Delayed":valid?"Reporting":"Pending";
+    const state=connectionUnavailable||feed?.error||valid&&age>300000?"Delayed":valid?"Reporting":"Pending";
     const count=Number.isInteger(feed?.count)&&feed.count>=0?feed.count:0;
     return {name,label:label(name),state,
-      text:label(name)+" · "+count+(state==="Delayed"?" cached":"")+(count===1?" token":" tokens")+" · "+state+" · "+updated+(feed?.error?" · "+feed.error:"")};
+      text:label(name)+" · "+count+(state==="Delayed"?" cached":"")+(count===1?" token":" tokens")+" · "+state+" · "+updated+(feed?.error?" · "+feed.error:"")+(connectionUnavailable?" · Connection unavailable":"")};
   });
   const reporting=rows.filter(row=>row.state==="Reporting").length;
   const delayed=rows.filter(row=>row.state==="Delayed").length;
-  return {rows,summary:reporting+"/"+rows.length+" reporting · "+delayed+" delayed · "+(rows.length-reporting-delayed)+" pending"};
+  return {rows,summary:(connectionUnavailable?"Connection unavailable · ":"")+reporting+"/"+rows.length+" reporting · "+delayed+" delayed · "+(rows.length-reporting-delayed)+" pending"};
 }
