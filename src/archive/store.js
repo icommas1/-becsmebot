@@ -16,8 +16,15 @@ function atMillis(value){
   if(!Number.isSafeInteger(n)||n<0)throw Error("Invalid research archive timestamp");
   return n;
 }
+// Preserve JSON's representation of absent evidence without weakening BecsEvent validation.
+function jsonEvidence(value){
+  if(Array.isArray(value))return value.map(entry=>entry===undefined?null:jsonEvidence(entry));
+  if(value&&typeof value==="object")return Object.fromEntries(Object.entries(value)
+    .filter(([,entry])=>entry!==undefined).map(([key,entry])=>[key,jsonEvidence(entry)]));
+  return value;
+}
 function encode(value){
-  const normalized=canonical(value);
+  const normalized=canonical(jsonEvidence(value));
   const json=JSON.stringify(normalized),raw=Buffer.from(json);
   if(raw.length>MAX_PAYLOAD_BYTES)throw Error("Research archive payload is too large");
   const compressed=gzipSync(raw,{level:6});

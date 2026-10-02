@@ -7,7 +7,7 @@ test("PostgreSQL: permanent research archive is append-only, content-addressed a
   const streamId="research-"+randomUUID(),archive=createResearchArchive(url,{streamId}),db=new Pool({connectionString:url});
   try{
     await archive.init();
-    const first=await archive.record({kind:"market.scan",source:"market",occurredAt:Date.now(),payload:{mint:"A",price:1},metadata:{scan:1}});
+    const first=await archive.record({kind:"market.scan",source:"market",occurredAt:Date.now(),payload:{mint:"A",price:1,optional:undefined},metadata:{scan:1}});
     const second=await archive.record({kind:"market.scan",source:"market",occurredAt:Date.now(),payload:{mint:"A",price:1},metadata:{scan:2}});
     assert.equal(first.sequence,1);assert.equal(second.sequence,2);
     assert.equal(first.payloadHash,second.payloadHash,"identical payloads should share one content-addressed blob");
