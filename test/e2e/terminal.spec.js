@@ -91,7 +91,8 @@ test("failed refresh labels cached feeds and successful revalidation recovers wi
   await page.route("**/api/basket",async route=>{
     requests.push(route.request().headers());
     if(fail)await route.fulfill({status:503,contentType:"application/json",body:JSON.stringify({error:"Fixture connection failure"})});
-    else await route.fulfill({status:304});
+    // Let the fixture server perform real ETag revalidation; WebKit cannot mock 304.
+    else await route.continue();
   });
   await page.locator("#refresh").click();
   await expect(page.locator("#feed-summary")).toContainText("Connection unavailable · 0/19 reporting · 19 delayed");
@@ -113,7 +114,7 @@ test("failed refresh labels cached feeds and successful revalidation recovers wi
 test("cached feed ages advance while a request is stalled without overlapping refreshes",async({page})=>{
   await page.getByRole("button",{name:"Feeds",exact:true}).click();
   let release,requests=0;const gate=new Promise(resolve=>{release=resolve;});
-  await page.route("**/api/basket",async route=>{requests++;await gate;await route.fulfill({status:304});});
+  await page.route("**/api/basket",async route=>{requests++;await gate;await route.continue();});
   try{
     await page.locator("#refresh").click();
     await expect.poll(()=>requests).toBe(1);
