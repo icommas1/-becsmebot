@@ -6,7 +6,7 @@ const { assertSchema, isValid }=require("./validation");
 function createApp(market, paperAccounts={config:{enabled:false}}, walletIntel={snapshot:()=>({
   enabled:false,updatedAt:null,lastError:null,running:false,
   providers:{nansen:{enabled:false,records:0,lastSuccessAt:null,lastError:null}},tokens:[]
-}),revision:()=>0}, archiveStatus=require("../archive/capture").disabledStatus) {
+}),revision:()=>0}, archiveStatus=require("../archive/capture").disabledStatus, release={commit:null}) {
   const instanceId=randomUUID();
   const send = (res, name, value) => res.json(assertSchema(name, value));
   const app=express();app.set("trust proxy",1);app.disable("x-powered-by");
@@ -26,7 +26,7 @@ function createApp(market, paperAccounts={config:{enabled:false}}, walletIntel={
   }));
   app.get("/health",(_req,res)=>{
     const s=market.terminalSnapshot?market.terminalSnapshot():market.snapshot();send(res,"health",{ok:true,tradingEnabled:false,manualSell:{enabled:false},
-      lastScanAt:s.lastScanAt,lastError:s.lastError,running:s.running,feeds:s.feeds});
+      lastScanAt:s.lastScanAt,lastError:s.lastError,running:s.running,feeds:s.feeds,release});
   });
   app.get("/health/archive",(_req,res)=>{
     const status=archiveStatus();

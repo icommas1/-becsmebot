@@ -3,7 +3,10 @@ const {FEEDS}=require("../src/market/tokens");
 const {DEX_FEEDS}=require("../src/market/dexscreener");
 const feedNames=[...FEEDS,...DEX_FEEDS].map(([name])=>name);
 const {assertSchema}=require("../src/api/validation");
-async function smoke(base,{request=fetch,now=Date.now,maxAgeMs=300000,requireMarketData=false,requireArchive=false,expectedCommit=null}={}){
+async function smoke(base,{request=fetch,now=Date.now,maxAgeMs=300000,requireMarketData=false,requireArchive=false,
+  archiveMode=requireArchive?"required":"auto",expectedCommit=null}={}){
+  assert.ok(["auto","required","disabled"].includes(archiveMode),"Invalid archive mode");
+  assert.ok(!requireArchive||archiveMode==="required","Conflicting archive mode");
   const url=new URL(base);
   if(!["https:","http:"].includes(url.protocol)||url.username||url.password||url.search||url.hash)
     throw Error("Use a plain HTTP(S) origin without credentials");
@@ -13,12 +16,13 @@ async function smoke(base,{request=fetch,now=Date.now,maxAgeMs=300000,requireMar
     assert.equal(response.status,200,route+" HTTP status");return response;
   };
   const health=assertSchema("health",await(await get("/health")).json());
+  if(expectedCommit)assert.equal(health.release?.commit,expectedCommit,"Deployed commit differs from expected main");
   const snapshot=assertSchema("snapshot",await(await get("/api/basket")).json());
   const history=assertSchema("historyResponse",await(await get("/api/history")).json());
   const walletIntel=assertSchema("walletIntelResponse",await(await get("/api/wallet-intel")).json());
-  let archive=null;
-  if(requireArchive){
-    archive=assertSchema("archiveHealth",await(await get("/health/archive")).json());
+  const archive=assertSchema("archiveHealth",await(await get("/health/archive")).json());
+  if(archiveMode==="disabled")assert.equal(archive.enabled,false,"Research archive is expected to be disabled");
+  if(archiveMode==="required"||archiveMode==="auto"&&archive.enabled){
     assert.equal(archive.enabled,true,"Research archive is disabled");
     assert.equal(archive.healthy,true,"Research archive is not verified and current");
     assert.ok(archive.runtimeEvidence,"Missing runtime provenance");
@@ -55,7 +59,7 @@ async function smoke(base,{request=fetch,now=Date.now,maxAgeMs=300000,requireMar
   assert.ok(logo.headers.get("content-type")?.startsWith("image/jpeg"),"Logo MIME type");
   assert.ok((await logo.arrayBuffer()).byteLength>100,"Logo is empty");
   // Read-only: never call order, authenticated paper, search or price POST endpoints.
-  return {radar:snapshot.radar.length,signals:snapshot.signals.length,chartMints:Object.keys(history.trails).length,walletIntelEnabled:walletIntel.enabled,smartTokens:walletIntel.tokens.length,scanAgeSeconds:Math.round(age/1000),archive,
+  return {radar:snapshot.radar.length,signals:snapshot.signals.length,chartMints:Object.keys(history.trails).length,walletIntelEnabled:walletIntel.enabled,smartTokens:walletIntel.tokens.length,scanAgeSeconds:Math.round(age/1000),archive,release:health.release,
     marketData:{solFresh,healthyFeeds,totalFeeds:feedNames.length,degraded:!solFresh||healthyFeeds<feedNames.length}};
 }
 if(require.main===module){
@@ -63,7 +67,8 @@ if(require.main===module){
   const retries=Math.min(24,Math.max(1,Number(process.env.SMOKE_ATTEMPTS)||1));
   const requireMarketData=process.env.SMOKE_REQUIRE_MARKET_DATA==="1";
   (async()=>{for(let i=0;i<retries;i++){
-    try{console.log("Smoke passed",await smoke(base,{requireMarketData,requireArchive:process.env.SMOKE_REQUIRE_ARCHIVE==="1",expectedCommit:process.env.SMOKE_EXPECT_COMMIT||null}));return;}
+    try{console.log("Smoke passed",await smoke(base,{requireMarketData,requireArchive:process.env.SMOKE_REQUIRE_ARCHIVE==="1",
+      archiveMode:process.env.SMOKE_ARCHIVE_MODE||undefined,expectedCommit:process.env.SMOKE_EXPECT_COMMIT||null}));return;}
     catch(error){if(i===retries-1)throw error;console.log("Waiting for a healthy deployment ("+(i+1)+"/"+retries+")");await new Promise(r=>setTimeout(r,5000));}
   }})().catch(error=>{console.error("Smoke failed: "+error.message);process.exitCode=1;});
 }

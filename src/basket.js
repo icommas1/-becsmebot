@@ -20,10 +20,10 @@ function readConfig(env=process.env) {
 }
 
 function start({env=process.env,logger=console,marketFactory=createMarket,walletIntelFactory=createWalletIntel,archiveFactory=createResearchArchive}={}) {
-  const config=readConfig(env),market=marketFactory({apiKey:config.apiKey,dataDir:config.dataDir});
+  const config=readConfig(env),archiveSettings=archiveConfig(env);
+  const market=marketFactory({apiKey:config.apiKey,dataDir:config.dataDir,captureResearch:archiveSettings.enabled});
   const accounts=paperConfig(env),store=accounts.enabled?createStore(accounts.databaseUrl):null;
   const walletIntel=walletIntelFactory({config:walletIntelConfig(env)});
-  const archiveSettings=archiveConfig(env);
   const archive=archiveSettings.enabled?archiveFactory(archiveSettings.databaseUrl,{streamId:archiveSettings.streamId}):null;
   const capture=archive?createArchiveCapture({archive,dataDir:config.dataDir||path.join(process.cwd(),"data"),logger}):null;
   let interval=null,walletInterval=null,archiveInterval=null,closing=null,stopping=false;
@@ -43,8 +43,10 @@ function start({env=process.env,logger=console,marketFactory=createMarket,wallet
     if(stopping||marketJob||capture&&!capture.canCapture())return marketJob;
     marketJob=(async()=>{
       await market.scan();
-      const snapshot=market.researchSnapshot?.();
-      await record("market.scan","market",snapshot,snapshot?.scanAt||Date.now(),{scanIntervalMs:SCAN_MS});
+      if(capture){
+        const snapshot=market.researchSnapshot?.();
+        await record("market.scan","market",snapshot,snapshot?.scanAt||Date.now(),{scanIntervalMs:SCAN_MS});
+      }
     })().catch(()=>logger.error?.("Market capture unavailable")).finally(()=>{marketJob=null;});
     return marketJob;
   }
@@ -52,12 +54,15 @@ function start({env=process.env,logger=console,marketFactory=createMarket,wallet
     if(stopping||walletJob||capture&&!capture.canCapture())return walletJob;
     walletJob=(async()=>{
       await walletIntel.scan();
-      const snapshot=walletIntel.researchSnapshot?.();
-      await record("wallet-intel.scan","wallet-intel",snapshot,Date.now(),{scanIntervalMs:walletIntel.scanMs});
+      if(capture){
+        const snapshot=walletIntel.researchSnapshot?.();
+        await record("wallet-intel.scan","wallet-intel",snapshot,Date.now(),{scanIntervalMs:walletIntel.scanMs});
+      }
     })().catch(()=>logger.error?.("Wallet intelligence capture unavailable")).finally(()=>{walletJob=null;});
     return walletJob;
   }
-  const server=createApp(market,{config:accounts,store},walletIntel,archiveStatus).listen(config.port,"0.0.0.0",()=>{
+  const release={commit:/^[0-9a-f]{40}$/i.test(env.RAILWAY_GIT_COMMIT_SHA||"")?env.RAILWAY_GIT_COMMIT_SHA.toLowerCase():null};
+  const server=createApp(market,{config:accounts,store},walletIntel,archiveStatus,release).listen(config.port,"0.0.0.0",()=>{
     logger.log("BecsBot public Jupiter paper terminal running on port "+server.address().port);
     runtimeJob=(async()=>{
       if(archive){

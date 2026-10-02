@@ -17,8 +17,8 @@ test("all public response contracts and read-only smoke work against a real HTTP
   const r=await fetch(base+"/api/paper/prices",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({mints:[SOL,MINTS[0]]})});
   assert.equal(r.status,200);assert.ok(isValid("priceResponse",await r.json()));
   const called=[];await smoke(base,{request:(url,options)=>{called.push({url,method:options.method||"GET"});return fetch(url,options);}});
-  assert.deepEqual(called.map(c=>c.method),Array(10).fill("GET"));
-  assert.equal(called.length,10);
+  assert.deepEqual(called.map(c=>c.method),Array(11).fill("GET"));
+  assert.equal(called.length,11);
 });
 test("browser payloads preserve Radar and Signals while separating bounded chart history",async t=>{
   const market=await fixtureMarket(),full=market.snapshot(),base=await serve(t,market);

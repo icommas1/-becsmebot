@@ -122,7 +122,7 @@ test("production smoke verifies archive health and deployed revision using GETs 
   const commit="a".repeat(40),provenance=await runtimeEvidence({env:{RAILWAY_GIT_COMMIT_SHA:commit},marketScanMs:60000,
     walletIntelEnabled:false,walletIntelScanMs:60000,paperAccountsEnabled:false,streamId:"test"});
   const state={...disabledStatus(),enabled:true,healthy:true,runtimeEvidence:provenance.reference};
-  const server=createApp(await fixtureMarket(),undefined,undefined,()=>state).listen(0,"127.0.0.1");
+  const server=createApp(await fixtureMarket(),undefined,undefined,()=>state,{commit}).listen(0,"127.0.0.1");
   await once(server,"listening");
   try{
     const base="http://127.0.0.1:"+server.address().port,request=(url,options)=>{
@@ -131,4 +131,36 @@ test("production smoke verifies archive health and deployed revision using GETs 
     const result=await smoke(base,{request,requireArchive:true,expectedCommit:commit});assert.equal(result.archive.healthy,true);
     await assert.rejects(smoke(base,{request,requireArchive:true,expectedCommit:"b".repeat(40)}),/Deployed commit/);
   }finally{await new Promise(resolve=>server.close(resolve));}
+});
+
+test("paused research skips evidence capture while markets and independent release checks work",async()=>{
+  const {smoke}=require("../../scripts/smoke");
+  const market=await fixtureMarket(),commit="c".repeat(40);let received,scans=0,evidenceReads=0;
+  const originalScan=market.scan;
+  market.scan=async()=>{scans++;await originalScan();};
+  market.researchSnapshot=()=>{evidenceReads++;return {};};
+  const runtime=start({env:{JUPITER_API_KEY:"fixture",PORT:"0",RESEARCH_ARCHIVE_ENABLED:"false",RAILWAY_GIT_COMMIT_SHA:commit},
+    marketFactory:options=>{received=options;return market;},
+    archiveFactory:()=>assert.fail("Paused archive must not connect to storage"),logger:{log(){},error(value){assert.fail(value);}}});
+  try{
+    if(!runtime.server.listening)await once(runtime.server,"listening");
+    await runtime.ready();await new Promise(resolve=>setImmediate(resolve));
+    assert.equal(scans,1);assert.equal(received.captureResearch,false);assert.equal(evidenceReads,0);
+    const base="http://127.0.0.1:"+runtime.server.address().port;
+    const result=await smoke(base,{archiveMode:"disabled",expectedCommit:commit});
+    assert.equal(result.archive.enabled,false);assert.equal(result.release.commit,commit);
+    await assert.rejects(smoke(base,{archiveMode:"disabled",expectedCommit:"d".repeat(40)}),/Deployed commit/);
+    await assert.rejects(smoke(base,{archiveMode:"required"}),/Research archive is disabled/);
+    await assert.rejects(smoke(base,{archiveMode:"typo"}),/archive mode/);
+  }finally{await runtime.shutdown();}
+});
+
+test("disabled archive expectation rejects unexpected collection",async()=>{
+  const {createApp}=require("../../src/api/app"),{disabledStatus}=require("../../src/archive/capture");
+  const {smoke}=require("../../scripts/smoke");
+  const state={...disabledStatus(),enabled:true,healthy:true};
+  const server=createApp(await fixtureMarket(),undefined,undefined,()=>state).listen(0,"127.0.0.1");
+  await once(server,"listening");
+  try{await assert.rejects(smoke("http://127.0.0.1:"+server.address().port,{archiveMode:"disabled"}),/expected to be disabled/);}
+  finally{await new Promise(resolve=>server.close(resolve));}
 });
