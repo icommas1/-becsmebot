@@ -89,6 +89,33 @@ test("archive health exposes aggregate verification state without private eviden
   }finally{await new Promise(resolve=>server.close(resolve));}
 });
 
+test("archive catch-up advances bounded pages promptly, backs off failures and stops with runtime",async t=>{
+  const market=await fixtureMarket(),dataDir=mkdtempSync(path.join(tmpdir(),"becs-catchup-"));
+  let calls=0,sequence=50,offline=false;
+  t.mock.timers.enable({apis:["setTimeout"]});
+  const settle=()=>new Promise(resolve=>setImmediate(resolve));
+  const archive={record:async()=>({sequence:++sequence}),close:async()=>{},verify:async({afterSequence=0,limit})=>{
+    calls++;assert.equal(limit,10);if(offline)throw Error("offline");
+    const verified=Math.min(sequence,afterSequence+limit);
+    return {valid:true,verified,complete:verified===sequence,previousHash:"a".repeat(64),target:{headSequence:sequence}};
+  }};
+  const runtime=start({env:{JUPITER_API_KEY:"fixture",PORT:"0",DATA_DIR:dataDir,RESEARCH_ARCHIVE_ENABLED:"true",DATABASE_URL:"fixture"},
+    marketFactory:()=>market,archiveFactory:()=>archive,logger:{log(){},error(){}}});
+  try{
+    if(!runtime.server.listening)await once(runtime.server,"listening");
+    await runtime.ready();await settle();
+    const first=calls;t.mock.timers.tick(1000);await settle();assert.equal(calls,first+1);
+    offline=true;t.mock.timers.tick(1000);await settle();const failed=calls;
+    assert.equal(runtime.archiveStatus().lastError,"delivery_or_verification_pending");
+    offline=false;t.mock.timers.tick(1000);await settle();assert.equal(calls,failed,"failure keeps ten-second backoff");
+    t.mock.timers.tick(9000);await settle();assert.equal(calls,failed+1);
+    for(let i=0;i<10&&!runtime.archiveStatus().verificationComplete;i++){t.mock.timers.tick(1000);await settle();}
+    assert.equal(runtime.archiveStatus().verificationComplete,true);
+    const caughtUp=calls;t.mock.timers.tick(1000);await settle();assert.equal(calls,caughtUp,"healthy archive returns to normal cadence");
+    await runtime.shutdown();const closed=calls;t.mock.timers.tick(20000);await settle();assert.equal(calls,closed);
+  }finally{await runtime.shutdown();t.mock.timers.reset();rmSync(dataDir,{recursive:true,force:true});}
+});
+
 test("production smoke verifies archive health and deployed revision using GETs only",async()=>{
   const {createApp}=require("../../src/api/app"),{disabledStatus}=require("../../src/archive/capture");
   const {smoke}=require("../../scripts/smoke"),{runtimeEvidence}=require("../../src/archive/runtime-evidence");
