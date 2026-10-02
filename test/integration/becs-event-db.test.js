@@ -34,6 +34,14 @@ test("PostgreSQL: committed paper actions append verifiable BecsEvents and immut
     await assert.rejects(db.query("UPDATE becs_events SET type='tampered' WHERE stream_id=$1",[stream]),/append-only/);
     await assert.rejects(db.query("DELETE FROM becs_event_proofs WHERE stream_id=$1",[stream]),/append-only/);
 
+    // Always roll back, including on the pre-fix schema: never destroy fixture history.
+    const client=await db.connect();
+    try{for(const table of ["becs_events","becs_event_proofs"]){
+      await client.query("BEGIN");
+      try{await assert.rejects(client.query("TRUNCATE "+table),/append-only/);}
+      finally{await client.query("ROLLBACK");}
+    }}finally{client.release();}
+
     const count=verification.eventCount;
     await assert.rejects(store.command(owner,cmd({}),null,async()=>({ok:true,auditEvents:[]})));
     assert.equal((await store.verifyEvents(owner)).eventCount,count,"rolled-back commands must not alter the event ledger");
