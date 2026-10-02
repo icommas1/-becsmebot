@@ -66,7 +66,7 @@ Normalization merges canonical mints and feeds. Positive finite prices and numer
 | --- | --- |
 | `GET /`, `GET /terminal` | Lean launch shell; same-origin fragment hydrates the full terminal |
 | `GET /assets/becs-logo.jpg` | Fixed supplied artwork |
-| `GET /health` | Liveness, feed/scan state, real trading disabled |
+| `GET /health` | Liveness, feed/scan state, validated release commit, real trading disabled |
 | `GET /api/basket` | Validated cached market snapshot |
 | `GET /api/history` | Validated, bounded chart trails, independent from signal history |
 | `GET /api/search?q=...` | Trimmed 2–80-character query; one-minute cache |
@@ -187,7 +187,7 @@ The existing market health route does not certify database health. When disabled
 
 CI runs syntax/schema checks and unit/integration tests with a disposable PostgreSQL 18 service on Node 22/24, plus iPhone WebKit, mobile Chromium and desktop Chromium using a local fixture server. Failures retain traces/screenshots for seven days. No test needs a production API key.
 
-The Railway workflow runs after pushes to main, manually, and every six hours. It makes ten GET requests per attempt, plus archive health when required, allows deployment warm-up retries, validates contracts including bounded chart history, confirms all nineteen configured feeds, a recent scan, disabled live trading and terminal/asset availability. Provider freshness is reported separately so a provider outage is not misclassified as a BecsBot process outage; strict market-data readiness is available through `SMOKE_REQUIRE_MARKET_DATA=1`. It does not send orders, change settings or buy a developer plan. Dependabot opens weekly npm and Actions update PRs; updates are not automatically merged.
+The Railway workflow runs after pushes to main, manually, and every six hours. It makes eleven GET requests per attempt, including archive status, allows deployment warm-up retries, validates contracts including bounded chart history, confirms all nineteen configured feeds, a recent scan, disabled live trading and terminal/asset availability. Provider freshness is reported separately so a provider outage is not misclassified as a BecsBot process outage; strict market-data readiness is available through `SMOKE_REQUIRE_MARKET_DATA=1`. It does not send orders, change settings or buy a developer plan. Dependabot opens weekly npm and Actions update PRs; updates are not automatically merged.
 
 Railway service variables, volume attachment and health-check configuration live outside this repository. The repository defines the startup command and expected variable names but cannot prove those external settings. No `railway.toml`, Dockerfile or Procfile is currently required.
 
@@ -220,8 +220,8 @@ Coverage is prospective. Old chart samples already pruned before archive activat
 
 ### Reproducible runtime/configuration history
 
-Every new process archives a version-2 `runtime.started` payload before starting its scan timers. It records a random runtime ID, the validated Railway commit SHA (null when unavailable), Node/package versions, hashes of the relevant strategy/execution/market/archive sources and dependency lockfile, API schema hash, and an explicit non-secret configuration snapshot. The snapshot contains actual shared strategy/default settings, feed definitions, feature enabled flags, polling intervals and archive format/stream. It never enumerates environment variables, stores credentials, OAuth owner identity or connection strings.
+When research capture is enabled, each new process archives a version-2 `runtime.started` payload before starting its scan timers. It records a random runtime ID, the validated Railway commit SHA (null when unavailable), Node/package versions, hashes of the relevant strategy/execution/market/archive sources and dependency lockfile, API schema hash, and an explicit non-secret configuration snapshot. The snapshot contains actual shared strategy/default settings, feed definitions, feature enabled flags, polling intervals and archive format/stream. It never enumerates environment variables, stores credentials, OAuth owner identity or connection strings.
 
 Each subsequent market or intelligence record includes the runtime ID, configuration hash, code hash and full runtime-evidence payload hash in its hash-protected metadata. This links observations to the exact deployed configuration for later replay and outcome comparison, without changing the strategy or default values. Per-account settings changes remain in private BecsEvent; these runtime defaults do not pretend to replace account-specific history. Older records lacking provenance remain intact and explicitly lack this new linkage.
 
-`/health/archive` exposes the current provenance hashes/commit only. Production smoke now requires the archive to be healthy and its deployed commit to match the workflow commit, on deploy and on the existing six-hour schedule. It does not expose archived payloads or make paper commands.
+`/health/archive` exposes the current provenance hashes/commit only. `/health` independently exposes the running release commit, including while capture is paused. Production smoke checks that commit against the workflow commit on deploy and on the existing six-hour schedule. The current owner-requested pause is enforced with `SMOKE_ARCHIVE_MODE=disabled`; `required` instead requires a healthy archive and matching provenance when collection is authorized again. Neither route exposes archived payloads, and smoke never makes paper commands. With research capture disabled, scans continue without retaining or cloning provider evidence for the archive; saved history remains intact.

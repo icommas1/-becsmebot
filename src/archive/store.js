@@ -32,6 +32,25 @@ function encode(value){
 }
 function envelopeHash(value){return digest(value);}
 
+function verifyArchiveEnvelope(row){
+  try{
+    if(Number(row.schema_version)!==SCHEMA_VERSION||digest(row.metadata)!==row.metadata_hash)return false;
+    const envelope={schemaVersion:Number(row.schema_version),recordId:row.record_id,streamId:row.stream_id,sequence:Number(row.sequence),
+      occurredAt:Number(row.occurred_at),capturedAt:Number(row.captured_at),kind:row.kind,source:row.source,
+      payloadHash:row.payload_hash,metadataHash:row.metadata_hash,previousHash:row.previous_hash||null};
+    return envelopeHash(envelope)===row.record_hash;
+  }catch{return false;}
+}
+function verifyArchivePayload(row){
+  try{
+    if(row.encoding!==ENCODING||!Buffer.isBuffer(row.payload))return false;
+    const raw=gunzipSync(row.payload,{maxOutputLength:MAX_PAYLOAD_BYTES});
+    return digest(JSON.parse(raw.toString("utf8")))===row.payload_hash&&
+      (row.compressed_bytes==null||Number(row.compressed_bytes)===row.payload.length)&&
+      (row.uncompressed_bytes==null||Number(row.uncompressed_bytes)===raw.length);
+  }catch{return false;}
+}
+
 function createResearchArchive(connectionString,{streamId="becs-research-v1",now=Date.now}={}){
   if(!connectionString)throw Error("Research archive database URL is required");
   if(!text(streamId,120))throw Error("Invalid research archive stream");
@@ -114,14 +133,7 @@ function createResearchArchive(connectionString,{streamId="becs-research-v1",now
     let expected=afterSequence+1;
     for(const row of rows){
       if(Number(row.sequence)!==expected||(row.previous_hash||null)!==previousHash)return {valid:false,verified:expected-1,failedSequence:expected};
-      if(row.encoding!==ENCODING)return {valid:false,verified:expected-1,failedSequence:expected};
-      let payload;
-      try{payload=JSON.parse(gunzipSync(row.payload,{maxOutputLength:MAX_PAYLOAD_BYTES}).toString("utf8"));}catch{return {valid:false,verified:expected-1,failedSequence:expected};}
-      if(digest(payload)!==row.payload_hash||digest(row.metadata)!==row.metadata_hash)return {valid:false,verified:expected-1,failedSequence:expected};
-      const envelope={schemaVersion:Number(row.schema_version),recordId:row.record_id,streamId:row.stream_id,sequence:Number(row.sequence),
-        occurredAt:Number(row.occurred_at),capturedAt:Number(row.captured_at),kind:row.kind,source:row.source,
-        payloadHash:row.payload_hash,metadataHash:row.metadata_hash,previousHash:row.previous_hash||null};
-      if(envelopeHash(envelope)!==row.record_hash)return {valid:false,verified:expected-1,failedSequence:expected};
+      if(!verifyArchivePayload(row)||!verifyArchiveEnvelope(row))return {valid:false,verified:expected-1,failedSequence:expected};
       previousHash=row.record_hash;expected++;
     }
     const verified=expected-1,complete=verified===boundary.headSequence;
@@ -130,4 +142,4 @@ function createResearchArchive(connectionString,{streamId="becs-research-v1",now
   }
   return {init,record,stats,head,verify,close:()=>pool.end(),streamId};
 }
-module.exports={SCHEMA_VERSION,ENCODING,MAX_PAYLOAD_BYTES,encode,createResearchArchive};
+module.exports={SCHEMA_VERSION,ENCODING,MAX_PAYLOAD_BYTES,encode,verifyArchivePayload,verifyArchiveEnvelope,createResearchArchive};

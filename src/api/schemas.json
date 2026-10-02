@@ -300,6 +300,22 @@
           "additionalProperties": {
             "$ref": "#/definitions/feed"
           }
+        },
+        "release": {
+          "type": "object",
+          "properties": {
+            "commit": {
+              "type": [
+                "string",
+                "null"
+              ],
+              "pattern": "^[0-9a-f]{40}$"
+            }
+          },
+          "required": [
+            "commit"
+          ],
+          "additionalProperties": false
         }
       },
       "required": [
@@ -309,7 +325,8 @@
         "lastScanAt",
         "lastError",
         "running",
-        "feeds"
+        "feeds",
+        "release"
       ],
       "additionalProperties": false
     },

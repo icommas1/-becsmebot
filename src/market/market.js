@@ -8,7 +8,7 @@ const SOL = "So11111111111111111111111111111111111111112";
 const SCAN_MS = 60000;
 const PRICE_CACHE_MS = 20000;
 
-function createMarket({ apiKey, dataDir, request, dexRequest }) {
+function createMarket({ apiKey, dataDir, request, dexRequest, captureResearch = true }) {
   const jupiter = request || createJupiterClient({ apiKey });
   const dex = dexRequest || createDexClient();
   const history = createPriceHistory({ dataDir });
@@ -74,7 +74,7 @@ function createMarket({ apiKey, dataDir, request, dexRequest }) {
     try {
       try {
         const prices=await jupiter("/price/v3?ids="+SOL);
-        assertSchema("upstreamPrices", prices);providerEvidence.jupiter.solPrice=prices;
+        assertSchema("upstreamPrices", prices);if(captureResearch)providerEvidence.jupiter.solPrice=prices;
         const price=positive(prices[SOL]?.usdPrice);
         if(!price)throw Error("SOL price unavailable");
         state.solUsd=price;state.solPriceAt=Date.now();touch();
@@ -83,13 +83,13 @@ function createMarket({ apiKey, dataDir, request, dexRequest }) {
         try {
           const tokens=await jupiter(url);
           assertSchema("upstreamTokens", tokens);
-          providerEvidence.jupiter[name]=tokens;
+          if(captureResearch)providerEvidence.jupiter[name]=tokens;
           successful[name]=tokens;feedTokens[name]=tokens;
           state.feeds[name]={count:tokens.length,at:new Date().toISOString()};touch();
         }catch(error){errors.push(name+": "+error.message);state.feeds[name]={...state.feeds[name],error:error.message};touch();}
       }
       const discovered=await discovery;
-      for(const feed of discovered)if(feed.raw)providerEvidence.dex[feed.name]=feed.raw;
+      if(captureResearch)for(const feed of discovered)if(feed.raw)providerEvidence.dex[feed.name]=feed.raw;
       const mints=[...new Set(discovered.flatMap(feed=>feed.mints||[]))];
       const metadata=new Map();
       let enrichmentError=null;
@@ -97,7 +97,7 @@ function createMarket({ apiKey, dataDir, request, dexRequest }) {
         for(let i=0;i<mints.length;i+=100) {
           const chunk=mints.slice(i,i+100);
           const tokens=await jupiter("/tokens/v2/search?query="+encodeURIComponent(chunk.join(",")));
-          assertSchema("upstreamTokens",tokens);providerEvidence.enrichment.push(tokens);
+          assertSchema("upstreamTokens",tokens);if(captureResearch)providerEvidence.enrichment.push(tokens);
           for(const token of tokens)if(chunk.includes(token.id))metadata.set(token.id,token);
         }
       }catch(error){enrichmentError="Jupiter enrichment: "+error.message;}
@@ -125,12 +125,12 @@ function createMarket({ apiKey, dataDir, request, dexRequest }) {
       const rankedSignals=rankSignals(state.radar,trails);
       compactSignals=rankedSignals.map(({mint,firstSeenAt,observedAt,multiple,peakMultiple})=>
         ({mint,firstSeenAt,observedAt,multiple,peakMultiple}));
-      lastResearch={
+      lastResearch=captureResearch?{
         schemaVersion:1,scanAt:state.lastScanAt,solUsd:state.solUsd,solPriceAt:state.solPriceAt,
         lastError:state.lastError,feeds:structuredClone(state.feeds),
         providerRows:structuredClone(successful),providerEvidence:structuredClone(providerEvidence),
         radar:structuredClone(state.radar),signals:structuredClone(rankedSignals)
-      };
+      }:null;
       touch();
     }
   }
@@ -150,4 +150,3 @@ function createMarket({ apiKey, dataDir, request, dexRequest }) {
 }
 
 module.exports={createMarket,SCAN_MS};
-

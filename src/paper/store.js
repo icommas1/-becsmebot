@@ -10,6 +10,12 @@ const fault=(status,message)=>Object.assign(Error(message),{status});
 const EVENT_BATCH_SIZE=32,EVENT_BATCH_MAX=128,VERIFY_MAX_EVENTS=5000;
 const proofProvider=createLocalHashProofProvider();
 const streamForUser=userId=>"paper:"+hash(userId);
+const eventFromRow=row=>({
+  schemaVersion:Number(row.schema_version),eventId:row.event_id,streamId:row.stream_id,sequence:Number(row.sequence),
+  occurredAt:Number(row.occurred_at),type:row.type,source:row.source,payload:row.payload,payloadHash:row.payload_hash,
+  previousHash:row.previous_hash??null,eventHash:row.event_hash,requestId:row.request_id??null,accountId:row.account_id??null,
+  strategy:row.strategy_id?{id:row.strategy_id,version:row.strategy_version}:null
+});
 
 function createStore(connectionString) {
   const pool=new Pool({connectionString,max:4,connectionTimeoutMillis:5000,idleTimeoutMillis:10000,
@@ -36,12 +42,6 @@ function createStore(connectionString) {
     if(!rows[0])throw fault(401,"Sign in again.");return view(rows[0]);
   }
 
-  const eventFromRow=row=>({
-    schemaVersion:Number(row.schema_version),eventId:row.event_id,streamId:row.stream_id,sequence:Number(row.sequence),
-    occurredAt:Number(row.occurred_at),type:row.type,source:row.source,payload:row.payload,payloadHash:row.payload_hash,
-    previousHash:row.previous_hash??null,eventHash:row.event_hash,requestId:row.request_id??null,accountId:row.account_id??null,
-    strategy:row.strategy_id?{id:row.strategy_id,version:row.strategy_version}:null
-  });
   const publicEvent=event=>{
     const {streamId,...safe}=event;return {...safe,occurredAt:new Date(event.occurredAt).toISOString()};
   };
@@ -184,4 +184,4 @@ function createStore(connectionString) {
   async function consumeFlow(state){await init();return (await pool.query("DELETE FROM paper_oauth_flows WHERE state_hash=$1 AND expires_at>$2 RETURNING verifier",[hash(state),Date.now()])).rows[0]?.verifier;}
   return {init,ensureAccount,read,command,listEvents,listProofs,sealEvents,verifyEvents,createSession,session,logout,flow,consumeFlow,close:()=>pool.end()};
 }
-module.exports={createStore,hash,fault,streamForUser,EVENT_BATCH_SIZE};
+module.exports={createStore,hash,fault,streamForUser,EVENT_BATCH_SIZE,eventFromRow};

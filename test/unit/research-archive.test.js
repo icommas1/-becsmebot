@@ -42,3 +42,14 @@ test("a completed market scan can be archived with optional Radar fields absent"
   const encoded=encode(snapshot);
   assert.deepEqual(JSON.parse(gunzipSync(encoded.compressed)),JSON.parse(JSON.stringify(snapshot)));
 });
+
+test("disabled research capture keeps public scans identical without retained provider evidence",async()=>{
+  const mint="So11111111111111111111111111111111111111112";
+  const options={dexRequest:async()=>[],request:async url=>url.startsWith("/price")?
+    {[mint]:{usdPrice:200}}:[{id:mint,usdPrice:200,stats6h:{}}]};
+  const paused=createMarket({...options,captureResearch:false});
+  await paused.scan();
+  assert.ok(paused.terminalSnapshot().radar.length>0);
+  assert.equal(Object.keys(paused.terminalSnapshot().feeds).length,19);
+  assert.equal(paused.researchSnapshot(),null);
+});
