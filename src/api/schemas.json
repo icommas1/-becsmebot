@@ -1758,6 +1758,81 @@
         "proofsComplete"
       ],
       "additionalProperties": false
+    },
+    "archiveHealth": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "enabled",
+        "healthy",
+        "pendingRecords",
+        "pendingBytes",
+        "blockedRecords",
+        "lastCommittedAt",
+        "lastMarketAt",
+        "lastSequence",
+        "verifiedThrough",
+        "verificationComplete",
+        "failures",
+        "lastError"
+      ],
+      "properties": {
+        "enabled": {
+          "type": "boolean"
+        },
+        "healthy": {
+          "type": "boolean"
+        },
+        "verificationComplete": {
+          "type": "boolean"
+        },
+        "pendingRecords": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "pendingBytes": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "blockedRecords": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "lastSequence": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "verifiedThrough": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "failures": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "lastCommittedAt": {
+          "type": [
+            "integer",
+            "null"
+          ],
+          "minimum": 0
+        },
+        "lastMarketAt": {
+          "type": [
+            "integer",
+            "null"
+          ],
+          "minimum": 0
+        },
+        "lastError": {
+          "enum": [
+            null,
+            "capture_pending",
+            "delivery_or_verification_pending",
+            "integrity_failed"
+          ]
+        }
+      }
     }
   }
 }

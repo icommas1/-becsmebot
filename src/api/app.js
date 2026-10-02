@@ -6,7 +6,7 @@ const { assertSchema, isValid }=require("./validation");
 function createApp(market, paperAccounts={config:{enabled:false}}, walletIntel={snapshot:()=>({
   enabled:false,updatedAt:null,lastError:null,running:false,
   providers:{nansen:{enabled:false,records:0,lastSuccessAt:null,lastError:null}},tokens:[]
-}),revision:()=>0}) {
+}),revision:()=>0}, archiveStatus=require("../archive/capture").disabledStatus) {
   const instanceId=randomUUID();
   const send = (res, name, value) => res.json(assertSchema(name, value));
   const app=express();app.set("trust proxy",1);app.disable("x-powered-by");
@@ -27,6 +27,11 @@ function createApp(market, paperAccounts={config:{enabled:false}}, walletIntel={
   app.get("/health",(_req,res)=>{
     const s=market.terminalSnapshot?market.terminalSnapshot():market.snapshot();send(res,"health",{ok:true,tradingEnabled:false,manualSell:{enabled:false},
       lastScanAt:s.lastScanAt,lastError:s.lastError,running:s.running,feeds:s.feeds});
+  });
+  app.get("/health/archive",(_req,res)=>{
+    const status=archiveStatus();
+    res.status(status.enabled&&!status.healthy?503:200);
+    send(res,"archiveHealth",status);
   });
   // No signing module is loaded. Even old clients cannot execute a real sale.
   app.use("/api/sell",(_req,res)=>res.status(410).json({error:"Real trading is disabled on the public terminal"}));
