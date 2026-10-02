@@ -81,3 +81,10 @@ DROP TRIGGER IF EXISTS becs_event_proofs_append_only ON becs_event_proofs;
 CREATE TRIGGER becs_event_proofs_append_only
   BEFORE UPDATE OR DELETE ON becs_event_proofs
   FOR EACH ROW EXECUTE FUNCTION becs_reject_append_only_mutation();
+
+DROP TRIGGER IF EXISTS becs_events_no_truncate ON becs_events;
+CREATE TRIGGER becs_events_no_truncate BEFORE TRUNCATE ON becs_events
+  FOR EACH STATEMENT EXECUTE FUNCTION becs_reject_append_only_mutation();
+DROP TRIGGER IF EXISTS becs_event_proofs_no_truncate ON becs_event_proofs;
+CREATE TRIGGER becs_event_proofs_no_truncate BEFORE TRUNCATE ON becs_event_proofs
+  FOR EACH STATEMENT EXECUTE FUNCTION becs_reject_append_only_mutation();

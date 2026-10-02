@@ -9,12 +9,15 @@ const {SCHEMA_VERSION,ENCODING}=require("./store");
 const sourceFiles=[
   "package.json","package-lock.json",
   "src/basket.js","src/market/market.js","src/market/tokens.js","src/market/signals.js",
+  "src/market/client.js","src/market/dexscreener.js","src/market/history.js","src/market/mint.js",
   "src/intel/wallet-intel.js","src/paper/service.js","src/paper/store.js",
+  "src/paper/config.js","src/paper/routes.js","src/paper/schema.sql","src/api/app.js","src/api/validation.js",
   "src/events/becs-event.js","src/archive/store.js","src/archive/capture.js",
+  "src/archive/config.js","src/proof/provider.js","src/proof/local-hash.js",
   "src/archive/runtime-evidence.js","src/archive/schema.sql","src/api/schemas.json",
   "src/web/assets/js/filters.mjs","src/web/assets/js/paper-wallet.mjs",
   "src/web/assets/js/trading/contracts.mjs","src/web/assets/js/trading/decision-engine.mjs",
-  "src/web/assets/js/trading/paper-executor.mjs"
+  "src/web/assets/js/trading/paper-executor.mjs","src/web/assets/js/trading/paper-pipeline.mjs","src/web/assets/js/core.mjs"
 ];
 function sourceHashes(){
   const root=path.resolve(__dirname,"../..");

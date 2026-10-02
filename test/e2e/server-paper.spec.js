@@ -78,6 +78,7 @@ test("server paper retry survives reload without overwriting the local wallet",a
     return r.fulfill({json:result});
   });
   await page.reload();await expect(page.locator("#radar .token-contact")).toHaveCount(2);
+  await expect(page.locator("#account-status")).toContainText("Server paper account · saved across devices");
   await page.locator("#radar .token-contact").first().getByRole("button",{name:"BUY $1",exact:true}).click();
   await expect(page.locator("#toast")).toContainText("Retry pending action");
   expect(paper.holds[MINTS[0]].qty).toBeGreaterThan(0);expect(revision).toBe(1);

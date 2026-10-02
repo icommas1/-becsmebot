@@ -14,7 +14,7 @@ Railway service access, variables, volume attachment, restart policy and deploym
 
 ## Health and smoke checks
 
-`GET /health` proves process liveness and reports scan/feed state; it is not a promise that Jupiter is healthy. `npm run test:smoke` performs nine read-only GET requests against `SMOKE_BASE_URL`, validates contracts and confirms that live trading remains disabled. It reports provider degradation separately. Set `SMOKE_REQUIRE_MARKET_DATA=1` only for a strict provider-readiness check.
+`GET /health` proves process liveness and reports scan/feed state; it is not a promise that Jupiter is healthy. `npm run test:smoke` performs ten read-only GET requests (eleven with archive health enabled) against `SMOKE_BASE_URL`, validates contracts and confirms that live trading remains disabled. It reports provider degradation separately. Set `SMOKE_REQUIRE_MARKET_DATA=1` only for a strict provider-readiness check.
 
 The smoke script rejects URLs containing embedded credentials, query strings or fragments. It never calls search, price POST, wallet, order, sell or pause operations.
 
@@ -40,3 +40,17 @@ Monitor both volume usage and queue growth. There is no permanent archive TTL or
 Independent, encrypted off-provider backups plus a tested restore remain required. The current repository does not configure an external backup destination, payment, or retention policy. A healthy archive endpoint verifies the primary copy only and must not be presented as proof of an independent backup.
 
 The deployed runtime evidence is available as hashes and commit in `/health/archive`. `SMOKE_REQUIRE_ARCHIVE=1 SMOKE_EXPECT_COMMIT=<merged-sha> npm run test:smoke` verifies both capture/integrity and release identity. The existing Railway smoke workflow now applies these checks automatically. The code revision comes only from Railway's built-in `RAILWAY_GIT_COMMIT_SHA`; it is never substituted with an invented value. Runtime/configuration payloads stay private in PostgreSQL.
+
+
+## Audit checkpoint — 2026-10-02
+
+Main through PR #51 was deployed with green CI, all nineteen feeds current, server paper accounts enabled, and a healthy verified research archive. Wallet intelligence remains disabled without `NANSEN_API_KEY`. The production startup health check is now configured as `/health`; it applies to the next deployment. Live execution remains disabled.
+
+Remaining operational work, in priority order:
+
+1. **Increase storage capacity.** The workspace's effective Railway limit is 0.5 GB per volume, with zero native backups allowed. PostgreSQL disk usage was approximately 0.389 GB during this audit and rising. This is a workspace limit, not a safe long-term archive capacity. Update the Railway workspace/billing limits, then expand the existing PostgreSQL volume without replacing it. Do not prune records, reset the database or discard the delivery spool.
+2. **Establish independent backups and prove restoration.** Provision an encrypted off-provider destination, define retention, schedule database exports and restore into a separate disposable database. Verify research hashes, BecsEvent/proof integrity and paper balances there before relying on the backup. No backup is presently configured.
+3. **Remove retired deployment credentials after owner review.** The service still lists `SOLANA_PRIVATE_KEY`, `HELIUS_RPC_URL`, `MANUAL_SELL_ENABLED` and legacy `DASHBOARD_*` names. Current runtime code does not read them. Confirm any wallet key has an independently secured backup before deleting its deployment copy. Never print these values or bring a signer back into this service.
+4. **Keep archive verification practical as history grows.** Research verification resumes within a running process but restarts its scan from the beginning on deploy. Paper-event verification explicitly reports incomplete coverage above its bounded window. A durable verification checkpoint/independent full verifier is a follow-up; never label partial coverage as complete.
+
+Branch reconciliation found 50 branch heads belonging to merged PRs and three unmerged branches (`fix/research-archive-json-normalization`, its `-v2` variant, and `maintenance/phase1-docs-repo-guidance`). The normalization attempts are superseded by merged #49. All three were preserved; no old branch should be blindly merged into current main, particularly branches from the retired live/Pump implementation.

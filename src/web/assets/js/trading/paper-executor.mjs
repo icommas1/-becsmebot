@@ -90,15 +90,17 @@ function fillBuy(paper,intent,{row,solRate,now}) {
   if(row?.mint!==intent.asset||!recentMark(row.observedAt,180000,now)||!Number.isFinite(solRate)||solRate<=0||!price)return {ok:false,message:"Need a current SOL and token price for a paper buy."};
   const solCost=settings.betUsd/solRate,total=solCost+settings.feeSol;
   if(paper.cashSol+1e-10<total+settings.reserveSol)return {ok:false,message:"Paper cash would fall below your SOL reserve."};
-  const entry=price*(1+settings.impactPct/100);
+  const entry=price*(1+settings.impactPct/100),qty=settings.betUsd/entry,fee=settings.feeSol*solRate;
+  if(![solCost,total,entry,qty,fee].every(Number.isFinite)||entry<=0||qty<=0)
+    return {ok:false,message:"Paper fill exceeds supported numeric precision."};
   paper.cashSol=Math.max(0,paper.cashSol-total);
-  paper.holds[row.mint]={mint:row.mint,symbol:row.symbol,qty:settings.betUsd/entry,entryPrice:entry,
-    entryCap:row.marketCap,investedUsd:settings.betUsd,feesUsd:settings.feeSol*solRate,
+  paper.holds[row.mint]={mint:row.mint,symbol:row.symbol,qty,entryPrice:entry,
+    entryCap:row.marketCap,investedUsd:settings.betUsd,feesUsd:fee,
     boughtAt:new Date(now).toISOString(),lastPrice:price};
   paper.bought[row.mint]={...row};
   recordActivity(paper,"buy",(automatic?"Auto ":"")+"paper buy "+row.symbol+" "+formatUsd(settings.betUsd),
     {mint:row.mint,symbol:row.symbol,sizeUsd:settings.betUsd,marketCap:row.marketCap,source:automatic?feed:"manual"},now);
-  return {ok:true,filledQuantity:settings.betUsd/entry,fillPrice:entry,fee:settings.feeSol*solRate,gross:settings.betUsd,
+  return {ok:true,filledQuantity:qty,fillPrice:entry,fee,gross:settings.betUsd,
     message:automatic?null:"Paper bought "+row.symbol+" for "+formatUsd(settings.betUsd)+"."};
 }
 
@@ -118,6 +120,8 @@ function fillSale(paper,intent,{solRate,mark,markAt,marketCap=null,now}) {
   const basis=hold.investedUsd*fraction+hold.feesUsd*fraction;
   const entryCap=hold.entryCap;
   const realizedUsd=net-basis;
+  if(![unit,gross,fee,net,filledQuantity,basis,realizedUsd,paper.cashSol+net/solRate,paper.realizedUsd+realizedUsd].every(Number.isFinite)||unit<=0||filledQuantity<=0)
+    return {ok:false,message:"Paper fill exceeds supported numeric precision."};
   paper.cashSol+=net/solRate;
   paper.realizedUsd+=realizedUsd;
   hold.qty*=1-fraction;hold.investedUsd*=1-fraction;hold.feesUsd*=1-fraction;

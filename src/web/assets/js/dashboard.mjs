@@ -22,13 +22,13 @@ if(!trail||typeof trail.points!=="object"||!trail.points)trail={scan:null,points
 let paper=loadPaper(storage),snapshot=null,prices={},priceTimes={},refreshing=false;
 let searchRows=[],searchTimer=null,searchStatus="";
 const api=createApiClient();
-let accountMode="loading",serverPaper=null,serverRevision=0;
+let accountMode="loading",serverPaper=null,serverRevision=0,accountRefreshing=false,accountError=null;
 function syncAccountControls(){
   for(const input of document.querySelectorAll("[data-setting]"))input.value=paper.settings[input.dataset.setting];
   $("cash-input").value=paper.cashSol;
 }
 function accountStatus(){
-  $("account-status").textContent=accountMode==="server"?"Server paper account · saved across devices":accountMode==="local"?"Local paper wallet · saved on this browser":"Checking paper account…";
+  $("account-status").textContent=accountError?"Paper account unavailable · retrying automatically":accountMode==="server"?"Server paper account · saved across devices":accountMode==="local"?"Local paper wallet · saved on this browser":"Checking paper account…";
   $("retry-paper").hidden=!serverPaper?.pending;
 }
 function receiveAccount(result){if(result.revision<serverRevision)return;const auto=paper.auto;paper=result.paper;paper.auto=auto;serverRevision=result.revision;syncAccountControls();accountStatus();render();}
@@ -38,19 +38,32 @@ async function serverAction(action,retry=false){
   finally{accountStatus();}
 }
 async function initializeAccount(){
-  try{
-    serverPaper=createServerPaper({storage:{getItem:key=>globalThis.sessionStorage.getItem(key),setItem:(key,value)=>globalThis.sessionStorage.setItem(key,value),removeItem:key=>globalThis.sessionStorage.removeItem(key)}});
-    const capability=await serverPaper.request("/api/paper/capabilities");
-    if(!capability.enabled){accountMode="local";return;}
-    const status=await serverPaper.request("/api/auth/status");
-    if(!status.authenticated){accountMode="local";$("account-login").hidden=false;return;}
-    const result=await serverPaper.read();serverPaper.attach(result.paper);accountMode="server";
-    receiveAccount(result);$("account-logout").hidden=false;
-    if(serverPaper.pending)message("A previous paper action needs a retry to confirm its result.");
-  }catch(error){message("Paper account could not be checked. Reload to retry. "+error.message);}
-  finally{accountStatus();}
+  serverPaper??=createServerPaper({storage:{getItem:key=>globalThis.sessionStorage.getItem(key),setItem:(key,value)=>globalThis.sessionStorage.setItem(key,value),removeItem:key=>globalThis.sessionStorage.removeItem(key)}});
+  const capability=await serverPaper.request("/api/paper/capabilities");
+  if(!capability.enabled){accountMode="local";return;}
+  const status=await serverPaper.request("/api/auth/status");
+  if(!status.authenticated){accountMode="local";$("account-login").hidden=false;return;}
+  const result=await serverPaper.read();serverPaper.attach(result.paper);accountMode="server";
+  receiveAccount(result);$("account-logout").hidden=false;
+  if(serverPaper.pending)message("A previous paper action needs a retry to confirm its result.");
 }
-function accountReady(){if(accountMode==="loading"){message("Wait for the paper account check, or reload to retry.");return false;}return true;}
+async function refreshAccount(){
+  if(accountRefreshing||serverPaper?.busy||serverPaper?.pending&&accountMode!=="loading")return;
+  accountRefreshing=true;
+  try{
+    if(accountMode==="loading")await initializeAccount();
+    else if(accountMode==="server")receiveAccount(await serverPaper.read());
+    accountError=null;
+  }catch(error){
+    paper.auto=false;accountError=error.message;
+    message("Paper account unavailable. Retrying automatically. "+error.message);render();
+  }finally{accountRefreshing=false;accountStatus();}
+}
+function accountReady(){
+  if(accountError){message("Paper account unavailable. Wait for it to reconnect.");return false;}
+  if(accountMode==="loading"){message("Wait for the paper account check, or reload to retry.");return false;}
+  return true;
+}
 const $=id=>document.getElementById(id);
 function save(){if(accountMode!=="local")return true;const persisted=savePaper(storage,paper);if(!persisted)message("Browser storage is unavailable or full; paper trades and settings may not persist.");return persisted;}
 function saveRadar() { try { storage.setItem(RADAR_UI_STORE,JSON.stringify(radarUi)); } catch (_) {} }
@@ -119,7 +132,6 @@ async function runAutoExits() {
 async function refresh() {
   if (refreshing) return;refreshing=true;$("refresh").disabled=true;$("refresh").setAttribute("aria-busy","true");
   try {
-    if(accountMode==="server"&&!serverPaper.busy&&!serverPaper.pending)receiveAccount(await serverPaper.read());
     const s=await api.basket();snapshot=s;await loadRadarHistory(s);
     const scanned=s.lastScanAt?new Date(s.lastScanAt).toLocaleTimeString():"pending";
     $("status").textContent=(s.paused?"Scans paused":s.running?"Scanning":"Updated")+" · "+scanned+(s.lastError?" · "+s.lastError:"");
@@ -239,4 +251,5 @@ $("account-logout").onclick=async()=>{
   try{await serverPaper.request("/api/auth/logout",{method:"POST"});location.reload();}catch(error){message(error.message);}
 };
 $("retry-paper").onclick=()=>serverAction(null,true);
-render();await initializeAccount();refresh();setInterval(refresh,15000);
+// Private account availability must never gate public market rendering or polling.
+render();refreshAccount();refresh();setInterval(refreshAccount,15000);setInterval(refresh,15000);
