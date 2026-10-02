@@ -44,15 +44,25 @@ function createResearchArchive(connectionString,{streamId="becs-research-v1",now
       await pool.query("INSERT INTO research_archive_streams(stream_id,created_at) VALUES($1,$2) ON CONFLICT(stream_id) DO NOTHING",[streamId,now()]);
     }).catch(error=>{ready=null;throw error;}));
   }
-  async function record({kind,source,payload,occurredAt=now(),metadata={}}){
+  async function record({kind,source,payload,occurredAt=now(),metadata={},recordId=randomUUID()}){
     if(!text(kind,120)||!text(source,120))throw Error("Invalid research archive record");
+    if(!/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(recordId))throw Error("Invalid archive record ID");
     const occurred=atMillis(occurredAt),captured=atMillis(now());
-    const body=encode(payload),meta=canonical(metadata),metadataHash=digest(meta),recordId=randomUUID();
+    const body=encode(payload),meta=canonical(metadata),metadataHash=digest(meta);
     await init();
     const client=await pool.connect();let broken=false;
     try{
       await client.query("BEGIN");
       const stream=(await client.query("SELECT head_sequence,head_hash FROM research_archive_streams WHERE stream_id=$1 FOR UPDATE",[streamId])).rows[0];
+      // A crash after COMMIT but before removing the durable queue file must not duplicate evidence.
+      const prior=(await client.query("SELECT * FROM research_archive_records WHERE record_id=$1",[recordId])).rows[0];
+      if(prior){
+        if(prior.stream_id!==streamId||prior.kind!==kind||prior.source!==source||Number(prior.occurred_at)!==occurred||
+          prior.payload_hash!==body.hash||prior.metadata_hash!==metadataHash)throw Error("Archive record ID conflict");
+        await client.query("COMMIT");
+        return {recordId,streamId,sequence:Number(prior.sequence),recordHash:prior.record_hash,payloadHash:prior.payload_hash,
+          occurredAt:Number(prior.occurred_at),capturedAt:Number(prior.captured_at)};
+      }
       const sequence=Number(stream.head_sequence)+1,previousHash=stream.head_hash||null;
       const envelope={schemaVersion:SCHEMA_VERSION,recordId,streamId,sequence,occurredAt:occurred,capturedAt:captured,
         kind,source,payloadHash:body.hash,metadataHash,previousHash};
@@ -83,19 +93,30 @@ function createResearchArchive(connectionString,{streamId="becs-research-v1",now
     return {streamId,headSequence:Number(row?.head_sequence||0),headHash:row?.head_hash||null,recordCount:Number(row?.record_count||0),
       compressedBytes:Number(row?.compressed_bytes||0),uncompressedBytes:Number(row?.uncompressed_bytes||0)};
   }
-  async function verify({limit=5000}={}){
+  async function head(){
     await init();
-    if(!Number.isInteger(limit)||limit<1||limit>5000)throw Error("Invalid archive verification limit");
+    const row=(await pool.query("SELECT head_sequence,head_hash,record_count FROM research_archive_streams WHERE stream_id=$1",[streamId])).rows[0];
+    return {headSequence:Number(row.head_sequence),headHash:row.head_hash,recordCount:Number(row.record_count)};
+  }
+  async function verify({limit=10,afterSequence=0,previousHash=null,target=null}={}){
+    await init();
+    if(!Number.isInteger(limit)||limit<1||limit>100||!Number.isSafeInteger(afterSequence)||afterSequence<0)
+      throw Error("Invalid archive verification range");
+    const boundary=target||await head();
+    if(!Number.isSafeInteger(boundary.headSequence)||boundary.headSequence<afterSequence||
+      boundary.recordCount!==boundary.headSequence)throw Error("Invalid archive verification head");
+    if(afterSequence===0&&previousHash!==null||afterSequence>0&&!/^[0-9a-f]{64}$/.test(previousHash||""))
+      throw Error("Invalid archive verification anchor");
     const {rows}=await pool.query(
-      "SELECT r.*,p.encoding,p.payload FROM research_archive_records r JOIN research_archive_payloads p ON p.payload_hash=r.payload_hash WHERE r.stream_id=$1 ORDER BY r.sequence ASC LIMIT $2",
-      [streamId,limit]
+      "SELECT r.*,p.encoding,p.payload FROM research_archive_records r LEFT JOIN research_archive_payloads p ON p.payload_hash=r.payload_hash WHERE r.stream_id=$1 AND r.sequence>$2 AND r.sequence<=$3 ORDER BY r.sequence ASC LIMIT $4",
+      [streamId,afterSequence,boundary.headSequence,limit]
     );
-    let previousHash=null,expected=1;
+    let expected=afterSequence+1;
     for(const row of rows){
       if(Number(row.sequence)!==expected||(row.previous_hash||null)!==previousHash)return {valid:false,verified:expected-1,failedSequence:expected};
       if(row.encoding!==ENCODING)return {valid:false,verified:expected-1,failedSequence:expected};
       let payload;
-      try{payload=JSON.parse(gunzipSync(row.payload).toString("utf8"));}catch{return {valid:false,verified:expected-1,failedSequence:expected};}
+      try{payload=JSON.parse(gunzipSync(row.payload,{maxOutputLength:MAX_PAYLOAD_BYTES}).toString("utf8"));}catch{return {valid:false,verified:expected-1,failedSequence:expected};}
       if(digest(payload)!==row.payload_hash||digest(row.metadata)!==row.metadata_hash)return {valid:false,verified:expected-1,failedSequence:expected};
       const envelope={schemaVersion:Number(row.schema_version),recordId:row.record_id,streamId:row.stream_id,sequence:Number(row.sequence),
         occurredAt:Number(row.occurred_at),capturedAt:Number(row.captured_at),kind:row.kind,source:row.source,
@@ -103,10 +124,10 @@ function createResearchArchive(connectionString,{streamId="becs-research-v1",now
       if(envelopeHash(envelope)!==row.record_hash)return {valid:false,verified:expected-1,failedSequence:expected};
       previousHash=row.record_hash;expected++;
     }
-    const s=await stats();
-    const complete=rows.length===s.recordCount;
-    return {valid:complete?previousHash===s.headHash:true,complete,verified:rows.length,recordCount:s.recordCount,headHash:s.headHash};
+    const verified=expected-1,complete=verified===boundary.headSequence;
+    const valid=complete?previousHash===boundary.headHash:rows.length===limit;
+    return {valid,complete,verified,previousHash,recordCount:boundary.recordCount,headHash:boundary.headHash,target:boundary};
   }
-  return {init,record,stats,verify,close:()=>pool.end(),streamId};
+  return {init,record,stats,head,verify,close:()=>pool.end(),streamId};
 }
 module.exports={SCHEMA_VERSION,ENCODING,MAX_PAYLOAD_BYTES,encode,createResearchArchive};

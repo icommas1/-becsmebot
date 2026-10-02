@@ -3,7 +3,7 @@ const {FEEDS}=require("../src/market/tokens");
 const {DEX_FEEDS}=require("../src/market/dexscreener");
 const feedNames=[...FEEDS,...DEX_FEEDS].map(([name])=>name);
 const {assertSchema}=require("../src/api/validation");
-async function smoke(base,{request=fetch,now=Date.now,maxAgeMs=300000,requireMarketData=false}={}){
+async function smoke(base,{request=fetch,now=Date.now,maxAgeMs=300000,requireMarketData=false,requireArchive=false}={}){
   const url=new URL(base);
   if(!["https:","http:"].includes(url.protocol)||url.username||url.password||url.search||url.hash)
     throw Error("Use a plain HTTP(S) origin without credentials");
@@ -16,6 +16,12 @@ async function smoke(base,{request=fetch,now=Date.now,maxAgeMs=300000,requireMar
   const snapshot=assertSchema("snapshot",await(await get("/api/basket")).json());
   const history=assertSchema("historyResponse",await(await get("/api/history")).json());
   const walletIntel=assertSchema("walletIntelResponse",await(await get("/api/wallet-intel")).json());
+  let archive=null;
+  if(requireArchive){
+    archive=assertSchema("archiveHealth",await(await get("/health/archive")).json());
+    assert.equal(archive.enabled,true,"Research archive is disabled");
+    assert.equal(archive.healthy,true,"Research archive is not verified and current");
+  }
   assert.equal(health.tradingEnabled,false,"Health unexpectedly enables real trading");
   assert.equal(snapshot.tradingEnabled,false,"Snapshot unexpectedly enables real trading");
   assert.equal(health.manualSell.enabled,false,"Health unexpectedly enables manual selling");
@@ -47,7 +53,7 @@ async function smoke(base,{request=fetch,now=Date.now,maxAgeMs=300000,requireMar
   assert.ok(logo.headers.get("content-type")?.startsWith("image/jpeg"),"Logo MIME type");
   assert.ok((await logo.arrayBuffer()).byteLength>100,"Logo is empty");
   // Read-only: never call order, authenticated paper, search or price POST endpoints.
-  return {radar:snapshot.radar.length,signals:snapshot.signals.length,chartMints:Object.keys(history.trails).length,walletIntelEnabled:walletIntel.enabled,smartTokens:walletIntel.tokens.length,scanAgeSeconds:Math.round(age/1000),
+  return {radar:snapshot.radar.length,signals:snapshot.signals.length,chartMints:Object.keys(history.trails).length,walletIntelEnabled:walletIntel.enabled,smartTokens:walletIntel.tokens.length,scanAgeSeconds:Math.round(age/1000),archive,
     marketData:{solFresh,healthyFeeds,totalFeeds:feedNames.length,degraded:!solFresh||healthyFeeds<feedNames.length}};
 }
 if(require.main===module){
@@ -55,7 +61,7 @@ if(require.main===module){
   const retries=Math.min(24,Math.max(1,Number(process.env.SMOKE_ATTEMPTS)||1));
   const requireMarketData=process.env.SMOKE_REQUIRE_MARKET_DATA==="1";
   (async()=>{for(let i=0;i<retries;i++){
-    try{console.log("Smoke passed",await smoke(base,{requireMarketData}));return;}
+    try{console.log("Smoke passed",await smoke(base,{requireMarketData,requireArchive:process.env.SMOKE_REQUIRE_ARCHIVE==="1"}));return;}
     catch(error){if(i===retries-1)throw error;console.log("Waiting for a healthy deployment ("+(i+1)+"/"+retries+")");await new Promise(r=>setTimeout(r,5000));}
   }})().catch(error=>{console.error("Smoke failed: "+error.message);process.exitCode=1;});
 }

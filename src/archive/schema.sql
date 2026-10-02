@@ -51,3 +51,10 @@ DROP TRIGGER IF EXISTS research_archive_payloads_append_only ON research_archive
 CREATE TRIGGER research_archive_payloads_append_only
   BEFORE UPDATE OR DELETE ON research_archive_payloads
   FOR EACH ROW EXECUTE FUNCTION research_archive_reject_mutation();
+
+DROP TRIGGER IF EXISTS research_archive_records_no_truncate ON research_archive_records;
+CREATE TRIGGER research_archive_records_no_truncate BEFORE TRUNCATE ON research_archive_records
+  FOR EACH STATEMENT EXECUTE FUNCTION research_archive_reject_mutation();
+DROP TRIGGER IF EXISTS research_archive_payloads_no_truncate ON research_archive_payloads;
+CREATE TRIGGER research_archive_payloads_no_truncate BEFORE TRUNCATE ON research_archive_payloads
+  FOR EACH STATEMENT EXECUTE FUNCTION research_archive_reject_mutation();

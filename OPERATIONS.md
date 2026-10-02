@@ -30,3 +30,11 @@ The smoke script rejects URLs containing embedded credentials, query strings or 
 ## Optional server paper account
 
 See [SERVER_PAPER_SETUP.md](SERVER_PAPER_SETUP.md) for private PostgreSQL provisioning, OAuth setup, activation and rollback. The market health route remains independent of database availability. Server-account failures return sanitized errors and must not fall back to local fills. Keep the database volume and chart-history volume separate; backup/restore validation remains an operational follow-up.
+
+## Research archive operations
+
+Keep both the PostgreSQL volume and `/app/data` mounted. Never delete `research-pending` to clear an alarm: it contains undelivered evidence. Check `GET /health/archive` and run `SMOKE_REQUIRE_ARCHIVE=1 npm run test:smoke` after deploy warmup. Healthy means current market evidence, an empty delivery queue and successful chain/payload verification through the committed head. Initial verification can take multiple passes on a large archive. Failures expose fixed codes only; inspect capacity/connectivity without printing credentials.
+
+Monitor both volume usage and queue growth. There is no permanent archive TTL or pruning command. Expand/migrate storage before it fills; do not reduce historical coverage automatically. A capacity/disk failure pauses new capture scans and returns an archive-health alarm instead of deleting pending records. SIGTERM drains a running scan before database close, subject to the host's termination grace period. Forced termination before a completed scan is durably queued is outside this guarantee.
+
+Independent, encrypted off-provider backups plus a tested restore remain required. The current repository does not configure an external backup destination, payment, or retention policy. A healthy archive endpoint verifies the primary copy only and must not be presented as proof of an independent backup.

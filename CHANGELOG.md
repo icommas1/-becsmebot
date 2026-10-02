@@ -1,5 +1,11 @@
 # Changelog
 
+## Archive delivery reliability
+
+- Persist pending research evidence, retry idempotently across restart, drain scans on shutdown, and expose aggregate archive health with incremental integrity verification.
+- Reject archive TRUNCATE and add outage, replay, capacity, integrity and shutdown regressions.
+
+
 All notable repository-level changes are recorded here. Product strategy and proposed behavior do not belong in this file.
 
 ## Unreleased
