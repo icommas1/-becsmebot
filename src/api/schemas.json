@@ -2057,6 +2057,987 @@
         },
         "payload": {}
       }
+    },
+    "memoryCoverageResponse": {
+      "type": "object",
+      "properties": {
+        "version": {
+          "const": 1
+        },
+        "scope": {
+          "const": "authenticated_owner_paper_events"
+        },
+        "snapshotAt": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "source": {
+          "type": "object",
+          "properties": {
+            "status": {
+              "enum": [
+                "unavailable",
+                "verified",
+                "empty",
+                "invalid",
+                "partial"
+              ]
+            },
+            "retained": {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 9007199254740991
+            },
+            "verified": {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 9007199254740991
+            },
+            "headSequence": {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 9007199254740991
+            },
+            "headHash": {
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "complete": {
+              "type": "boolean"
+            },
+            "categories": {
+              "type": "array",
+              "maxItems": 64,
+              "items": {
+                "type": "object",
+                "properties": {
+                  "eventType": {
+                    "type": "string"
+                  },
+                  "category": {
+                    "type": "string"
+                  },
+                  "retained": {
+                    "type": "integer",
+                    "minimum": 0,
+                    "maximum": 9007199254740991
+                  }
+                },
+                "required": [
+                  "eventType",
+                  "category",
+                  "retained"
+                ],
+                "additionalProperties": false
+              }
+            },
+            "provenance": {
+              "type": "array",
+              "maxItems": 64,
+              "items": {
+                "type": "object",
+                "properties": {
+                  "source": {
+                    "type": "string"
+                  },
+                  "strategyId": {
+                    "type": [
+                      "string",
+                      "null"
+                    ]
+                  },
+                  "strategyVersion": {
+                    "type": [
+                      "string",
+                      "null"
+                    ]
+                  },
+                  "records": {
+                    "type": "integer",
+                    "minimum": 0,
+                    "maximum": 9007199254740991
+                  }
+                },
+                "required": [
+                  "source",
+                  "strategyId",
+                  "strategyVersion",
+                  "records"
+                ],
+                "additionalProperties": false
+              }
+            }
+          },
+          "required": [
+            "status",
+            "retained",
+            "verified",
+            "headSequence",
+            "headHash",
+            "complete",
+            "categories",
+            "provenance"
+          ],
+          "additionalProperties": false
+        },
+        "memory": {
+          "type": "object",
+          "properties": {
+            "status": {
+              "const": "not_implemented"
+            },
+            "records": {
+              "type": "null"
+            },
+            "coveragePercent": {
+              "type": "null"
+            }
+          },
+          "required": [
+            "status",
+            "records",
+            "coveragePercent"
+          ],
+          "additionalProperties": false
+        },
+        "excludedSurfaces": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "maxItems": 8
+        },
+        "limitations": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "maxItems": 8
+        }
+      },
+      "required": [
+        "version",
+        "scope",
+        "snapshotAt",
+        "source",
+        "memory",
+        "excludedSurfaces",
+        "limitations"
+      ],
+      "additionalProperties": false
+    },
+    "agentCandidateRequest": {
+      "type": "object",
+      "properties": {
+        "name": {
+          "type": "string",
+          "pattern": "^[a-z][a-z0-9.-]{0,63}$"
+        },
+        "code": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 8192
+        }
+      },
+      "required": [
+        "name",
+        "code"
+      ],
+      "additionalProperties": false
+    },
+    "agentEmptyRequest": {
+      "type": "object",
+      "properties": {},
+      "required": [],
+      "additionalProperties": false
+    },
+    "agentApprovalRequest": {
+      "type": "object",
+      "properties": {
+        "evaluationId": {
+          "type": "string",
+          "pattern": "^[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}$"
+        }
+      },
+      "required": [
+        "evaluationId"
+      ],
+      "additionalProperties": false
+    },
+    "agentPromotionRequest": {
+      "type": "object",
+      "properties": {
+        "evaluationId": {
+          "type": "string",
+          "pattern": "^[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}$"
+        },
+        "approvalToken": {
+          "type": "string",
+          "pattern": "^[a-f0-9]{64}$"
+        }
+      },
+      "required": [
+        "evaluationId",
+        "approvalToken"
+      ],
+      "additionalProperties": false
+    },
+    "agentEvaluationReport": {
+      "type": "object",
+      "properties": {
+        "version": {
+          "const": 1
+        },
+        "evaluationId": {
+          "type": "string",
+          "pattern": "^[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}$"
+        },
+        "bundleHash": {
+          "type": "string",
+          "pattern": "^[a-f0-9]{64}$"
+        },
+        "nonce": {
+          "type": "string",
+          "pattern": "^[a-f0-9]{64}$"
+        },
+        "policyHash": {
+          "type": "string",
+          "pattern": "^[a-f0-9]{64}$"
+        },
+        "verifierHash": {
+          "type": "string",
+          "pattern": "^[a-f0-9]{64}$"
+        },
+        "image": {
+          "type": "string",
+          "pattern": "^node:24-alpine@sha256:[a-f0-9]{64}$"
+        },
+        "completedAt": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9007199254740991
+        },
+        "isolationVerified": {
+          "type": "boolean"
+        },
+        "total": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 32
+        },
+        "passed": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 32
+        }
+      },
+      "required": [
+        "version",
+        "evaluationId",
+        "bundleHash",
+        "nonce",
+        "policyHash",
+        "verifierHash",
+        "image",
+        "completedAt",
+        "isolationVerified",
+        "total",
+        "passed"
+      ],
+      "additionalProperties": false
+    },
+    "agentAttestationRequest": {
+      "type": "object",
+      "properties": {
+        "report": {
+          "$ref": "#/definitions/agentEvaluationReport"
+        },
+        "signature": {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9+/]{86}==$"
+        }
+      },
+      "required": [
+        "report",
+        "signature"
+      ],
+      "additionalProperties": false
+    },
+    "superagentReference": {
+      "oneOf": [
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "kind",
+            "streamId",
+            "sequence",
+            "eventId",
+            "eventHash",
+            "payloadHash",
+            "schemaVersion"
+          ],
+          "properties": {
+            "kind": {
+              "const": "becs-event"
+            },
+            "streamId": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 2048
+            },
+            "sequence": {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 9007199254740991
+            },
+            "eventId": {
+              "type": "string",
+              "pattern": "^[0-9a-fA-F]{8}(-[0-9a-fA-F]{4}){3}-[0-9a-fA-F]{12}$"
+            },
+            "eventHash": {
+              "type": "string",
+              "pattern": "^[0-9a-f]{64}$"
+            },
+            "payloadHash": {
+              "type": "string",
+              "pattern": "^[0-9a-f]{64}$"
+            },
+            "schemaVersion": {
+              "const": 1
+            }
+          }
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "kind",
+            "streamId",
+            "sequence",
+            "recordId",
+            "recordHash",
+            "payloadHash",
+            "metadataHash",
+            "schemaVersion"
+          ],
+          "properties": {
+            "kind": {
+              "const": "research-archive"
+            },
+            "streamId": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 2048
+            },
+            "sequence": {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 9007199254740991
+            },
+            "recordId": {
+              "type": "string",
+              "pattern": "^[0-9a-fA-F]{8}(-[0-9a-fA-F]{4}){3}-[0-9a-fA-F]{12}$"
+            },
+            "recordHash": {
+              "type": "string",
+              "pattern": "^[0-9a-f]{64}$"
+            },
+            "payloadHash": {
+              "type": "string",
+              "pattern": "^[0-9a-f]{64}$"
+            },
+            "metadataHash": {
+              "type": "string",
+              "pattern": "^[0-9a-f]{64}$"
+            },
+            "schemaVersion": {
+              "const": 1
+            }
+          }
+        }
+      ]
+    },
+    "superagentCursor": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "at",
+        "purchaseId",
+        "sourceKey"
+      ],
+      "properties": {
+        "at": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9007199254740991
+        },
+        "purchaseId": {
+          "type": "string",
+          "pattern": "^[0-9a-fA-F]{8}(-[0-9a-fA-F]{4}){3}-[0-9a-fA-F]{12}$"
+        },
+        "sourceKey": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 100
+        }
+      }
+    },
+    "superagentPurchase": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "purchaseId",
+        "asset",
+        "executionMode",
+        "side",
+        "occurredAt",
+        "strategy",
+        "decision",
+        "fill",
+        "references",
+        "sequence",
+        "classification"
+      ],
+      "properties": {
+        "purchaseId": {
+          "type": "string",
+          "pattern": "^[0-9a-fA-F]{8}(-[0-9a-fA-F]{4}){3}-[0-9a-fA-F]{12}$"
+        },
+        "asset": {
+          "type": "string",
+          "format": "solana-mint"
+        },
+        "executionMode": {
+          "const": "paper"
+        },
+        "side": {
+          "const": "buy"
+        },
+        "occurredAt": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9007199254740991
+        },
+        "strategy": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "id",
+            "version"
+          ],
+          "properties": {
+            "id": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 100
+            },
+            "version": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 100
+            }
+          }
+        },
+        "decision": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "side",
+            "reason",
+            "source",
+            "automatic"
+          ],
+          "properties": {
+            "side": {
+              "enum": [
+                "buy",
+                "sell"
+              ]
+            },
+            "reason": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 500
+            },
+            "source": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 100
+            },
+            "automatic": {
+              "type": "boolean"
+            }
+          }
+        },
+        "fill": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "intentId",
+            "executionMode",
+            "status",
+            "filledQuantity",
+            "filledQuoteQuantity",
+            "fillPrice",
+            "fees",
+            "createdAt",
+            "completedAt"
+          ],
+          "properties": {
+            "intentId": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 100
+            },
+            "executionMode": {
+              "const": "paper"
+            },
+            "status": {
+              "const": "filled"
+            },
+            "filledQuantity": {
+              "type": "number",
+              "exclusiveMinimum": 0
+            },
+            "filledQuoteQuantity": {
+              "type": "number",
+              "exclusiveMinimum": 0
+            },
+            "fillPrice": {
+              "type": "number",
+              "exclusiveMinimum": 0
+            },
+            "fees": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "amount",
+                "currency"
+              ],
+              "properties": {
+                "amount": {
+                  "type": "number",
+                  "minimum": 0
+                },
+                "currency": {
+                  "const": "USD"
+                }
+              }
+            },
+            "createdAt": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 100
+            },
+            "completedAt": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 100
+            }
+          }
+        },
+        "references": {
+          "type": "array",
+          "minItems": 3,
+          "maxItems": 3,
+          "items": {
+            "$ref": "#/definitions/superagentReference"
+          }
+        },
+        "sequence": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9007199254740991
+        },
+        "classification": {
+          "const": "recorded-paper-purchase"
+        }
+      }
+    },
+    "superagentOutcome": {
+      "oneOf": [
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "purchaseId",
+            "asset",
+            "executionMode",
+            "side",
+            "occurredAt",
+            "strategy",
+            "decision",
+            "fill",
+            "references",
+            "sourceKey",
+            "classification"
+          ],
+          "properties": {
+            "purchaseId": {
+              "type": "string",
+              "pattern": "^[0-9a-fA-F]{8}(-[0-9a-fA-F]{4}){3}-[0-9a-fA-F]{12}$"
+            },
+            "asset": {
+              "type": "string",
+              "format": "solana-mint"
+            },
+            "executionMode": {
+              "const": "paper"
+            },
+            "side": {
+              "const": "sell"
+            },
+            "occurredAt": {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 9007199254740991
+            },
+            "strategy": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "id",
+                "version"
+              ],
+              "properties": {
+                "id": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 100
+                },
+                "version": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 100
+                }
+              }
+            },
+            "decision": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "side",
+                "reason",
+                "source",
+                "automatic"
+              ],
+              "properties": {
+                "side": {
+                  "enum": [
+                    "buy",
+                    "sell"
+                  ]
+                },
+                "reason": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 500
+                },
+                "source": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 100
+                },
+                "automatic": {
+                  "type": "boolean"
+                }
+              }
+            },
+            "fill": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "intentId",
+                "executionMode",
+                "status",
+                "filledQuantity",
+                "filledQuoteQuantity",
+                "fillPrice",
+                "fees",
+                "createdAt",
+                "completedAt"
+              ],
+              "properties": {
+                "intentId": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 100
+                },
+                "executionMode": {
+                  "const": "paper"
+                },
+                "status": {
+                  "const": "filled"
+                },
+                "filledQuantity": {
+                  "type": "number",
+                  "exclusiveMinimum": 0
+                },
+                "filledQuoteQuantity": {
+                  "type": "number",
+                  "exclusiveMinimum": 0
+                },
+                "fillPrice": {
+                  "type": "number",
+                  "exclusiveMinimum": 0
+                },
+                "fees": {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "required": [
+                    "amount",
+                    "currency"
+                  ],
+                  "properties": {
+                    "amount": {
+                      "type": "number",
+                      "minimum": 0
+                    },
+                    "currency": {
+                      "const": "USD"
+                    }
+                  }
+                },
+                "createdAt": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 100
+                },
+                "completedAt": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 100
+                }
+              }
+            },
+            "references": {
+              "type": "array",
+              "minItems": 3,
+              "maxItems": 3,
+              "items": {
+                "$ref": "#/definitions/superagentReference"
+              }
+            },
+            "sourceKey": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 100
+            },
+            "classification": {
+              "const": "recorded-paper-sale"
+            }
+          }
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "purchaseId",
+            "asset",
+            "executionMode",
+            "sourceKey",
+            "classification",
+            "priceUsd",
+            "observedAt",
+            "priceFeed",
+            "priceRatioToEntry",
+            "meaning",
+            "reference"
+          ],
+          "properties": {
+            "purchaseId": {
+              "type": "string",
+              "pattern": "^[0-9a-fA-F]{8}(-[0-9a-fA-F]{4}){3}-[0-9a-fA-F]{12}$"
+            },
+            "asset": {
+              "type": "string",
+              "format": "solana-mint"
+            },
+            "executionMode": {
+              "const": "paper"
+            },
+            "sourceKey": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 100
+            },
+            "classification": {
+              "const": "observed-market-mark"
+            },
+            "priceUsd": {
+              "type": "number",
+              "exclusiveMinimum": 0
+            },
+            "observedAt": {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 9007199254740991
+            },
+            "priceFeed": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 100
+            },
+            "priceRatioToEntry": {
+              "type": "number",
+              "exclusiveMinimum": 0
+            },
+            "meaning": {
+              "const": "sampled market price versus recorded fill; not a realized return or executable quote"
+            },
+            "reference": {
+              "$ref": "#/definitions/superagentReference"
+            }
+          }
+        }
+      ]
+    },
+    "superagentReport": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "schemaVersion",
+        "scope",
+        "sourceVerification",
+        "coverage",
+        "purchases",
+        "outcomes",
+        "nextPurchaseAfter",
+        "nextOutcomeAfter",
+        "hypotheses",
+        "learning",
+        "predictiveImprovement"
+      ],
+      "properties": {
+        "schemaVersion": {
+          "const": 1
+        },
+        "scope": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "sourceId",
+            "ownerId",
+            "accountId",
+            "executionMode",
+            "archiveStream",
+            "contractRevision"
+          ],
+          "properties": {
+            "sourceId": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 120
+            },
+            "ownerId": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 160
+            },
+            "accountId": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 160
+            },
+            "executionMode": {
+              "const": "paper"
+            },
+            "archiveStream": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 120
+            },
+            "contractRevision": {
+              "type": "string",
+              "pattern": "^[0-9a-f]{40}$"
+            }
+          }
+        },
+        "sourceVerification": {
+          "const": "hash consistency and continuity; not external attestation"
+        },
+        "coverage": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "eventVerifiedThrough",
+            "archiveVerifiedThrough",
+            "currentSourceHeads",
+            "retention",
+            "browserLocalTrades"
+          ],
+          "properties": {
+            "eventVerifiedThrough": {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 9007199254740991
+            },
+            "archiveVerifiedThrough": {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 9007199254740991
+            },
+            "currentSourceHeads": {
+              "const": "not queried by this report"
+            },
+            "retention": {
+              "const": "append-only; no automatic pruning"
+            },
+            "browserLocalTrades": {
+              "const": "not ingested"
+            }
+          }
+        },
+        "purchases": {
+          "type": "array",
+          "maxItems": 100,
+          "items": {
+            "$ref": "#/definitions/superagentPurchase"
+          }
+        },
+        "outcomes": {
+          "type": "array",
+          "maxItems": 100,
+          "items": {
+            "$ref": "#/definitions/superagentOutcome"
+          }
+        },
+        "nextPurchaseAfter": {
+          "anyOf": [
+            {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 9007199254740991
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "nextOutcomeAfter": {
+          "anyOf": [
+            {
+              "$ref": "#/definitions/superagentCursor"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "hypotheses": {
+          "type": "array",
+          "maxItems": 0
+        },
+        "learning": {
+          "const": "not evaluated"
+        },
+        "predictiveImprovement": {
+          "const": "not evaluated"
+        }
+      }
     }
   }
 }

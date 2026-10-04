@@ -13,7 +13,8 @@ async function verifyDatabase(client,{pageSize=100}={}){
   if(!Number.isInteger(pageSize)||pageSize<1||pageSize>100)fail("invalid_page_size");
   const fingerprint=createHash("sha256"),proofProvider=createLocalHashProofProvider();
   const result={version:1,research:{present:false,streams:0,records:0,payloads:0},
-    paper:{present:false,accounts:0,receipts:0},events:{present:false,streams:0,records:0,proofs:0,unprovedEvents:0}};
+    paper:{present:false,accounts:0,receipts:0},events:{present:false,streams:0,records:0,proofs:0,unprovedEvents:0},
+    agent:{present:false,rows:0}};
   const remember=(kind,row)=>fingerprint.update(JSON.stringify([kind,digest(row)])+"\n");
   const rows=async(sql,args=[])=>(await client.query(sql,args)).rows;
   async function present(tables){
@@ -119,7 +120,23 @@ async function verifyDatabase(client,{pageSize=100}={}){
       }
       await countMatches("paper_requests",result.paper.receipts);
     }
-    if(!result.research.present&&!result.paper.present&&!result.events.present)fail("no_becs_storage_found");
+    const agentTables=['agent_control','agent_candidates','agent_daily_budgets','agent_evaluations','agent_approvals','agent_audit'];
+    result.agent.present=await present(agentTables);
+    if(result.agent.present){
+      // Include every persisted replay/budget/approval row in source-vs-restore comparison.
+      // Fixed table/key names, read-only snapshot; never resets budgets or resurrects approvals.
+      const keys=['singleton','bundle_hash','day','evaluation_id','token_hash','sequence'];
+      for(let i=0;i<agentTables.length;i++){
+        let after='';
+        for(;;){
+          const page=await rows(`SELECT * FROM ${agentTables[i]} WHERE ${keys[i]}::text>$1 ORDER BY ${keys[i]}::text LIMIT $2`,[after,pageSize]);
+          if(!page.length)break;
+          for(const row of page){if(i===1&&digest(row.bundle)!==row.bundle_hash)fail('invalid_agent_bundle');remember(agentTables[i],row);result.agent.rows++;}
+          after=String(page.at(-1)[keys[i]]);
+        }
+      }
+    }
+    if(!result.research.present&&!result.paper.present&&!result.events.present&&!result.agent.present)fail("no_becs_storage_found");
     await client.query("COMMIT");
     return {...result,fingerprint:fingerprint.digest("hex")};
   }catch(error){await client.query("ROLLBACK").catch(()=>{});throw error;}

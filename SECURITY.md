@@ -16,6 +16,9 @@ The `main` branch is the only supported code line. Security fixes should include
 
 ## Security invariants
 
+- Agent tools remain off by default. Candidate code is never evaluated inside the web process. Signed evaluator receipts and exact owner approval are required for registry review, which grants no execution rights.
+- Evaluation signing private keys and backup encryption keys are operator-provisioned files outside the repository and candidate mounts. A container evaluator must use a dedicated disposable host without production credentials.
+
 - Provider credentials stay server-side and are read only from environment variables.
 - Seed phrases, private keys, keypairs, wallet exports, session secrets and authentication tokens must never enter source, fixtures, logs or browser storage.
 - Successful API and provider payloads are schema-validated without coercion. Invalid data remains unavailable rather than receiving a fabricated fallback.

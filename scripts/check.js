@@ -15,4 +15,5 @@ if(!html.includes('<script type="module" src="/assets/js/launch.mjs"></script>')
 const ids=[...(html+fragment).matchAll(/\bid="([^"]+)"/g)].map(m=>m[1]);
 if(new Set(ids).size!==ids.length)throw Error("Duplicate terminal element ID");
 require("../src/api/validation");
+require("../src/research/validation");
 console.log("JavaScript, DOM IDs and strict API schemas checked");

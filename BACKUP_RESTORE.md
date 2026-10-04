@@ -12,6 +12,10 @@ Paper ledger/receipt hashes allow exact source-versus-restored comparison. They 
 
 ## Rehearsal in CI
 
+The fixture rehearsal now encrypts the dump using AES-256-GCM, removes the plaintext dump, decrypts it to a new path, then restores it. It includes registry candidates, evaluation reservations, budgets and audit rows. The full verifier fingerprints all registry tables, including approvals and consumed-token state. Temporary fixture keys and dumps are never uploaded.
+
+`BACKUP_KEY_FILE=/private/backup.key node scripts/backup-crypt.js encrypt input.dump output.encrypted` requires a 32-byte key file with no group/other permissions. Use `decrypt` with a new destination to recover. Outputs are owner-only, authenticated before publication, fsynced, and never overwrite existing files. Bad keys or altered ciphertext fail and remove partial output. Provision the key separately from encrypted backups; the command does not upload data, configure a destination or create a production backup. `/app/data` still requires a separate consistent snapshot and restore rehearsal.
+
 The Node 22 and 24 jobs use disposable PostgreSQL 18 containers. After tests, CI creates a fixture with an actual simulated holding, committed receipt, BecsEvents/proof and research data. It verifies the source, exports it using the container's matching `pg_dump` in custom format, restores with `pg_restore --exit-on-error` into a new empty `becs_restore` database, verifies again, and compares the complete reports. No production URL or secret is available to this job. Fixture dumps are temporary and are not uploaded as workflow artifacts.
 
 The dedicated integration test also verifies 5,001 historical events beyond the interactive verifier's window, different page boundaries, and a corrupted stream head. Unit tests reject corrupt payloads, incorrect byte counts, unsupported encodings and incomplete schemas.
@@ -24,5 +28,7 @@ The dedicated integration test also verifies 5,001 historical events beyond the 
 4. Run the read-only verifier against the restored database. Compare counts/fingerprints captured from the same snapshot, or during a coordinated write pause; an active source can legitimately change after a dump starts.
 5. Separately restore `/app/data`, inspect any pending delivery spool, and rehearse idempotent delivery only in the isolated environment with external provider/trading access disabled.
 6. Keep production in place until the restore is accepted. Cutover, session invalidation, DNS/database URL changes and removal of old copies are separate operations requiring a concrete recovery decision.
+
+If the tool registry was enabled, keep it disabled during recovery. A historical database snapshot can predate consumed approval tokens or budget reservations. Before activation, invalidate restored sessions, rotate the separately held evaluator trust key (old signed evaluations then fail), and wait at least the configured reservation/evaluation/approval validity windows. Do not claim that row fingerprints alone prevent rollback to an older valid snapshot. Re-review candidates under the new evaluator key before issuing any new approval.
 
 Do not delete permanent history or loosen append-only triggers to recover disk space. Any later compression migration needs a proven backup, measured working space, lossless verification and its own rollback plan.

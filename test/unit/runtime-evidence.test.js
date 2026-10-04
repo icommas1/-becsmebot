@@ -12,6 +12,12 @@ test("runtime evidence captures exact defaults and code without serializing secr
   assert.equal(result.payload.build.commit,env.RAILWAY_GIT_COMMIT_SHA);
   assert.equal(result.payload.configuration.marketFeeds.jupiter.length,13);
   assert.equal(result.payload.configuration.marketFeeds.dexscreener.length,6);
+  assert.equal(result.payload.configuration.agentTools.enabled,false);
+  assert.ok(result.payload.build.sources['src/agent/store.js']);
+  assert.ok(result.payload.build.sources['scripts/agent-runner.py']);
+  assert.ok(result.payload.build.sources['src/superagent/report.js']);
+  assert.equal(result.payload.configuration.superagentReport.enabled,false);
+  assert.equal(result.payload.configuration.research.executionEnabled,false);
   assert.equal(result.reference.evidenceHash,digest(result.payload));
   assert.equal(result.reference.configurationHash,digest(result.payload.configuration));
   assert.equal(result.reference.codeHash,digest(result.payload.build.sources));

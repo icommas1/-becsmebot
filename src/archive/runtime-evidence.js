@@ -8,6 +8,11 @@ const {SCHEMA_VERSION,ENCODING}=require("./store");
 const {archiveIntervals,archiveLimits}=require("./config");
 
 const sourceFiles=[
+  'src/memory/coverage.js','src/memory/config.js','src/agent/config.js','src/agent/policy.json','src/agent/routes.js',
+  'src/agent/store.js','src/agent/schema.sql','scripts/agent-evaluate.js','scripts/agent-runner.py',
+  'src/research/config.js','src/research/service.js','src/research/routes.js','src/research/mcp-client.js',
+  'src/research/validation.js','src/api/research-schemas.json','src/superagent/config.js',
+  'src/superagent/evidence.js','src/superagent/observer.js','src/superagent/report.js','src/superagent/routes.js','src/superagent/schema.sql',
   "package.json","package-lock.json",
   "src/basket.js","src/market/market.js","src/market/tokens.js","src/market/signals.js",
   "src/market/client.js","src/market/dexscreener.js","src/market/history.js","src/market/mint.js",
@@ -26,11 +31,15 @@ function sourceHashes(){
 }
 
 // Explicit allowlist only. Never enumerate process.env or serialize account/provider config objects.
-async function runtimeEvidence({env,marketScanMs,walletIntelEnabled,walletIntelScanMs,paperAccountsEnabled,streamId}){
+async function runtimeEvidence({env,marketScanMs,walletIntelEnabled,walletIntelScanMs,paperAccountsEnabled,streamId,agentToolsEnabled=false,superagentReportEnabled=false}){
   const [{paperDefaults},{currentStrategy}]=await Promise.all([
     import("../web/assets/js/paper-wallet.mjs"),import("../web/assets/js/trading/contracts.mjs")
   ]);
   const configuration={marketScanMs,walletIntel:{enabled:walletIntelEnabled,scanMs:walletIntelScanMs,provider:"nansen"},
+    agentTools:{enabled:!!agentToolsEnabled,policyHash:digest(require('../agent/policy.json'))},
+    research:{onDemand:true,executionEnabled:false,limits:require('../research/config').limits},
+    memoryEvidence:{limits:require('../memory/config').limits},
+    superagentReport:{enabled:!!superagentReportEnabled,limits:require('../superagent/config').limits},
     paperAccountsEnabled,strategy:{...currentStrategy},paperDefaults:{...paperDefaults},
     marketFeeds:{jupiter:FEEDS,dexscreener:DEX_FEEDS},archive:{streamId,schemaVersion:SCHEMA_VERSION,encoding:ENCODING,...archiveIntervals,limits:archiveLimits}};
   const sources=sourceHashes(),codeHash=digest(sources);
