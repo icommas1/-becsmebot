@@ -62,8 +62,9 @@ function recordView(row){
 function createResearchArchive(connectionString,{streamId="becs-research-v1",now=Date.now}={}){
   if(!connectionString)throw Error("Research archive database URL is required");
   if(!text(streamId,120))throw Error("Invalid research archive stream");
-  const pool=new Pool({connectionString,max:2,connectionTimeoutMillis:5000,idleTimeoutMillis:10000,
-    statement_timeout:15000,idle_in_transaction_session_timeout:60000});
+  const pool=new Pool({connectionString,max:archiveLimits.poolSize,connectionTimeoutMillis:archiveLimits.connectMs,
+    idleTimeoutMillis:archiveLimits.idleMs,statement_timeout:archiveLimits.statementMs,query_timeout:archiveLimits.queryMs,
+    idle_in_transaction_session_timeout:archiveLimits.transactionIdleMs});
   pool.on("error",()=>{});
   let ready;
   function init(){
