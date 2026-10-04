@@ -9,6 +9,8 @@ const {createResearchArchive}=require("./archive/store");
 const {createArchiveCapture,disabledStatus}=require("./archive/capture");
 const path=require("node:path");
 const {runtimeEvidence}=require("./archive/runtime-evidence");
+const {reportConfig}=require("./superagent/config");
+const {createReportReader}=require("./superagent/report");
 
 function readConfig(env=process.env) {
   const apiKey=typeof env.JUPITER_API_KEY==="string"?env.JUPITER_API_KEY.trim():"";
@@ -23,6 +25,9 @@ function start({env=process.env,logger=console,marketFactory=createMarket,wallet
   const config=readConfig(env),archiveSettings=archiveConfig(env);
   const market=marketFactory({apiKey:config.apiKey,dataDir:config.dataDir,captureResearch:archiveSettings.enabled});
   const accounts=paperConfig(env),store=accounts.enabled?createStore(accounts.databaseUrl):null;
+  const agentSettings=require("./agent/config").agentConfig(env,accounts);
+  const agentTools=agentSettings.enabled?require("./agent/store").createAgentRegistry(agentSettings):null;
+  const reportSettings=reportConfig(env,accounts),reportReader=reportSettings.enabled?createReportReader(reportSettings):null;
   const walletIntel=walletIntelFactory({config:walletIntelConfig(env)});
   const archive=archiveSettings.enabled||accounts.enabled&&archiveSettings.databaseUrl?
     archiveFactory(archiveSettings.databaseUrl,{streamId:archiveSettings.streamId}):null;
@@ -63,13 +68,14 @@ function start({env=process.env,logger=console,marketFactory=createMarket,wallet
     return walletJob;
   }
   const release={commit:/^[0-9a-f]{40}$/i.test(env.RAILWAY_GIT_COMMIT_SHA||"")?env.RAILWAY_GIT_COMMIT_SHA.toLowerCase():null};
-  const server=createApp(market,{config:accounts,store,archive},walletIntel,archiveStatus,release).listen(config.port,"0.0.0.0",()=>{
+  const server=createApp(market,{config:accounts,store,archive,agentTools,reportReader},walletIntel,archiveStatus,release).listen(config.port,"0.0.0.0",()=>{
     logger.log("BecsBot public Jupiter paper terminal running on port "+server.address().port);
     runtimeJob=(async()=>{
       if(capture){
         logger.log("Permanent research archive enabled");
         provenance=await runtimeEvidence({env,marketScanMs:SCAN_MS,walletIntelEnabled:walletIntel.snapshot().enabled,
-          walletIntelScanMs:walletIntel.scanMs,paperAccountsEnabled:accounts.enabled,streamId:archiveSettings.streamId});
+          walletIntelScanMs:walletIntel.scanMs,paperAccountsEnabled:accounts.enabled,streamId:archiveSettings.streamId,
+          agentToolsEnabled:agentSettings.enabled,superagentReportEnabled:reportSettings.enabled});
         await record("runtime.started","runtime",provenance.payload,Date.now());
         logger.log("Research runtime provenance prepared for commit "+(provenance.reference.commit||"unavailable"));
         scheduleArchiveFlush();
@@ -93,7 +99,7 @@ function start({env=process.env,logger=console,marketFactory=createMarket,wallet
           if(archiveInterval)clearTimeout(archiveInterval);
           return Promise.all([marketJob,walletJob,retainedJob]);
         }).then(()=>capture?.flush())
-          .then(()=>Promise.all([store?.close(),archive?.close()])).then(()=>error?reject(error):resolve(),reject);
+          .then(()=>Promise.all([store?.close(),archive?.close(),agentTools?.close(),reportReader?.close()])).then(()=>error?reject(error):resolve(),reject);
       });
       server.closeIdleConnections?.();
     });

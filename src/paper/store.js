@@ -171,6 +171,18 @@ function createStore(connectionString) {
     if(!/^[\w-]{43}$/.test(token||""))return null;
     await init();return (await pool.query("SELECT user_id FROM paper_sessions WHERE token_hash=$1 AND expires_at>$2",[hash(token),Date.now()])).rows[0]?.user_id||null;
   }
+  async function reportIdentity(token){
+    // Report reads use existing tables only; never initialize or create an account.
+    if(!/^[\w-]{43}$/.test(token||""))return null;
+    const client=await pool.connect();let broken=false;
+    try{
+      await client.query("BEGIN READ ONLY");
+      const row=(await client.query(`SELECT a.user_id,a.account_id,a.ledger->'account'->>'executionMode' AS execution_mode
+        FROM paper_sessions s JOIN paper_accounts a ON a.user_id=s.user_id WHERE s.token_hash=$1 AND s.expires_at>$2`,[hash(token),Date.now()])).rows[0];
+      await client.query("COMMIT");return row?{userId:row.user_id,accountId:row.account_id,executionMode:row.execution_mode}:null;
+    }catch(error){try{await client.query("ROLLBACK");}catch{broken=true;}throw error;}
+    finally{client.release(broken);}
+  }
   async function logout(token){await init();await pool.query("DELETE FROM paper_sessions WHERE token_hash=$1",[hash(token)]);}
   async function flow(state,verifier) {
     await transaction(async c=>{
@@ -182,6 +194,12 @@ function createStore(connectionString) {
     });
   }
   async function consumeFlow(state){await init();return (await pool.query("DELETE FROM paper_oauth_flows WHERE state_hash=$1 AND expires_at>$2 RETURNING verifier",[hash(state),Date.now()])).rows[0]?.verifier;}
-  return {init,ensureAccount,read,command,listEvents,listProofs,sealEvents,verifyEvents,createSession,session,logout,flow,consumeFlow,close:()=>pool.end()};
+  async function memoryReport(userId){
+    if(pool.waitingCount>=20)throw fault(503,"Paper account is busy. Retry shortly.");
+    const client=await pool.connect();
+    try{return await require('../memory/coverage').memoryCoverage(client,userId);}
+    finally{client.release();}
+  }
+  return {init,ensureAccount,read,command,listEvents,listProofs,sealEvents,verifyEvents,memoryReport,createSession,session,reportIdentity,logout,flow,consumeFlow,close:()=>pool.end()};
 }
 module.exports={createStore,hash,fault,streamForUser,EVENT_BATCH_SIZE,eventFromRow};

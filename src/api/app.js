@@ -21,6 +21,14 @@ function createApp(market, paperAccounts={config:{enabled:false}}, walletIntel={
     "X-Frame-Options":"DENY"
   });next();});
   app.get(["/","/terminal"],(_req,res)=>res.sendFile(path.join(__dirname,"../web/dashboard.html")));
+  app.get("/superagent",(_req,res)=>res.sendFile(path.join(__dirname,"../web/superagent.html")));
+  app.get("/memory",(_req,res)=>res.sendFile(path.join(__dirname,"../web/memory.html")));
+  app.get("/assets/js/memory-config.mjs",(_req,res)=>res.type("text/javascript").send(
+    "export const requestTimeoutMs="+require("../memory/config").limits.clientTimeoutMs+";\n"));
+  app.get("/assets/js/research-config.mjs",(_req,res)=>res.type("text/javascript").send(
+    "export const limits="+JSON.stringify(require("../research/config").limits)+";\n"));
+  app.get("/assets/js/superagent-config.mjs",(_req,res)=>res.type("text/javascript").send(
+    "export const requestTimeoutMs="+require("../superagent/config").limits.reportClientMs+";\n"));
   app.use("/assets",express.static(path.join(__dirname,"../web/assets"),{
     dotfiles:"deny",fallthrough:false,index:false
   }));
@@ -78,7 +86,9 @@ function createApp(market, paperAccounts={config:{enabled:false}}, walletIntel={
     if(!isValid("priceRequest",req.body))return res.status(400).json({error:"Invalid token list"});
     try{send(res,"priceResponse",{prices:await market.paperPrices(input)});}catch(_error){res.status(503).json({error:"Market data temporarily unavailable"});}
   });
+  require("../research/routes").mountResearchRoutes(app,paperAccounts);
   require("../paper/routes").mountPaperRoutes(app,{...paperAccounts,market});
+  require("../superagent/routes").mountReportRoutes(app,{config:paperAccounts.config,store:paperAccounts.store,reader:paperAccounts.reportReader});
   app.use((error,_req,res,_next)=>res.status(error.status||500).json({error:error.status===400?"Invalid JSON request":"Request unavailable"}));
   return app;
 }

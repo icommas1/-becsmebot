@@ -1,6 +1,20 @@
 # Architecture
 
+The separate BecsSuperAgent recorded-evidence observer is documented in
+[SUPERAGENT_OBSERVER.md](SUPERAGENT_OBSERVER.md). It reads retained source events
+and archive records into an isolated durable observation store. Its CLI is not
+loaded by the BecsBot runtime and has no strategy or execution authority.
+An independently gated, read-only owner report at `/superagent` uses the existing
+GitHub session and exact persisted account mapping; see
+[SUPERAGENT_REPORT.md](SUPERAGENT_REPORT.md). Its reader performs no ingestion or
+schema initialization and needs only SELECT on the separate observation store.
+
 BecsBot is a single Node/Express service serving a vanilla HTML/CSS/JavaScript terminal. It reads Jupiter market data and DexScreener discovery membership and simulates trades in browser storage, with an optional private GitHub-authenticated PostgreSQL paper account. It has no wallet signer or real execution engine.
+
+## Owner-only memory evidence and tool review
+
+`src/memory` provides a bounded read-only report over the authenticated owner's retained BecsEvents; absent semantic memory is explicitly `not_implemented`. `src/agent` contains the disabled-by-default registry with durable budgets, signed evaluator receipts, append-only audit records and transactional one-use approval consumption. `scripts/agent-runner.py` runs candidate code only on a separate isolated Docker evaluator. A reviewed tool gains no execution rights. See `AGENT_MEMORY_TOOLS.md` for exact routes, trust boundaries, resource limits and activation dependencies.
+
 
 ## Repository layout
 

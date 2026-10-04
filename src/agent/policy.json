@@ -1,0 +1,21 @@
+{
+  "version": 1,
+  "capability": "event.coverage",
+  "permissions": ["input.read"],
+  "maxSourceBytes": 8192,
+  "maxCandidates": 256,
+  "maxAttemptsPerCandidate": 3,
+  "maxEvaluationsPerDay": 24,
+  "reservationMs": 900000,
+  "evaluationMaxAgeMs": 900000,
+  "approvalMs": 300000,
+  "runner": {"wallTimeMs": 5000, "maxOutputBytes": 65536, "memoryMb": 128, "cpus": 1, "pids": 32, "uid": "65534:65534"},
+  "cases": [
+    {"kind":"positive","input":{"events":["a","b"],"memory":["a","b"]},"expected":{"missing":[],"orphan":[],"duplicate":[]}},
+    {"kind":"negative","input":{"events":["a","b"],"memory":["a"]},"expected":{"missing":["b"],"orphan":[],"duplicate":[]}},
+    {"kind":"negative","input":{"events":["a"],"memory":["a","z"]},"expected":{"missing":[],"orphan":["z"],"duplicate":[]}},
+    {"kind":"negative","input":{"events":["a"],"memory":["a","a"]},"expected":{"missing":[],"orphan":[],"duplicate":["a"]}},
+    {"kind":"heldout","input":{"events":["x","y","z"],"memory":["z","z","outside"]},"expected":{"missing":["x","y"],"orphan":["outside"],"duplicate":["z"]}},
+    {"kind":"heldout","input":{"events":[],"memory":[]},"expected":{"missing":[],"orphan":[],"duplicate":[]}}
+  ]
+}

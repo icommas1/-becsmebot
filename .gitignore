@@ -22,3 +22,9 @@ keypair*.json
 backups/
 *.dump
 *.backup
+
+# Python evaluator caches and private review artifacts
+__pycache__/
+*.pyc
+agent-manifest*.json
+agent-attestation*.json

@@ -2,6 +2,17 @@
 
 Public full-page markets and paper trading dashboard. Optional private GitHub sign-in for a separate server paper account. Real transaction routes return 410; the runtime does not load a wallet signer or private key.
 
+## Connected fundamentals
+
+The terminal links to four supporting screens:
+
+- **Sources & tools** (`/assets/sources.html`): current market-feed status, provider families, paid promotion labels and the eight selected tools.
+- **Sources & engines** (`/research`): owner-only, on-demand public queries through the limited keyless Exa/Parallel readers. Saved recipes remain separate from the paper wallet; results stay in memory and never change trading rules.
+- **Memory evidence** (`/memory`): authenticated retained-paper-event coverage and JSON export, including partial/invalid states. This is evidence inspection; semantic memory and learning are not implemented.
+- **BecsSuperAgent** (`/superagent`): owner/account-scoped recorded purchases and outcomes when its separate observer database is configured. Ingestion is a separately operated CLI; the report defaults off.
+
+The reviewed tool registry also defaults off and grants no execution rights. Its independent evaluator, observer database activation, archive capacity and production backups remain separate operational work. See [INTEGRATIONS.md](INTEGRATIONS.md), [RESEARCH_WORKBENCH.md](RESEARCH_WORKBENCH.md), [AGENT_MEMORY_TOOLS.md](AGENT_MEMORY_TOOLS.md), [SUPERAGENT_OBSERVER.md](SUPERAGENT_OBSERVER.md) and [SUPERAGENT_REPORT.md](SUPERAGENT_REPORT.md). No production feature gate is enabled by merging these implementations.
+
 ## Terminal interface
 
 Desktop has a left signal rail, central SVG radar and compact token contacts, right paper wallet/execution module, an observed activity tape and persistent dollar execution dock. iPhone uses bottom navigation, horizontally swipeable cards, 44px trading buttons and native modal slide-up details. $1/$5/$10/custom sizing affects manual dock orders only; automatic buys retain their configured amount. Contact buttons always buy/sell $1.

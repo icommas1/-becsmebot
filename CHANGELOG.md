@@ -1,9 +1,22 @@
 # Changelog
 
+## Integrated fundamentals
+
+- Reconcile Sources & tools, the on-demand research workspace, owner memory evidence, constrained tool review, durable SuperAgent observation and its gated report with current archive recovery and release monitoring.
+- Connect all supporting screens from the terminal, add the private memory-evidence view, and distinguish installed research adapters from supporting tools.
+- Centralize research/memory limits and include the integrated non-secret settings and source fingerprints in runtime provenance.
+- Preserve strategy, Radar/Signals, paper accounting and wallet behavior. Keep archive capture, the registry and the separate observer/report activation off pending their operational prerequisites.
+
 ## Retained research monitoring
 
 - Require production smoke to match a previously retrieved research record hash, including while collection is paused.
 - Fail on missing or changed retained evidence without writing to storage, resuming capture or claiming full archive verification.
+## Memory evidence and constrained tool review
+
+- Add owner-only, read-only memory-evidence reports and JSON export; absent projections remain explicitly unimplemented.
+- Add disabled-by-default tool registration, durable evaluation budgets, signed isolated-evaluator receipts and transactional one-use review approvals. No tool invocation or live execution is enabled.
+- Add a separately operated Docker evaluator and CI isolation checks, plus authenticated backup encryption and encrypted disposable PostgreSQL restore comparison.
+- Preserve paused research collection, existing history, strategy and paper execution behavior. Independent production backups and evaluator provisioning remain operator dependencies.
 
 ## Browser feed freshness
 

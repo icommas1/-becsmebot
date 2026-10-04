@@ -1,5 +1,6 @@
 const {randomBytes,createHash,timingSafeEqual}=require("node:crypto");
 const {limits}=require("./config");
+const {limits:memoryLimits}=require("../memory/config");
 const {createPaperService}=require("./service");
 const {assertSchema}=require("../api/validation");
 const SESSION="__Host-becs-session",STATE="__Host-becs-oauth";
@@ -22,13 +23,13 @@ async function githubIdentity(config,code,verifier) {
   if(!Number.isSafeInteger(user.id)||typeof user.login!=="string"||!user.login)throw Error("GitHub identity unavailable");
   return {id:String(user.id),login:user.login}; // OAuth token is neither stored nor sent to the browser.
 }
-function mountPaperRoutes(app,{config,store,market,archive=null,identity=githubIdentity}) {
+function mountPaperRoutes(app,{config,store,market,archive=null,identity=githubIdentity,agentTools=null}) {
   app.get("/api/paper/capabilities",(_req,res)=>res.json({enabled:!!config.enabled}));
   if(!config.enabled)return;
   const service=createPaperService({store,market}),owner="github:"+config.ownerId;
-  let hits=[],active=0;
+  let hits=[],active=0,memoryReads=0;
   function limit(_req,res,next){const now=Date.now();hits=hits.filter(at=>at>now-60000);if(hits.length>=120){res.set("Retry-After","60");return res.status(429).json({error:"Paper requests busy. Try again shortly."});}hits.push(now);next();}
-  app.use(["/api/auth","/api/paper/account","/api/paper/commands","/api/paper/events","/api/paper/proofs","/api/paper/verify","/api/research"],limit);
+  app.use(["/api/auth","/api/paper/account","/api/paper/commands","/api/paper/events","/api/paper/proofs","/api/paper/verify","/api/research","/api/memory","/api/agent"],limit);
   const safe=(fn,unavailable="Server paper account temporarily unavailable. Retry the same action.")=>async(req,res)=>{try{await fn(req,res);}catch(error){res.status([400,401,403,409].includes(error.status)?error.status:503).json({error:[400,401,403,409].includes(error.status)?error.message:unavailable});}};
   async function authenticated(req,res){const user=await store.session(cookie(req,SESSION));if(user!==owner){res.status(401).json({error:"Sign in to your server paper account."});return null;}return user;}
   function sameOrigin(req,res){if(req.get("Origin")!==config.origin||req.get("Sec-Fetch-Site")==="cross-site"){res.status(403).json({error:"Same-origin request required."});return false;}return true;}
@@ -61,6 +62,17 @@ function mountPaperRoutes(app,{config,store,market,archive=null,identity=githubI
   }));
   app.post("/api/auth/logout",safe(async(req,res)=>{if(!sameOrigin(req,res))return;await store.logout(cookie(req,SESSION));res.clearCookie(SESSION,cookieOptions);res.json({ok:true});}));
   app.get("/api/paper/account",safe(async(req,res)=>{const user=await authenticated(req,res);if(user)res.json(await store.read(user));}));
+  app.get(['/api/memory/coverage','/api/memory/coverage/export'],safe(async(req,res)=>{
+    const user=await authenticated(req,res);if(!user)return;
+    if(Object.keys(req.query).length)return res.status(400).json({error:'Coverage queries do not accept caller-supplied scope.'});
+    if(memoryReads>=memoryLimits.concurrentReads)return res.status(503).json({error:'Memory report busy. Retry shortly.'});
+    memoryReads++;try{
+      const report=assertSchema('memoryCoverageResponse',await store.memoryReport(user));
+      if(req.path.endsWith('/export'))res.set('Content-Disposition','attachment; filename="becs-memory-coverage.json"');
+      res.json(report);
+    }finally{memoryReads--;}
+  }));
+  if(agentTools)require('../agent/routes').mountAgentRoutes(app,{registry:agentTools,authenticated,sameOrigin,safe});
   const queryInt=(value,{name,max})=>{
     if(value==null||value==="")return null;
     if(!/^\d+$/.test(value))throw Object.assign(Error("Invalid "+name+"."),{status:400});

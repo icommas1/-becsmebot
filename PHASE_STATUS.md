@@ -1,5 +1,22 @@
 # BecsBot phase reconciliation — 2026-10-02
 
+## Fundamentals integration — 2026-10-04
+
+This integration starts from verified main `7889535672eba1c0b191a870010f5fdb03884835` and reconciles the pinned implementation heads of PRs #57, #58, #59, #61 and #63. Previous source copies and unfinished working trees are preserved. The older sections below are dated evidence, not claims about the latest release.
+
+| Fundamental | Implemented behavior |
+| --- | --- |
+| Strategy, Radar and Signals | Existing launch-v1 decision rules, shared filters and observed multiples retained; no new trading thresholds. |
+| Paper accounting and wallets | Existing local/server separation, fresh-mark checks, fee/cost-basis accounting and duplicate protection retained. |
+| Sources & tools | Nineteen-feed status and selected-tool catalog, with truthful reader/support roles. |
+| Research workspace | Authenticated on-demand Exa/Parallel reads; bounded queries, original URLs and RAM-only results; browser-local recipes are separate from holdings. |
+| Memory evidence | Owner-only event coverage/export plus a usable view; partial and invalid checks are explicit. Semantic memory is not implemented. |
+| Tool review | Separate isolated evaluation, signed receipts, persistent budgets and one-use review approvals. Registry remains gated off; reviewed tools have no execution rights. |
+| SuperAgent observation | Durable, scoped ingestion and restart/duplicate protections plus a same-origin report. Production observer/report remain off pending a separate database and exact bindings. |
+| Production reliability | Existing retained-record pin, archive crash recovery, disabled collection and release verification are preserved. |
+
+Storage expansion, archive resumption, independent production backups and evaluator/observer provisioning are deferred by the owner's current instruction. No credential or production feature gate is changed by this implementation. Validation and deployment outcomes belong in the release PR checkpoint; local checks, CI fixtures and production evidence must remain distinct.
+
 Verified baseline: merged main `a63296f09ad1840c2f4888ba868a0fd92fd7c692` (PR #53), green main CI, successful Railway deployment, no open PRs or issues. This file describes implemented capabilities and explicit dependencies; it does not turn product mockups into approved trading rules.
 
 | Phase | Status and evidence |
@@ -21,7 +38,7 @@ Verified baseline: merged main `a63296f09ad1840c2f4888ba868a0fd92fd7c692` (PR #5
 - **Independent production backups:** need an owner-only encrypted external destination and its access configuration. The restore procedure and fixture rehearsal do not establish a production backup.
 - **Storage expansion:** Railway still limits each existing volume to 500 MB. Collection is off; capacity/billing changes belong to the owner. Do not purge history or resume collection as a substitute.
 - **Smart Wallet activation:** requires a provider credential and any required subscription. Existing normalization and tests are complete; enabling it is not possible without that input.
-- **Long-horizon outcomes, rejection research, Memory/Lab recommendations:** require an approved collection scope and evidence. These remain deferred under the stop-storage instruction; no new strategy thresholds or research claims have been invented.
+- **Memory evidence and tool review:** owner-only read-only evidence reporting, a disabled tool-review registry, signed isolated evaluation and approval replay controls are implemented in this change. Semantic memory materialization, long-horizon outcomes and rejection collection still require an approved collection scope; paused research is not resumed. See `AGENT_MEMORY_TOOLS.md`.
 - **Real signing/live execution:** explicitly excluded, including live executors, wallet routing and tiny-value live tests. Completing safe phases does not authorize activation.
 - **Feed freshness:** production scans updated all nineteen feeds. A confirmed browser issue left the last Reporting labels frozen after failed or stalled requests; the follow-up freshness change makes those labels age, shows cached/disconnected status, and revalidates on tab/network recovery. The original specific stale screen has not been identified, so no provider-side outage is claimed.
 
