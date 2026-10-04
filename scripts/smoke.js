@@ -4,9 +4,11 @@ const {DEX_FEEDS}=require("../src/market/dexscreener");
 const feedNames=[...FEEDS,...DEX_FEEDS].map(([name])=>name);
 const {assertSchema}=require("../src/api/validation");
 async function smoke(base,{request=fetch,now=Date.now,maxAgeMs=300000,requireMarketData=false,requireArchive=false,
-  archiveMode=requireArchive?"required":"auto",expectedCommit=null}={}){
+  archiveMode=requireArchive?"required":"auto",expectedCommit=null,expectedRetainedRecordHash=null}={}){
   assert.ok(["auto","required","disabled"].includes(archiveMode),"Invalid archive mode");
   assert.ok(!requireArchive||archiveMode==="required","Conflicting archive mode");
+  assert.ok(expectedRetainedRecordHash===null||typeof expectedRetainedRecordHash==="string"&&/^[0-9a-f]{64}$/.test(expectedRetainedRecordHash),
+    "Invalid retained record hash");
   const url=new URL(base);
   if(!["https:","http:"].includes(url.protocol)||url.username||url.password||url.search||url.hash)
     throw Error("Use a plain HTTP(S) origin without credentials");
@@ -22,6 +24,10 @@ async function smoke(base,{request=fetch,now=Date.now,maxAgeMs=300000,requireMar
   const walletIntel=assertSchema("walletIntelResponse",await(await get("/api/wallet-intel")).json());
   const archive=assertSchema("archiveHealth",await(await get("/health/archive")).json());
   if(archiveMode==="disabled")assert.equal(archive.enabled,false,"Research archive is expected to be disabled");
+  if(expectedRetainedRecordHash){
+    assert.ok(archive.retainedEvidence,"Retained research evidence is missing");
+    assert.equal(archive.retainedEvidence.recordHash,expectedRetainedRecordHash,"Retained research record differs from expected witness");
+  }
   if(archiveMode==="required"||archiveMode==="auto"&&archive.enabled){
     assert.equal(archive.enabled,true,"Research archive is disabled");
     assert.equal(archive.healthy,true,"Research archive is not verified and current");
@@ -68,7 +74,8 @@ if(require.main===module){
   const requireMarketData=process.env.SMOKE_REQUIRE_MARKET_DATA==="1";
   (async()=>{for(let i=0;i<retries;i++){
     try{console.log("Smoke passed",await smoke(base,{requireMarketData,requireArchive:process.env.SMOKE_REQUIRE_ARCHIVE==="1",
-      archiveMode:process.env.SMOKE_ARCHIVE_MODE||undefined,expectedCommit:process.env.SMOKE_EXPECT_COMMIT||null}));return;}
+      archiveMode:process.env.SMOKE_ARCHIVE_MODE||undefined,expectedCommit:process.env.SMOKE_EXPECT_COMMIT||null,
+      expectedRetainedRecordHash:process.env.SMOKE_EXPECT_RETAINED_RECORD_HASH||null}));return;}
     catch(error){if(i===retries-1)throw error;console.log("Waiting for a healthy deployment ("+(i+1)+"/"+retries+")");await new Promise(r=>setTimeout(r,5000));}
   }})().catch(error=>{console.error("Smoke failed: "+error.message);process.exitCode=1;});
 }

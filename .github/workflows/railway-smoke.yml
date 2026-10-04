@@ -27,6 +27,8 @@ jobs:
         env:
           SMOKE_BASE_URL: https://becsbot-production.up.railway.app
           SMOKE_ATTEMPTS: '24'
-          # Research collection is intentionally paused by the owner.
+          # Collection stays paused pending capacity and independent backups.
           SMOKE_ARCHIVE_MODE: 'disabled'
           SMOKE_EXPECT_COMMIT: ${{ github.sha }}
+          # Public hash of record #4, retrieved from production on 2026-10-04.
+          SMOKE_EXPECT_RETAINED_RECORD_HASH: '3c5343e491b16da45200250015fcff77923988cb1617b16fbb5d34853f819ed2'

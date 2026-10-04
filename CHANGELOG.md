@@ -1,5 +1,10 @@
 # Changelog
 
+## Retained research monitoring
+
+- Require production smoke to match a previously retrieved research record hash, including while collection is paused.
+- Fail on missing or changed retained evidence without writing to storage, resuming capture or claiming full archive verification.
+
 ## Browser feed freshness
 
 - Label cached feed data and stop the scanning indicator when browser connectivity fails.

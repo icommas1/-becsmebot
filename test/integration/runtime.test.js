@@ -186,3 +186,35 @@ test("disabled archive expectation rejects unexpected collection",async()=>{
   try{await assert.rejects(smoke("http://127.0.0.1:"+server.address().port,{archiveMode:"disabled"}),/expected to be disabled/);}
   finally{await new Promise(resolve=>server.close(resolve));}
 });
+
+test("paused production smoke requires the pinned retained record without claiming full archive health",async()=>{
+  const {createApp}=require("../../src/api/app"),{disabledStatus}=require("../../src/archive/capture");
+  const {smoke}=require("../../scripts/smoke"),expectedRetainedRecordHash="e".repeat(64);
+  const witness={sequence:4,occurredAt:1,capturedAt:2,recordHash:expectedRetainedRecordHash,payloadHash:"f".repeat(64),
+    radarRows:3,signalRows:2,providerFeeds:1};
+  const state={...disabledStatus(),retainedEvidence:witness},calls=[];
+  const server=createApp(await fixtureMarket(),undefined,undefined,()=>state).listen(0,"127.0.0.1");
+  await once(server,"listening");
+  try{
+    const base="http://127.0.0.1:"+server.address().port,options={archiveMode:"disabled",expectedRetainedRecordHash,
+      request:(url,settings)=>{calls.push(url);assert.equal(settings.method,undefined);return fetch(url,settings);}};
+    const result=await smoke(base,options);
+    assert.equal(result.archive.retainedEvidence.recordHash,expectedRetainedRecordHash);
+    assert.equal(result.archive.enabled,false);assert.equal(result.archive.healthy,false);
+    assert.equal(result.archive.verificationComplete,false);assert.equal(calls.length,11);
+    state.retainedEvidence=null;
+    await assert.rejects(smoke(base,options),/Retained research evidence is missing/);
+    state.retainedEvidence={...witness,recordHash:"a".repeat(64)};
+    await assert.rejects(smoke(base,options),/Retained research record differs from expected witness/);
+    state.retainedEvidence=null;
+    await smoke(base,{archiveMode:"disabled"});
+  }finally{await new Promise(resolve=>server.close(resolve));}
+});
+
+test("smoke rejects an invalid retained-record pin before making requests",async()=>{
+  const {smoke}=require("../../scripts/smoke");
+  for(const pin of ["bad", "E".repeat(64), "e".repeat(63)]){
+    await assert.rejects(smoke("http://127.0.0.1:1",{expectedRetainedRecordHash:pin,
+      request:()=>assert.fail("Invalid pins must not reach HTTP")}),/Invalid retained record hash/);
+  }
+});
