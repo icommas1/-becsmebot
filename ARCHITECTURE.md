@@ -181,6 +181,8 @@ Each command locks its account row. Its balance/hold changes and successful requ
 
 Public market startup and polling run independently of the private account check. Account failures stop auto, block new paper actions and retry every 15 seconds without switching to the local ledger; stalled account requests cannot hold up Radar refreshes.
 
+An unauthenticated account read or command response (401) explicitly shows the GitHub sign-in control. The active page keeps its server wallet selected; an unresolved command retains its original ID through a later authenticated reload. Authenticated recovery hides sign-in and clears the availability error; it does not enable auto, overwrite the local wallet or create a replacement command. Database/provider failures remain availability errors rather than sign-in prompts.
+
 The browser persists one unresolved command per tab in session storage before sending it. An uncertain response keeps its original ID across reload; the user retries explicitly. A server failure never routes a signed-in trade through local execution. Closing the tab can discard its pending command; committed server state remains. State refreshes every 15 seconds, and auto remains off after reload. No server-side scheduled trading or automatic local-ledger migration is implemented.
 
 | Route | Behavior |

@@ -12,6 +12,7 @@ import {createPaperView} from "./paper-view.mjs";
 import {createPerformanceView} from "./paper-performance.mjs";
 
 const RADAR_UI_STORE = "becsRadarUiV1", TRAIL_STORE = "becsRadarTrailV1";
+const SIGN_IN_REQUIRED = "Sign in with GitHub to reconnect your server paper account.";
 const storage=(()=>{try{return globalThis.localStorage;}catch(_error){return {
   getItem:()=>null,setItem:()=>{throw Error("Browser storage unavailable");}
 };}})();
@@ -28,19 +29,23 @@ function syncAccountControls(){
   $("cash-input").value=paper.cashSol;
 }
 function accountStatus(){
-  $("account-status").textContent=accountError?"Paper account unavailable · retrying automatically":accountMode==="server"?"Server paper account · saved across devices":accountMode==="local"?"Local paper wallet · saved on this browser":"Checking paper account…";
+  const needsSignIn=accountError?.status===401;
+  $("account-status").textContent=needsSignIn?"Sign-in required · server paper actions are blocked":accountError?"Paper account unavailable · retrying automatically":accountMode==="server"?"Server paper account · saved across devices":accountMode==="local"?"Local paper wallet · saved on this browser":"Checking paper account…";
+  if(needsSignIn)$("account-login").hidden=false;
+  else if(accountMode==="server")$("account-login").hidden=true;
   $("retry-paper").hidden=!serverPaper?.pending;
 }
 function receiveAccount(result){if(result.revision<serverRevision)return;const auto=paper.auto;paper=result.paper;paper.auto=auto;serverRevision=result.revision;syncAccountControls();accountStatus();render();}
 async function serverAction(action,retry=false){
-  try{const result=await (retry?serverPaper.retry():serverPaper.send(action));receiveAccount(result);if(result.message)message(result.message);return result.ok;}
-  catch(error){paper.auto=false;message(error.message+(serverPaper.pending?" Use Retry pending action; do not place it again.":""));render();return false;}
+  try{const result=await (retry?serverPaper.retry():serverPaper.send(action));accountError=null;receiveAccount(result);if(result.message)message(result.message);return result.ok;}
+  catch(error){paper.auto=false;if(error.status===401)accountError=error;
+    message((error.status===401?SIGN_IN_REQUIRED:error.message)+(serverPaper.pending?" Use Retry pending action; do not place it again.":""));render();return false;}
   finally{accountStatus();}
 }
 async function initializeAccount(){
   serverPaper??=createServerPaper({storage:{getItem:key=>globalThis.sessionStorage.getItem(key),setItem:(key,value)=>globalThis.sessionStorage.setItem(key,value),removeItem:key=>globalThis.sessionStorage.removeItem(key)}});
   const capability=await serverPaper.request("/api/paper/capabilities");
-  if(!capability.enabled){accountMode="local";return;}
+  if(!capability.enabled){accountMode="local";$("account-login").hidden=true;return;}
   const status=await serverPaper.request("/api/auth/status");
   if(!status.authenticated){accountMode="local";$("account-login").hidden=false;return;}
   const result=await serverPaper.read();serverPaper.attach(result.paper);accountMode="server";
@@ -55,12 +60,12 @@ async function refreshAccount(){
     else if(accountMode==="server")receiveAccount(await serverPaper.read());
     accountError=null;
   }catch(error){
-    paper.auto=false;accountError=error.message;
-    message("Paper account unavailable. Retrying automatically. "+error.message);render();
+    paper.auto=false;accountError=error;
+    message(error.status===401?SIGN_IN_REQUIRED:"Paper account unavailable. Retrying automatically. "+error.message);render();
   }finally{accountRefreshing=false;accountStatus();}
 }
 function accountReady(){
-  if(accountError){message("Paper account unavailable. Wait for it to reconnect.");return false;}
+  if(accountError){message(accountError.status===401?SIGN_IN_REQUIRED:"Paper account unavailable. Wait for it to reconnect.");return false;}
   if(accountMode==="loading"){message("Wait for the paper account check, or reload to retry.");return false;}
   return true;
 }

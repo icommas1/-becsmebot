@@ -45,6 +45,7 @@ test("Radar keeps refreshing during a private account outage and paper actions f
   const local=await page.evaluate(()=>localStorage.getItem("becsPaperV1"));
   offline=true;await page.clock.fastForward(15000);
   await expect(page.locator("#account-status")).toContainText("unavailable");
+  await expect(page.locator("#account-login")).toBeHidden();
   await expect.poll(()=>baskets).toBe(2);
   await page.getByRole("button",{name:"Markets",exact:true}).click();
   await page.locator("#radar .token-contact").first().getByRole("button",{name:"BUY $1",exact:true}).click();
@@ -92,4 +93,78 @@ test("server paper retry survives reload without overwriting the local wallet",a
   await page.getByLabel("Paper buy ($)").fill("5");await page.getByLabel("Paper buy ($)").blur();
   await expect.poll(()=>paper.settings.betUsd).toBe(5);
   expect(requests[2].revision).toBe(1);expect(revision).toBe(2);
+});
+
+test("expired server session offers sign-in while preserving both wallets and blocking paper actions",async({page})=>{
+  await page.clock.install();
+  const account=await serverAccount(page);account.paper.cashSol=.375;
+  let expired=false,commands=0,baskets=0;
+  await page.addInitScript(()=>localStorage.setItem("becsPaperV1",JSON.stringify({cashSol:.75,holds:{},bought:{},settings:{},activity:[]})));
+  await page.route("**/api/paper/capabilities",r=>r.fulfill({json:{enabled:true}}));
+  await page.route("**/api/paper/account",r=>r.fulfill(expired?{status:401,json:{error:"Sign in to your server paper account."}}:{json:account}));
+  await page.route("**/api/paper/commands",r=>{commands++;return r.abort();});
+  page.on("request",r=>{if(new URL(r.url()).pathname==="/api/basket")baskets++;});
+  await page.goto("/");await expect(page.locator("#radar .token-contact")).toHaveCount(2);
+  await page.getByRole("button",{name:"Paper wallet",exact:true}).click();
+  await expect(page.locator("#account-status")).toContainText("Server paper account");
+  await expect(page.locator("#account-login")).toBeHidden();
+  const local=await page.evaluate(()=>localStorage.getItem("becsPaperV1")),cash=await page.locator("#cash").textContent();
+  expired=true;await page.clock.fastForward(15000);
+  await expect(page.locator("#account-status")).toContainText("Sign-in required");
+  await expect(page.locator("#account-login")).toBeVisible();
+  await expect(page.locator("#account-logout")).toBeVisible();
+  await expect(page.locator("#cash")).toHaveText(cash);
+  await page.getByRole("button",{name:"Settings",exact:true}).click();
+  await page.locator("#cash-input").fill(".9");await page.locator("#set-cash").click();
+  await expect(page.locator("#toast")).toContainText("Sign in with GitHub");
+  await page.getByRole("button",{name:"Markets",exact:true}).click();
+  await page.locator("#radar .token-contact").first().getByRole("button",{name:"BUY $1",exact:true}).click();
+  await expect(page.locator("#toast")).toContainText("Sign in with GitHub");
+  await page.clock.fastForward(15000);await expect.poll(()=>baskets).toBe(3);
+  expect(commands).toBe(0);expect(account.paper.cashSol).toBe(.375);
+  expect(await page.evaluate(()=>localStorage.getItem("becsPaperV1"))).toBe(local);
+  expired=false;await page.clock.fastForward(15000);
+  await page.getByRole("button",{name:"Paper wallet",exact:true}).click();
+  await expect(page.locator("#account-status")).toContainText("Server paper account");
+  await expect(page.locator("#account-login")).toBeHidden();
+  await expect(page.locator("#cash")).toHaveText(cash);await expect(page.locator("#auto-label")).toHaveText("Auto paper: off");
+  expect(commands).toBe(0);expect(await page.evaluate(()=>localStorage.getItem("becsPaperV1"))).toBe(local);
+});
+
+test("session expiry during an uncertain command keeps its original retry through reauthentication",async({page})=>{
+  const account=await serverAccount(page),paper=account.paper;
+  let revision=0,expired=false,loseResponse=true,executed=0;const receipts=new Map(),requests=[];
+  const service=createPaperService({market:await fixtureMarket(),store:{command:async(_user,input,_fingerprint,fn)=>{
+    if(receipts.has(input.requestId))return {...receipts.get(input.requestId),paper,revision,replayed:true};
+    const result=await fn(paper);if(result.ok){executed++;revision++;receipts.set(input.requestId,result);}return {...result,paper,revision};
+  }}});
+  await page.addInitScript(()=>{if(!localStorage.getItem("becsPaperV1"))localStorage.setItem("becsPaperV1",JSON.stringify({cashSol:.75,holds:{},bought:{},settings:{},activity:[]}));});
+  await page.route("**/api/paper/capabilities",r=>r.fulfill({json:{enabled:true}}));
+  await page.route("**/api/paper/account",r=>r.fulfill({json:{paper,revision}}));
+  await page.route("**/api/paper/commands",async r=>{
+    const input=r.request().postDataJSON();requests.push(input);
+    if(expired)return r.fulfill({status:401,json:{error:"Sign in to your server paper account."}});
+    const result=await service.command(paper.account.userId,input);
+    if(loseResponse){loseResponse=false;return r.abort("failed");}return r.fulfill({json:result});
+  });
+  await page.goto("/");await expect(page.locator("#radar .token-contact")).toHaveCount(2);
+  await expect(page.locator("#account-status")).toContainText("Server paper account");
+  const local=await page.evaluate(()=>localStorage.getItem("becsPaperV1"));
+  await page.locator("#radar .token-contact").first().getByRole("button",{name:"BUY $1",exact:true}).click();
+  await expect(page.locator("#toast")).toContainText("Retry pending action");
+  const filled=structuredClone(paper);expect(filled.holds[MINTS[0]].qty).toBeGreaterThan(0);
+  expired=true;await page.getByRole("button",{name:"Paper wallet",exact:true}).click();await page.locator("#retry-paper").click();
+  await expect(page.locator("#account-status")).toContainText("Sign-in required");
+  await expect(page.locator("#account-login")).toBeVisible();await expect(page.locator("#retry-paper")).toBeVisible();
+  const retained=await page.evaluate(id=>JSON.parse(sessionStorage.getItem("becsServerPending:"+id)),paper.account.accountId);
+  expect(retained).toEqual(requests[0]);expect(requests[1]).toEqual(requests[0]);expect(executed).toBe(1);
+  expect(await page.evaluate(()=>localStorage.getItem("becsPaperV1"))).toBe(local);
+  // The fixture restores the owner session; no OAuth credentials or production commands are used.
+  expired=false;await page.reload();await expect(page.locator("#account-status")).toContainText("Server paper account");
+  await expect(page.locator("#account-login")).toBeHidden();await expect(page.locator("#hold-count")).toHaveText("1");
+  await page.locator("#retry-paper").click();await expect(page.locator("#retry-paper")).toBeHidden();
+  expect(requests).toHaveLength(3);expect(requests[2]).toEqual(requests[0]);expect(executed).toBe(1);expect(revision).toBe(1);
+  expect(paper.cashSol).toBe(filled.cashSol);expect(paper.holds).toEqual(filled.holds);expect(paper.activity).toEqual(filled.activity);
+  await expect(page.locator("#auto-label")).toHaveText("Auto paper: off");
+  expect(await page.evaluate(()=>localStorage.getItem("becsPaperV1"))).toBe(local);
 });
