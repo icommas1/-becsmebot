@@ -18,6 +18,8 @@ Railway service access, variables, volume attachment, restart policy and deploym
 
 `SMOKE_ARCHIVE_MODE=required` requires enabled, current, verified research capture; `disabled` requires capture to remain off; the default `auto` verifies it if enabled. The legacy `SMOKE_REQUIRE_ARCHIVE=1` still requires capture and conflicts with an explicit disabled mode. `SMOKE_EXPECT_COMMIT` always checks `/health` independently of archive mode. The production workflow currently expects `disabled`, reflecting the storage-capacity block; an unexpected reactivation fails the check.
 
+`SMOKE_EXPECT_RETAINED_RECORD_HASH` optionally requires the public retained-record witness to match a previously verified lowercase SHA-256. The production workflow pins record #4's hash, retrieved on 2026-10-04, so disabled-mode checks fail if a new process cannot retrieve it or returns a different record. Keep this expectation when capture resumes. Investigate a missing/changed witness rather than replacing the pin to clear an alarm. Loading may briefly lag market startup, so the existing bounded smoke retries allow warmup. The witness is loaded once per application start; this check proves retrieval of that record, not ongoing database connectivity, a full-history integrity sweep or an independent backup. A paused archive remains `healthy: false` and `verificationComplete: false`.
+
 The smoke script rejects URLs containing embedded credentials, query strings or fragments. It never calls search, price POST, wallet, order, sell or pause operations.
 
 ## Failure behavior

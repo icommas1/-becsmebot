@@ -226,6 +226,8 @@ Each subsequent market or intelligence record includes the runtime ID, configura
 
 `/health/archive` exposes current provenance plus an optional historical market witness containing only hashes, timestamps and row/feed counts. The witness verifies one retrieved payload/envelope; it is not a full-history verification or backup. `/health` independently exposes the running release commit, including while capture is paused. Production smoke checks that commit against the workflow commit on deploy and on the existing six-hour schedule. The current owner-requested pause is enforced with `SMOKE_ARCHIVE_MODE=disabled`; `required` instead requires a healthy archive and matching provenance when collection is authorized again. Neither route exposes archived payloads, and smoke never makes paper commands. With research capture disabled, scans continue without retaining or cloning provider evidence for the archive; saved history remains intact.
 
+Production smoke additionally pins the retained record hash via `SMOKE_EXPECT_RETAINED_RECORD_HASH`, independent of capture mode. Missing or changed witnesses fail deployment/scheduled smoke without resuming collection. The witness is loaded once per process start, so this detects failed historical retrieval after startup/restart rather than continuous database availability. Passing this check does not change disabled archive health or certify the entire history.
+
 
 ### Retained research reads and crash recovery
 
