@@ -45,6 +45,10 @@ test("PostgreSQL: committed paper actions append verifiable BecsEvents and immut
     const count=verification.eventCount;
     await assert.rejects(store.command(owner,cmd({}),null,async()=>({ok:true,auditEvents:[]})));
     assert.equal((await store.verifyEvents(owner)).eventCount,count,"rolled-back commands must not alter the event ledger");
+    const other="event-isolation-"+randomUUID();
+    assert.deepEqual((await store.listEvents(other)).events,[]);
+    assert.deepEqual((await store.listProofs(other)).proofs,[]);
+    assert.equal((await store.verifyEvents(other)).eventCount,0);
   }finally{
     for(const table of ["paper_sessions","paper_requests","paper_accounts"])await db.query("DELETE FROM "+table+" WHERE user_id=$1",[owner]).catch(()=>{});
     await Promise.all([store.close(),db.end()]);
