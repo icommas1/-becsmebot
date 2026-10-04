@@ -1792,7 +1792,8 @@
         "verificationComplete",
         "failures",
         "lastError",
-        "runtimeEvidence"
+        "runtimeEvidence",
+        "retainedEvidence"
       ],
       "properties": {
         "enabled": {
@@ -1892,7 +1893,169 @@
               }
             }
           ]
+        },
+        "retainedEvidence": {
+          "anyOf": [
+            {
+              "type": "null"
+            },
+            {
+              "type": "object",
+              "additionalProperties": false,
+              "properties": {
+                "sequence": {
+                  "type": "integer",
+                  "minimum": 1
+                },
+                "occurredAt": {
+                  "type": "integer",
+                  "minimum": 0
+                },
+                "capturedAt": {
+                  "type": "integer",
+                  "minimum": 0
+                },
+                "radarRows": {
+                  "type": "integer",
+                  "minimum": 0
+                },
+                "signalRows": {
+                  "type": "integer",
+                  "minimum": 0
+                },
+                "providerFeeds": {
+                  "type": "integer",
+                  "minimum": 0
+                },
+                "recordHash": {
+                  "type": "string",
+                  "pattern": "^[0-9a-f]{64}$"
+                },
+                "payloadHash": {
+                  "type": "string",
+                  "pattern": "^[0-9a-f]{64}$"
+                }
+              },
+              "required": [
+                "sequence",
+                "occurredAt",
+                "capturedAt",
+                "radarRows",
+                "signalRows",
+                "providerFeeds",
+                "recordHash",
+                "payloadHash"
+              ]
+            }
+          ]
         }
+      }
+    },
+    "researchRecord": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "recordId": {
+          "type": "string",
+          "pattern": "^[0-9a-f-]{36}$"
+        },
+        "streamId": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 120
+        },
+        "sequence": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "kind": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 120
+        },
+        "source": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 120
+        },
+        "occurredAt": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "capturedAt": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "payloadHash": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{64}$"
+        },
+        "recordHash": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{64}$"
+        },
+        "previousHash": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "pattern": "^[0-9a-f]{64}$"
+        },
+        "metadata": {
+          "type": "object",
+          "additionalProperties": true
+        }
+      },
+      "required": [
+        "recordId",
+        "streamId",
+        "sequence",
+        "kind",
+        "source",
+        "occurredAt",
+        "capturedAt",
+        "payloadHash",
+        "recordHash",
+        "previousHash",
+        "metadata"
+      ]
+    },
+    "researchRecordsResponse": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "records",
+        "nextBeforeSequence"
+      ],
+      "properties": {
+        "records": {
+          "type": "array",
+          "maxItems": 100,
+          "items": {
+            "$ref": "#/definitions/researchRecord"
+          }
+        },
+        "nextBeforeSequence": {
+          "type": [
+            "integer",
+            "null"
+          ],
+          "minimum": 1
+        }
+      }
+    },
+    "researchRecordResponse": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "record",
+        "payload"
+      ],
+      "properties": {
+        "record": {
+          "$ref": "#/definitions/researchRecord"
+        },
+        "payload": {}
       }
     }
   }

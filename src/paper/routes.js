@@ -22,14 +22,14 @@ async function githubIdentity(config,code,verifier) {
   if(!Number.isSafeInteger(user.id)||typeof user.login!=="string"||!user.login)throw Error("GitHub identity unavailable");
   return {id:String(user.id),login:user.login}; // OAuth token is neither stored nor sent to the browser.
 }
-function mountPaperRoutes(app,{config,store,market,identity=githubIdentity}) {
+function mountPaperRoutes(app,{config,store,market,archive=null,identity=githubIdentity}) {
   app.get("/api/paper/capabilities",(_req,res)=>res.json({enabled:!!config.enabled}));
   if(!config.enabled)return;
   const service=createPaperService({store,market}),owner="github:"+config.ownerId;
   let hits=[],active=0;
   function limit(_req,res,next){const now=Date.now();hits=hits.filter(at=>at>now-60000);if(hits.length>=120){res.set("Retry-After","60");return res.status(429).json({error:"Paper requests busy. Try again shortly."});}hits.push(now);next();}
-  app.use(["/api/auth","/api/paper/account","/api/paper/commands","/api/paper/events","/api/paper/proofs","/api/paper/verify"],limit);
-  const safe=fn=>async(req,res)=>{try{await fn(req,res);}catch(error){res.status([400,401,403,409].includes(error.status)?error.status:503).json({error:[400,401,403,409].includes(error.status)?error.message:"Server paper account temporarily unavailable. Retry the same action."});}};
+  app.use(["/api/auth","/api/paper/account","/api/paper/commands","/api/paper/events","/api/paper/proofs","/api/paper/verify","/api/research"],limit);
+  const safe=(fn,unavailable="Server paper account temporarily unavailable. Retry the same action.")=>async(req,res)=>{try{await fn(req,res);}catch(error){res.status([400,401,403,409].includes(error.status)?error.status:503).json({error:[400,401,403,409].includes(error.status)?error.message:unavailable});}};
   async function authenticated(req,res){const user=await store.session(cookie(req,SESSION));if(user!==owner){res.status(401).json({error:"Sign in to your server paper account."});return null;}return user;}
   function sameOrigin(req,res){if(req.get("Origin")!==config.origin||req.get("Sec-Fetch-Site")==="cross-site"){res.status(403).json({error:"Same-origin request required."});return false;}return true;}
   app.get("/api/auth/status",safe(async(req,res)=>{const user=await store.session(cookie(req,SESSION));res.json({authenticated:user===owner});}));
@@ -67,6 +67,25 @@ function mountPaperRoutes(app,{config,store,market,identity=githubIdentity}) {
     const number=Number(value);if(!Number.isSafeInteger(number)||number<1||number>max)throw Object.assign(Error("Invalid "+name+"."),{status:400});
     return number;
   };
+  let researchReads=0;
+  const researchRead=fn=>safe(async(req,res)=>{
+    if(!await authenticated(req,res))return;
+    const {archiveLimits}=require("../archive/config");
+    if(!archive||researchReads>=archiveLimits.concurrentReads)return res.status(503).json({error:"Research archive temporarily unavailable."});
+    researchReads++;try{await fn(req,res);}finally{researchReads--;}
+  },"Research archive temporarily unavailable.");
+  app.get("/api/research/records",researchRead(async(req,res)=>{
+    const {archiveLimits}=require("../archive/config");
+    const limit=queryInt(req.query.limit,{name:"archive limit",max:archiveLimits.readPageMax})??archiveLimits.readPage;
+    const beforeSequence=queryInt(req.query.before,{name:"archive cursor",max:Number.MAX_SAFE_INTEGER});
+    res.json(assertSchema("researchRecordsResponse",await archive.listRecords({limit,beforeSequence})));
+  }));
+  app.get("/api/research/records/:sequence",researchRead(async(req,res)=>{
+    const sequence=queryInt(req.params.sequence,{name:"archive sequence",max:Number.MAX_SAFE_INTEGER});
+    const record=await archive.readRecord(sequence);
+    if(!record)return res.status(404).json({error:"Research record unavailable."});
+    res.json(assertSchema("researchRecordResponse",record));
+  }));
   app.get("/api/paper/events",safe(async(req,res)=>{
     const user=await authenticated(req,res);if(!user)return;
     const limit=queryInt(req.query.limit,{name:"event limit",max:100})??50;

@@ -3,6 +3,7 @@ const {randomUUID}=require("node:crypto");
 const {gzipSync,gunzipSync}=require("node:zlib");
 const {Pool}=require("pg");
 const {canonical,digest}=require("../events/becs-event");
+const {archiveLimits}=require("./config");
 
 const SCHEMA_VERSION=1;
 const ENCODING="gzip-json-v1";
@@ -49,6 +50,13 @@ function verifyArchivePayload(row){
       (row.compressed_bytes==null||Number(row.compressed_bytes)===row.payload.length)&&
       (row.uncompressed_bytes==null||Number(row.uncompressed_bytes)===raw.length);
   }catch{return false;}
+}
+
+function recordView(row){
+  if(!verifyArchiveEnvelope(row))throw Error("Archive record integrity failed");
+  return {recordId:row.record_id,streamId:row.stream_id,sequence:Number(row.sequence),kind:row.kind,source:row.source,
+    occurredAt:Number(row.occurred_at),capturedAt:Number(row.captured_at),payloadHash:row.payload_hash,
+    recordHash:row.record_hash,previousHash:row.previous_hash||null,metadata:row.metadata};
 }
 
 function createResearchArchive(connectionString,{streamId="becs-research-v1",now=Date.now}={}){
@@ -117,6 +125,34 @@ function createResearchArchive(connectionString,{streamId="becs-research-v1",now
     const row=(await pool.query("SELECT head_sequence,head_hash,record_count FROM research_archive_streams WHERE stream_id=$1",[streamId])).rows[0];
     return {headSequence:Number(row.head_sequence),headHash:row.head_hash,recordCount:Number(row.record_count)};
   }
+  // Reads never initialize/migrate schemas or write verification checkpoints.
+  // A paused collector can still retrieve its existing permanent evidence.
+  async function listRecords({limit=archiveLimits.readPage,beforeSequence=null}={}){
+    if(!Number.isInteger(limit)||limit<1||limit>archiveLimits.readPageMax||
+      beforeSequence!==null&&(!Number.isSafeInteger(beforeSequence)||beforeSequence<1))throw Error("Invalid archive read range");
+    const rows=(await pool.query("SELECT * FROM research_archive_records WHERE stream_id=$1 AND ($2::bigint IS NULL OR sequence<$2) ORDER BY sequence DESC LIMIT $3",
+      [streamId,beforeSequence,limit])).rows;
+    return {records:rows.map(recordView),nextBeforeSequence:rows.length===limit?Number(rows.at(-1).sequence):null};
+  }
+  async function readRecord(sequence){
+    if(!Number.isSafeInteger(sequence)||sequence<1)throw Error("Invalid archive sequence");
+    const row=(await pool.query("SELECT r.*,p.encoding,p.payload,p.compressed_bytes,p.uncompressed_bytes FROM research_archive_records r LEFT JOIN research_archive_payloads p ON p.payload_hash=r.payload_hash WHERE r.stream_id=$1 AND r.sequence=$2",
+      [streamId,sequence])).rows[0];
+    if(!row)return null;
+    if(!verifyArchivePayload(row))throw Error("Archive payload integrity failed");
+    return {record:recordView(row),payload:JSON.parse(gunzipSync(row.payload,{maxOutputLength:MAX_PAYLOAD_BYTES}).toString("utf8"))};
+  }
+  async function retainedEvidence(){
+    const first=(await pool.query("SELECT sequence FROM research_archive_records WHERE stream_id=$1 AND kind='market.scan' ORDER BY sequence ASC LIMIT 1",[streamId])).rows[0];
+    if(!first)return null;
+    const {record,payload}=await readRecord(Number(first.sequence));
+    // Public witness contains only hashes, times and counts of historical market
+    // evidence. Payloads, stream IDs, metadata and wallet/account identities stay private.
+    return {sequence:record.sequence,occurredAt:record.occurredAt,capturedAt:record.capturedAt,
+      recordHash:record.recordHash,payloadHash:record.payloadHash,radarRows:Array.isArray(payload.radar)?payload.radar.length:0,
+      signalRows:Array.isArray(payload.signals)?payload.signals.length:0,
+      providerFeeds:payload.providerRows&&typeof payload.providerRows==="object"?Object.keys(payload.providerRows).length:0};
+  }
   async function verify({limit=10,afterSequence=0,previousHash=null,target=null}={}){
     await init();
     if(!Number.isInteger(limit)||limit<1||limit>100||!Number.isSafeInteger(afterSequence)||afterSequence<0)
@@ -127,7 +163,7 @@ function createResearchArchive(connectionString,{streamId="becs-research-v1",now
     if(afterSequence===0&&previousHash!==null||afterSequence>0&&!/^[0-9a-f]{64}$/.test(previousHash||""))
       throw Error("Invalid archive verification anchor");
     const {rows}=await pool.query(
-      "SELECT r.*,p.encoding,p.payload FROM research_archive_records r LEFT JOIN research_archive_payloads p ON p.payload_hash=r.payload_hash WHERE r.stream_id=$1 AND r.sequence>$2 AND r.sequence<=$3 ORDER BY r.sequence ASC LIMIT $4",
+      "SELECT r.*,p.encoding,p.payload,p.compressed_bytes,p.uncompressed_bytes FROM research_archive_records r LEFT JOIN research_archive_payloads p ON p.payload_hash=r.payload_hash WHERE r.stream_id=$1 AND r.sequence>$2 AND r.sequence<=$3 ORDER BY r.sequence ASC LIMIT $4",
       [streamId,afterSequence,boundary.headSequence,limit]
     );
     let expected=afterSequence+1;
@@ -140,6 +176,6 @@ function createResearchArchive(connectionString,{streamId="becs-research-v1",now
     const valid=complete?previousHash===boundary.headHash:rows.length===limit;
     return {valid,complete,verified,previousHash,recordCount:boundary.recordCount,headHash:boundary.headHash,target:boundary};
   }
-  return {init,record,stats,head,verify,close:()=>pool.end(),streamId};
+  return {init,record,stats,head,verify,listRecords,readRecord,retainedEvidence,close:()=>pool.end(),streamId};
 }
 module.exports={SCHEMA_VERSION,ENCODING,MAX_PAYLOAD_BYTES,encode,verifyArchivePayload,verifyArchiveEnvelope,createResearchArchive};

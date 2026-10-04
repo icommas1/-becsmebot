@@ -16,7 +16,7 @@ Railway service access, variables, volume attachment, restart policy and deploym
 
 `GET /health` proves process liveness and reports scan/feed state and `release.commit`; it is not a promise that Jupiter is healthy. The commit is a validated Railway commit SHA or null, available even when research capture is disabled. `npm run test:smoke` performs eleven read-only GET requests against `SMOKE_BASE_URL`, validates contracts and confirms that live trading remains disabled. It reports provider degradation separately. Set `SMOKE_REQUIRE_MARKET_DATA=1` only for a strict provider-readiness check.
 
-`SMOKE_ARCHIVE_MODE=required` requires enabled, current, verified research capture; `disabled` requires capture to remain off; the default `auto` verifies it if enabled. The legacy `SMOKE_REQUIRE_ARCHIVE=1` still requires capture and conflicts with an explicit disabled mode. `SMOKE_EXPECT_COMMIT` always checks `/health` independently of archive mode. The production workflow currently expects `disabled`, honoring the owner's stop-storage instruction; an unexpected reactivation fails the check.
+`SMOKE_ARCHIVE_MODE=required` requires enabled, current, verified research capture; `disabled` requires capture to remain off; the default `auto` verifies it if enabled. The legacy `SMOKE_REQUIRE_ARCHIVE=1` still requires capture and conflicts with an explicit disabled mode. `SMOKE_EXPECT_COMMIT` always checks `/health` independently of archive mode. The production workflow currently expects `disabled`, reflecting the storage-capacity block; an unexpected reactivation fails the check.
 
 The smoke script rejects URLs containing embedded credentials, query strings or fragments. It never calls search, price POST, wallet, order, sell or pause operations.
 
@@ -43,9 +43,9 @@ Independent, encrypted off-provider backups plus a tested restore remain require
 
 When collecting, runtime evidence is available as hashes and commit in `/health/archive`. `SMOKE_ARCHIVE_MODE=required SMOKE_EXPECT_COMMIT=<merged-sha> npm run test:smoke` verifies both capture/integrity and release identity. While intentionally paused, use `SMOKE_ARCHIVE_MODE=disabled`; `/health` still verifies the release. The code revision comes only from Railway's built-in `RAILWAY_GIT_COMMIT_SHA`; it is never substituted with an invented value. Runtime/configuration payloads stay private in PostgreSQL.
 
-## Owner-requested storage pause — 2026-10-02
+## Storage pause and renewed archive request — 2026-10-04
 
-Production `RESEARCH_ARCHIVE_ENABLED=false`. Keep it off until the owner explicitly requests collection again. No history was deleted. Market/Radar/Signals scanning, the bounded chart cache and operational paper-account persistence continue. Paused market scans skip retaining/cloning research-only provider evidence; existing research delivery files remain untouched. Compression experiments were stopped without deploying a new archive encoding.
+Production `RESEARCH_ARCHIVE_ENABLED=false`. The owner has now requested archive completion; continuous collection remains blocked on capacity and backup configuration. On 2026-10-04 the Railway PostgreSQL disk metric was 0.422 GB against a 500 MB mounted volume. Do not resume unlimited collection or spend on expansion without resolving that capacity decision. No history was deleted. Market/Radar/Signals scanning, the bounded chart cache and operational paper-account persistence continue. Paused market scans skip retaining/cloning research-only provider evidence; existing research delivery files remain untouched. Compression experiments were stopped without deploying a new archive encoding.
 
 PostgreSQL settings were adjusted without a database restart: `min_wal_size=32MB`, `max_wal_size=64MB`, and `wal_compression=on` (pglz). `fsync`, `full_page_writes` and `synchronous_commit` remain on. WAL limits are soft limits, not a storage guarantee; no measured disk reduction was established. Earlier values were 80MB, 1GB and off respectively. No table was vacuum-full rewritten, truncated or removed. Temporary maintenance deployment hooks were cleared.
 
@@ -64,3 +64,19 @@ Remaining operational work, in priority order:
 4. **Keep archive verification practical as history grows.** Research verification resumes within a running process but restarts its scan from the beginning on deploy. The post-#52 smoke check exposed a warm-up timeout; successful catch-up now advances every second while failures retain their ten-second backoff. Paper-event verification explicitly reports incomplete coverage above its bounded window. A durable verification checkpoint/independent full verifier is a follow-up; never label partial coverage as complete.
 
 Branch reconciliation found 50 branch heads belonging to merged PRs and three unmerged branches (`fix/research-archive-json-normalization`, its `-v2` variant, and `maintenance/phase1-docs-repo-guidance`). The normalization attempts are superseded by merged #49. All three were preserved; no old branch should be blindly merged into current main, particularly branches from the retired live/Pump implementation.
+
+
+## Retrieval and explicit retention rules
+
+Sign in as the configured owner, then use the same-origin research GET routes documented in ARCHITECTURE.md. Existing saved records can be read even with collection disabled. `/health/archive.retainedEvidence` is an aggregate witness of the oldest retained market scan, reloaded from PostgreSQL on each application start. Compare its sequence, timestamps and hashes before/after an application restart. This proves retrieval of that historical record, not a complete production restore or continuous capture while paused.
+
+| Data | Retention and deletion rule |
+| --- | --- |
+| Research records and compressed payloads | Permanent; no TTL/pruning; UPDATE, DELETE and TRUNCATE guarded. |
+| BecsEvents and proofs | Permanent committed server-paper audit; append-only guards. |
+| Pending research files, including crash temporary files | Keep until a matching DB receipt or a proven identical durable copy; never evict for capacity. Incomplete/conflicting evidence requires recovery. |
+| Chart history | Operational 24 hours, up to 1,440 points/mint and 1,000 mints; distinct from permanent history. |
+| Paper command receipts | Latest 500/account with replay watermark; committed BecsEvents remain permanent. |
+| Browser paper state/activity | Local operational state; not a permanent server research archive. |
+
+Do not mistake disabled-mode health for a current, fully verified archive. After capacity and independent backups are established, set `RESEARCH_ARCHIVE_ENABLED=true`, change smoke expectation to `required`, wait for bounded full-chain catch-up, and verify new scan delivery plus a controlled application restart. Keep database restarts and destructive restore/cutover out of smoke tests.

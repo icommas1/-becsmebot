@@ -41,6 +41,28 @@ test("wallet intelligence polling stays disabled without a key and starts when c
   await new Promise(resolve=>setImmediate(resolve));assert.equal(scans,1);await runtime.shutdown();
 });
 
+test("paused owner archive reads retained evidence without writing or delaying public scans",async()=>{
+  const market=await fixtureMarket();let scans=0,release;
+  market.scan=async()=>{scans++;};
+  const witness={sequence:7,occurredAt:1,capturedAt:2,recordHash:"a".repeat(64),payloadHash:"b".repeat(64),
+    radarRows:3,signalRows:2,providerFeeds:1};
+  const archive={retainedEvidence:()=>new Promise(resolve=>{release=()=>resolve(witness);}),close:async()=>{},
+    init:()=>assert.fail("Paused reader must not initialize schemas"),record:()=>assert.fail("Paused reader must not write")};
+  const runtime=start({env:{JUPITER_API_KEY:"fixture",PORT:"0",PAPER_ACCOUNTS_ENABLED:"true",RESEARCH_ARCHIVE_ENABLED:"false",
+    DATABASE_URL:"postgresql://fixture:fixture@127.0.0.1:1/fixture",PUBLIC_ORIGIN:"https://becs.example",
+    GITHUB_CLIENT_ID:"fixture",GITHUB_CLIENT_SECRET:"fixture",PAPER_GITHUB_USER_ID:"123"},
+    marketFactory:options=>{assert.equal(options.captureResearch,false);return market;},archiveFactory:()=>archive,
+    logger:{log(){},error(value){assert.fail(value);}}});
+  try{
+    if(!runtime.server.listening)await once(runtime.server,"listening");await runtime.ready();
+    assert.equal(scans,1,"Slow storage reads must not hold up public scans");assert.ok(release);
+    release();await new Promise(resolve=>setImmediate(resolve));
+    const response=await fetch("http://127.0.0.1:"+runtime.server.address().port+"/health/archive");
+    assert.equal(response.status,200);const status=await response.json();
+    assert.equal(status.enabled,false);assert.equal(status.runtimeEvidence,null);assert.deepEqual(status.retainedEvidence,witness);
+  }finally{release?.();await runtime.shutdown();}
+});
+
 test("enabled research archive commits runtime and completed scans with startup diagnostics",async()=>{
   const market=await fixtureMarket(),records=[],logs=[];
   const dataDir=mkdtempSync(path.join(tmpdir(),"becs-runtime-"));

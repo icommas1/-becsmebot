@@ -5,7 +5,7 @@ const {digest}=require("../events/becs-event");
 const {FEEDS}=require("../market/tokens");
 const {DEX_FEEDS}=require("../market/dexscreener");
 const {SCHEMA_VERSION,ENCODING}=require("./store");
-const {archiveIntervals}=require("./config");
+const {archiveIntervals,archiveLimits}=require("./config");
 
 const sourceFiles=[
   "package.json","package-lock.json",
@@ -32,7 +32,7 @@ async function runtimeEvidence({env,marketScanMs,walletIntelEnabled,walletIntelS
   ]);
   const configuration={marketScanMs,walletIntel:{enabled:walletIntelEnabled,scanMs:walletIntelScanMs,provider:"nansen"},
     paperAccountsEnabled,strategy:{...currentStrategy},paperDefaults:{...paperDefaults},
-    marketFeeds:{jupiter:FEEDS,dexscreener:DEX_FEEDS},archive:{streamId,schemaVersion:SCHEMA_VERSION,encoding:ENCODING,...archiveIntervals}};
+    marketFeeds:{jupiter:FEEDS,dexscreener:DEX_FEEDS},archive:{streamId,schemaVersion:SCHEMA_VERSION,encoding:ENCODING,...archiveIntervals,limits:archiveLimits}};
   const sources=sourceHashes(),codeHash=digest(sources);
   const commit=/^[0-9a-f]{40}$/i.test(env.RAILWAY_GIT_COMMIT_SHA||"")?env.RAILWAY_GIT_COMMIT_SHA.toLowerCase():null;
   const payload={schemaVersion:2,runtimeId:randomUUID(),tradingEnabled:false,marketScanMs,walletIntelEnabled,walletIntelScanMs,

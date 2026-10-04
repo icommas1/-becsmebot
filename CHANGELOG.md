@@ -68,3 +68,13 @@ All notable repository-level changes are recorded here. Product strategy and pro
 - Added unit, integration and Playwright coverage for Radar, Signals, paper accounting, contracts and mobile layout.
 - Added GitHub CI, Dependabot, repository templates and read-only Railway smoke checks.
 - Removed the unused wallet-capable Solana SDK and retained canonical mint validation with a non-signing base58 dependency.
+
+
+## Archive retrieval and crash recovery — 2026-10-04
+
+- Add owner-session-protected metadata pages and verified single-record research reads, including while collection is paused.
+- Expose only hashes/timestamps/counts for an oldest-market-record witness in archive health, reloaded across starts.
+- Recover complete fsynced temporary spool files; preserve and block on incomplete/conflicting evidence.
+- Centralize archive delivery/read limits and verify payload byte metadata during chain checks.
+- Add real PostgreSQL restart/replay/isolation regressions; preserve all trading boundaries and explicit permanent retention.
+- Keep collection paused at the existing storage-capacity block; independent production backups remain outstanding.

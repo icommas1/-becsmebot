@@ -12,7 +12,7 @@ Verified baseline: merged main `a63296f09ad1840c2f4888ba868a0fd92fd7c692` (PR #5
 | Duplicate protection and private accounts | Delivered in #43–#45; GitHub sign-in and PostgreSQL are configured in production. Browser and server accounts remain separate. |
 | Wallet intelligence | Provider boundary and normalization delivered in #46. Ingestion is disabled pending a valid provider key; no invented scores or trade observations. |
 | Evidence and proof ledger | Delivered in #47/#52; append-only BecsEvents and local proofs, transactional with paper mutations. |
-| Permanent research archive | Delivered in #48–#53, including durable queue, optional-field handling, provenance and verification. New collection is intentionally disabled by the owner; existing history remains. |
+| Permanent research archive | Delivered in #48–#53, including durable queue, optional-field handling, provenance and verification. New collection remains disabled pending storage capacity and backups; the owner requested completion on 2026-10-04. Existing history remains. |
 | Paused-mode operations | This change makes release checks independent of archive capture, asserts the expected disabled state, and skips research-only scan copies while paused. |
 | Full verification and restore readiness | This change adds a read-only full-history verifier and a disposable PostgreSQL dump/restore comparison in CI. Independent production backups remain unconfigured. |
 
@@ -28,3 +28,12 @@ Verified baseline: merged main `a63296f09ad1840c2f4888ba868a0fd92fd7c692` (PR #5
 ## Branch reconciliation
 
 Fifty-two retained branch heads match merged PRs. Their presence does not represent unfinished implementation. The three unmerged branches are preserved: `fix/research-archive-json-normalization` and its `-v2` variant are superseded by #49; `maintenance/phase1-docs-repo-guidance` is superseded by the guidance delivered in #30. No old branch should be merged wholesale into current main, especially branches for the retired signing/Pump paths. No branches, credentials, wallets, volumes or historical rows were deleted during this reconciliation.
+
+
+## Archive continuation — 2026-10-04
+
+The starting main was verified as `cdf1222af54303fb78baaf6b98badd45bd870b5c`, with successful main CI and Railway deployment `dd224a72-9ba8-4e44-afa4-5495befcbd3c`. The deployed service had live execution disabled and collection paused. Open feature PRs #57–#59 and earlier uncommitted checkouts were preserved; none were merged as part of the archive scope.
+
+This scoped archive change adds owner-only metadata/payload retrieval while paused, hash/byte validation, an aggregate historical retrieval witness, fsynced temporary-spool recovery, and database tests for lost responses, replacement collectors, duplicate IDs and stream/account isolation. Retention rules and delivery limits are explicit. CI fixtures remain separate from production evidence.
+
+Continuous capture and production backup/restore are still blocked: Railway reported PostgreSQL disk usage of 0.422 GB on a 500 MB volume, and no independent backup destination is configured. Local checks, PR CI and post-deployment restart evidence must be reported separately; this document does not assert an unperformed production restore or new capture.

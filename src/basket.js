@@ -24,11 +24,12 @@ function start({env=process.env,logger=console,marketFactory=createMarket,wallet
   const market=marketFactory({apiKey:config.apiKey,dataDir:config.dataDir,captureResearch:archiveSettings.enabled});
   const accounts=paperConfig(env),store=accounts.enabled?createStore(accounts.databaseUrl):null;
   const walletIntel=walletIntelFactory({config:walletIntelConfig(env)});
-  const archive=archiveSettings.enabled?archiveFactory(archiveSettings.databaseUrl,{streamId:archiveSettings.streamId}):null;
-  const capture=archive?createArchiveCapture({archive,dataDir:config.dataDir||path.join(process.cwd(),"data"),logger}):null;
+  const archive=archiveSettings.enabled||accounts.enabled&&archiveSettings.databaseUrl?
+    archiveFactory(archiveSettings.databaseUrl,{streamId:archiveSettings.streamId}):null;
+  const capture=archiveSettings.enabled?createArchiveCapture({archive,dataDir:config.dataDir||path.join(process.cwd(),"data"),logger}):null;
   let interval=null,walletInterval=null,archiveInterval=null,closing=null,stopping=false;
-  let marketJob=null,walletJob=null,runtimeJob=null,provenance=null;
-  const archiveStatus=()=>({...capture?.status()||disabledStatus(),runtimeEvidence:provenance?.reference||null});
+  let marketJob=null,walletJob=null,runtimeJob=null,retainedJob=null,provenance=null,retainedEvidence=null;
+  const archiveStatus=()=>({...capture?.status()||{...disabledStatus(),retainedEvidence},runtimeEvidence:provenance?.reference||null});
   function scheduleArchiveFlush(){
     if(stopping)return;
     const status=capture.status();
@@ -62,16 +63,19 @@ function start({env=process.env,logger=console,marketFactory=createMarket,wallet
     return walletJob;
   }
   const release={commit:/^[0-9a-f]{40}$/i.test(env.RAILWAY_GIT_COMMIT_SHA||"")?env.RAILWAY_GIT_COMMIT_SHA.toLowerCase():null};
-  const server=createApp(market,{config:accounts,store},walletIntel,archiveStatus,release).listen(config.port,"0.0.0.0",()=>{
+  const server=createApp(market,{config:accounts,store,archive},walletIntel,archiveStatus,release).listen(config.port,"0.0.0.0",()=>{
     logger.log("BecsBot public Jupiter paper terminal running on port "+server.address().port);
     runtimeJob=(async()=>{
-      if(archive){
+      if(capture){
         logger.log("Permanent research archive enabled");
         provenance=await runtimeEvidence({env,marketScanMs:SCAN_MS,walletIntelEnabled:walletIntel.snapshot().enabled,
           walletIntelScanMs:walletIntel.scanMs,paperAccountsEnabled:accounts.enabled,streamId:archiveSettings.streamId});
         await record("runtime.started","runtime",provenance.payload,Date.now());
         logger.log("Research runtime provenance prepared for commit "+(provenance.reference.commit||"unavailable"));
         scheduleArchiveFlush();
+      }else if(archive?.retainedEvidence){
+        retainedJob=archive.retainedEvidence().then(value=>{retainedEvidence=value;})
+          .catch(()=>logger.error?.("Retained research evidence unavailable"));
       }
       if(stopping)return;
       scanMarket();interval=setInterval(scanMarket,SCAN_MS);
@@ -87,7 +91,7 @@ function start({env=process.env,logger=console,marketFactory=createMarket,wallet
       server.close(error=>{clearTimeout(force);
         Promise.resolve(runtimeJob).then(()=>{
           if(archiveInterval)clearTimeout(archiveInterval);
-          return Promise.all([marketJob,walletJob]);
+          return Promise.all([marketJob,walletJob,retainedJob]);
         }).then(()=>capture?.flush())
           .then(()=>Promise.all([store?.close(),archive?.close()])).then(()=>error?reject(error):resolve(),reject);
       });

@@ -1,6 +1,6 @@
 # Backup and restore boundary
 
-The PostgreSQL volume is the only established durable production copy. Research collection is currently paused by owner request. An independent production backup destination and its access/encryption configuration have not been supplied. Do not claim that CI fixtures or this verifier are a production backup, create a new paid service, or resume research to exercise restoration.
+The PostgreSQL volume is the only established durable production copy. The owner requested archive completion on 2026-10-04; continuous research collection remains paused because the 500 MB production volume is near capacity. An independent production backup destination and its access/encryption configuration have not been supplied. Do not claim that CI fixtures or this verifier are a production backup, create a new paid service, or resume unlimited research on the constrained volume to exercise restoration. Owner-authenticated retained-record reads and a public aggregate witness work while collection is paused; they do not establish an independent backup.
 
 ## Read-only verification
 
