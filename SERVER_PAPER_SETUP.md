@@ -58,6 +58,10 @@ requested. There is no wallet connection, signer or LiveExecutor.
   reload. The backend rechecks existing auto eligibility and uses server marks.
 - A database/sign-in failure never switches an active server wallet into local
   execution. Markets remain public. Retry after service recovery.
+- A 401 shows **Sign in with GitHub** and blocks new paper actions while keeping
+  the selected server wallet and any unresolved command. After signing in,
+  **Retry pending action** confirms that same command ID. Auto remains off;
+  neither wallet's balances or history are reset by reauthentication.
 - Disabling the feature hides sign-in and returns browsers to their separate
   local wallet on reload; PostgreSQL data remains intact. Back up the database
   before replacing or deleting its volume. Automated backup/restore validation
