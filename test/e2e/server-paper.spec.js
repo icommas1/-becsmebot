@@ -114,6 +114,7 @@ test("expired server session offers sign-in while preserving both wallets and bl
   await expect(page.locator("#account-login")).toBeVisible();
   await expect(page.locator("#account-logout")).toBeVisible();
   await expect(page.locator("#cash")).toHaveText(cash);
+  await page.getByRole("button",{name:"Settings",exact:true}).click();
   await page.locator("#cash-input").fill(".9");await page.locator("#set-cash").click();
   await expect(page.locator("#toast")).toContainText("Sign in with GitHub");
   await page.getByRole("button",{name:"Markets",exact:true}).click();
