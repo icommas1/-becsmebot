@@ -11,12 +11,14 @@ The report has no trade, wallet, strategy, recommendation or ingestion controls.
 ## Integration baseline and identity boundary
 
 The report implementation from PR #63 at
-`86f8128c7cd522c50e06002b5ce85fdb40c15f47` and its observer dependency from
-PR #61 at `9b75e4196aa2f7bf87789856fd4d09fae68cc330` were reconciled with
+`1d49fc693abae39a15798b4507a4f2c69649180b` and its observer dependency from
+PR #61 at `5cc991446e2acb73311c1896f5379b704e3bcfae` were reconciled with
 BecsBot main `7889535672eba1c0b191a870010f5fdb03884835` during fundamentals
 integration. Original branch files were compared against their pinned GitHub
 blobs before merging. Final CI, deployed source and runtime evidence belong in
 the integration PR's release checkpoint; older branch results are prior evidence.
+The source event/archive contract remains at the inspected
+`9fb32fe01ef7b7b714c6a49ba84831adaf5ba9c0` revision.
 
 The report uses the BecsBot GitHub session and persisted account directly.
 The independent AppDeploy dashboard and its browser-local journal are outside
@@ -101,6 +103,10 @@ and persisted session/account mapping with sign-out revocation. Existing ingesti
 recovery, duplicate protection and source immutability regressions remain in place.
 Browser tests cover independent pages, source references, text escaping, empty and
 unavailable states, authentication expiry, native mobile controls and overflow.
+Each browser context receives its own fixture scan, preserving its ETags and
+original observation timestamps. A regression verifies that later contexts get
+fresh fixture observations while old observations remain stale. Production
+freshness rules and market behavior are unchanged.
 
 Local Node validation can run without production credentials. PostgreSQL and
 mobile/desktop browser results must be verified in CI for the final PR head.

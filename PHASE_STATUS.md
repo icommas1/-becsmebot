@@ -4,6 +4,11 @@
 
 This integration starts from verified main `7889535672eba1c0b191a870010f5fdb03884835` and reconciles the pinned implementation heads of PRs #57, #58, #59, #61 and #63. Previous source copies and unfinished working trees are preserved. The older sections below are dated evidence, not claims about the latest release.
 
+Final reconciliation includes observer head `5cc991446e2acb73311c1896f5379b704e3bcfae`
+and report head `1d49fc693abae39a15798b4507a4f2c69649180b`, which advanced during
+validation. Their retained-witness monitoring and per-context browser fixture
+isolation are preserved; existing event/archive contracts remain unchanged.
+
 | Fundamental | Implemented behavior |
 | --- | --- |
 | Strategy, Radar and Signals | Existing launch-v1 decision rules, shared filters and observed multiples retained; no new trading thresholds. |
