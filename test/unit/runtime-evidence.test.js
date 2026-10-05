@@ -18,6 +18,8 @@ test("runtime evidence captures exact defaults and code without serializing secr
   assert.ok(result.payload.build.sources['src/superagent/report.js']);
   assert.equal(result.payload.configuration.superagentReport.enabled,false);
   assert.equal(result.payload.configuration.research.executionEnabled,false);
+  assert.equal(result.payload.configuration.walletIntel.minCreditsReserve,5);
+  assert.equal(result.payload.configuration.walletIntel.tradeCreditsCost,5);
   assert.equal(result.reference.evidenceHash,digest(result.payload));
   assert.equal(result.reference.configurationHash,digest(result.payload.configuration));
   assert.equal(result.reference.codeHash,digest(result.payload.build.sources));
@@ -34,4 +36,7 @@ test("configuration hashes distinguish runtime settings while code and configura
   assert.notEqual(changed.reference.configurationHash,first.reference.configurationHash);
   assert.equal(changed.payload.build.commit,null);
   assert.equal(JSON.stringify(changed).includes("not-a-commit-secret"),false);
+  const reserveChanged=await runtimeEvidence({...settings,walletIntelMinCreditsReserve:10,env:{}});
+  assert.notEqual(reserveChanged.reference.configurationHash,first.reference.configurationHash);
+  assert.equal(reserveChanged.reference.codeHash,first.reference.codeHash);
 });

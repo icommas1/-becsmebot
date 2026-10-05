@@ -6,6 +6,12 @@ BecsBot runs as one Node/Express process with `npm start`. It requires Node 22 o
 
 Required and optional variable names are documented in `.env.example`. Values belong in Railway or a local untracked `.env`, never in source control or command output.
 
+## Nansen credit budget
+
+For the free allowance, set `WALLET_INTEL_SCAN_MS=86400000` and `NANSEN_MIN_CREDITS_RESERVE=5`. Each refresh first checks the live balance using the free account endpoint and makes one five-credit Smart Money request only if at least ten credits remain. An unknown balance or a balance below that boundary pauses requests; `/api/wallet-intel` retains the current process's last successful data with its original timestamp and a fixed pause/error reason. A restart can perform an additional guarded refresh, so the interval is not a durable daily request counter. Other Nansen clients use the same account credit balance and are outside this service's reserve guard. No credits are purchased automatically. The startup default is once daily; existing explicitly configured shorter intervals remain honored.
+
+Nansen's free plan grants 100 trial credits and later tops a below-ten balance up to ten daily. With one normal five-credit refresh daily, five credits remain for headroom after that top-up. Check [Nansen usage](https://app.nansen.ai/api?tab=usage-analytics) for the account's complete usage. Returning cached aggregates from BecsBot does not make another Nansen request. Changing these non-secret settings requires an application deployment, preserving the `/app/data` mount and existing records.
+
 ## Railway
 
 The repository assumes Railway runs `npm start`. Configure the service health check to `GET /health`. Mount the persistent volume at the same directory supplied as `DATA_DIR`—the existing deployment uses `/app/data`—so observed chart history survives restarts. Do not point `DATA_DIR` at source files or a shared credential directory.

@@ -1,6 +1,8 @@
 const {isCanonicalMint}=require("../market/mint");
 
 const MAX_EVENTS=100;
+const NANSEN_TRADE_CREDITS=5;
+const WALLET_INTEL_DEFAULTS=Object.freeze({scanMs:86400000,minCreditsReserve:5});
 const PLATFORM_PATTERNS=Object.freeze([
   ["trojan",/\btrojan\b/i],["bullx",/\bbullx\b/i],["photon",/\bphoton\b/i],
   ["gmgn",/\bgmgn\b/i],["maestro",/\bmaestro\b/i],["bloom",/\bbloom(?:bot)?\b/i],
@@ -15,9 +17,12 @@ const CATEGORY_PATTERNS=Object.freeze([
 
 function walletIntelConfig(env=process.env) {
   const apiKey=typeof env.NANSEN_API_KEY==="string"?env.NANSEN_API_KEY.trim():"";
-  const raw=env.WALLET_INTEL_SCAN_MS==null||env.WALLET_INTEL_SCAN_MS===""?60000:Number(env.WALLET_INTEL_SCAN_MS);
-  if(!Number.isInteger(raw)||raw<15000||raw>3600000)throw Error("WALLET_INTEL_SCAN_MS must be an integer from 15000 to 3600000");
-  return {enabled:!!apiKey,nansenApiKey:apiKey||null,scanMs:raw};
+  const raw=env.WALLET_INTEL_SCAN_MS==null||env.WALLET_INTEL_SCAN_MS===""?WALLET_INTEL_DEFAULTS.scanMs:Number(env.WALLET_INTEL_SCAN_MS);
+  if(!Number.isInteger(raw)||raw<15000||raw>86400000)throw Error("WALLET_INTEL_SCAN_MS must be an integer from 15000 to 86400000");
+  const reserve=env.NANSEN_MIN_CREDITS_RESERVE==null||env.NANSEN_MIN_CREDITS_RESERVE===""?
+    WALLET_INTEL_DEFAULTS.minCreditsReserve:Number(env.NANSEN_MIN_CREDITS_RESERVE);
+  if(!Number.isInteger(reserve)||reserve<1||reserve>1000000)throw Error("NANSEN_MIN_CREDITS_RESERVE must be an integer from 1 to 1000000");
+  return {enabled:!!apiKey,nansenApiKey:apiKey||null,scanMs:raw,minCreditsReserve:reserve};
 }
 
 function labels(value) {
@@ -54,21 +59,36 @@ function normalizeNansen(row) {
 
 async function jsonBounded(response,maxBytes=1024*1024) {
   if(!response.ok)throw Error("Nansen HTTP "+response.status);
-  if(!response.body)return response.json();
+  if(!response.body){
+    try{return await response.json();}catch{throw Error("Invalid Nansen response");}
+  }
   const reader=response.body.getReader(),chunks=[];let bytes=0;
   try{
     while(true){const {done,value}=await reader.read();if(done)break;bytes+=value.length;if(bytes>maxBytes)throw Error("Nansen response too large");chunks.push(value);}
   }finally{await reader.cancel().catch(()=>{});}
-  return JSON.parse(Buffer.concat(chunks).toString("utf8"));
+  try{return JSON.parse(Buffer.concat(chunks).toString("utf8"));}catch{throw Error("Invalid Nansen response");}
 }
 
-async function fetchNansen(apiKey,{fetchImpl=fetch}={}) {
-  const response=await fetchImpl("https://api.nansen.ai/api/v1/smart-money/dex-trades",{
+async function requestNansen(url,options,fetchImpl){
+  try{return await fetchImpl(url,options);}catch{throw Error("Nansen request unavailable");}
+}
+
+async function fetchNansen(apiKey,{fetchImpl=fetch,minCreditsReserve=WALLET_INTEL_DEFAULTS.minCreditsReserve}={}) {
+  // Account reads cost no credits. Unknown balance or failed reads stop the paid request.
+  const account=await jsonBounded(await requestNansen("https://api.nansen.ai/api/v1/account",{
+    method:"GET",redirect:"error",signal:AbortSignal.timeout(10000),
+    headers:{"apikey":apiKey,"Accept":"application/json"}
+  },fetchImpl),16384);
+  const credits=account?.credits_remaining;
+  if(!Number.isSafeInteger(credits)||credits<0)throw Error("Invalid Nansen credit balance");
+  if(credits<NANSEN_TRADE_CREDITS+minCreditsReserve)
+    throw Error("Nansen polling paused to preserve "+minCreditsReserve+" credits");
+  const response=await requestNansen("https://api.nansen.ai/api/v1/smart-money/dex-trades",{
     method:"POST",redirect:"error",signal:AbortSignal.timeout(10000),
-    headers:{"apiKey":apiKey,"Content-Type":"application/json","Accept":"application/json"},
+    headers:{"apikey":apiKey,"Content-Type":"application/json","Accept":"application/json"},
     body:JSON.stringify({chains:["solana"],pagination:{page:1,per_page:MAX_EVENTS},
       order_by:[{field:"block_timestamp",direction:"DESC"}]})
-  });
+  },fetchImpl);
   const body=await jsonBounded(response);
   if(!body||!Array.isArray(body.data))throw Error("Invalid Nansen smart-money response");
   return body.data.map(normalizeNansen).filter(Boolean).slice(0,MAX_EVENTS);
@@ -101,7 +121,7 @@ function createWalletIntel({config=walletIntelConfig(),nansenFetch=fetchNansen,n
     if(running||!config.enabled)return snapshot();
     running=true;
     try{
-      const next=await nansenFetch(config.nansenApiKey);
+      const next=await nansenFetch(config.nansenApiKey,{minCreditsReserve:config.minCreditsReserve??WALLET_INTEL_DEFAULTS.minCreditsReserve});
       events=next;lastSuccessAt=new Date(now()).toISOString();lastError=null;revision++;
     }catch(error){lastError=String(error?.message||"Wallet intelligence provider unavailable").slice(0,300);revision++;}
     finally{running=false;}
@@ -120,4 +140,4 @@ function createWalletIntel({config=walletIntelConfig(),nansenFetch=fetchNansen,n
   return {scan,snapshot,researchSnapshot,revision:()=>revision,scanMs:config.scanMs};
 }
 
-module.exports={MAX_EVENTS,walletIntelConfig,labels,normalizeNansen,fetchNansen,aggregate,createWalletIntel};
+module.exports={MAX_EVENTS,NANSEN_TRADE_CREDITS,WALLET_INTEL_DEFAULTS,walletIntelConfig,labels,normalizeNansen,fetchNansen,aggregate,createWalletIntel};
