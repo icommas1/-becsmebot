@@ -6,6 +6,7 @@ const {FEEDS}=require("../market/tokens");
 const {DEX_FEEDS}=require("../market/dexscreener");
 const {SCHEMA_VERSION,ENCODING}=require("./store");
 const {archiveIntervals,archiveLimits}=require("./config");
+const {WALLET_INTEL_DEFAULTS,NANSEN_TRADE_CREDITS}=require("../intel/wallet-intel");
 
 const sourceFiles=[
   'src/memory/coverage.js','src/memory/config.js','src/agent/config.js','src/agent/policy.json','src/agent/routes.js',
@@ -31,11 +32,13 @@ function sourceHashes(){
 }
 
 // Explicit allowlist only. Never enumerate process.env or serialize account/provider config objects.
-async function runtimeEvidence({env,marketScanMs,walletIntelEnabled,walletIntelScanMs,paperAccountsEnabled,streamId,agentToolsEnabled=false,superagentReportEnabled=false}){
+async function runtimeEvidence({env,marketScanMs,walletIntelEnabled,walletIntelScanMs,
+  walletIntelMinCreditsReserve=WALLET_INTEL_DEFAULTS.minCreditsReserve,paperAccountsEnabled,streamId,agentToolsEnabled=false,superagentReportEnabled=false}){
   const [{paperDefaults},{currentStrategy}]=await Promise.all([
     import("../web/assets/js/paper-wallet.mjs"),import("../web/assets/js/trading/contracts.mjs")
   ]);
-  const configuration={marketScanMs,walletIntel:{enabled:walletIntelEnabled,scanMs:walletIntelScanMs,provider:"nansen"},
+  const configuration={marketScanMs,walletIntel:{enabled:walletIntelEnabled,scanMs:walletIntelScanMs,provider:"nansen",
+    minCreditsReserve:walletIntelMinCreditsReserve,tradeCreditsCost:NANSEN_TRADE_CREDITS},
     agentTools:{enabled:!!agentToolsEnabled,policyHash:digest(require('../agent/policy.json'))},
     research:{onDemand:true,executionEnabled:false,limits:require('../research/config').limits},
     memoryEvidence:{limits:require('../memory/config').limits},

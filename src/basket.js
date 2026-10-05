@@ -28,7 +28,7 @@ function start({env=process.env,logger=console,marketFactory=createMarket,wallet
   const agentSettings=require("./agent/config").agentConfig(env,accounts);
   const agentTools=agentSettings.enabled?require("./agent/store").createAgentRegistry(agentSettings):null;
   const reportSettings=reportConfig(env,accounts),reportReader=reportSettings.enabled?createReportReader(reportSettings):null;
-  const walletIntel=walletIntelFactory({config:walletIntelConfig(env)});
+  const walletSettings=walletIntelConfig(env),walletIntel=walletIntelFactory({config:walletSettings});
   const archive=archiveSettings.enabled||accounts.enabled&&archiveSettings.databaseUrl?
     archiveFactory(archiveSettings.databaseUrl,{streamId:archiveSettings.streamId}):null;
   const capture=archiveSettings.enabled?createArchiveCapture({archive,dataDir:config.dataDir||path.join(process.cwd(),"data"),logger}):null;
@@ -74,7 +74,8 @@ function start({env=process.env,logger=console,marketFactory=createMarket,wallet
       if(capture){
         logger.log("Permanent research archive enabled");
         provenance=await runtimeEvidence({env,marketScanMs:SCAN_MS,walletIntelEnabled:walletIntel.snapshot().enabled,
-          walletIntelScanMs:walletIntel.scanMs,paperAccountsEnabled:accounts.enabled,streamId:archiveSettings.streamId,
+          walletIntelScanMs:walletIntel.scanMs,walletIntelMinCreditsReserve:walletSettings.minCreditsReserve,
+          paperAccountsEnabled:accounts.enabled,streamId:archiveSettings.streamId,
           agentToolsEnabled:agentSettings.enabled,superagentReportEnabled:reportSettings.enabled});
         await record("runtime.started","runtime",provenance.payload,Date.now());
         logger.log("Research runtime provenance prepared for commit "+(provenance.reference.commit||"unavailable"));
