@@ -1,6 +1,10 @@
 const crypto=require("node:crypto");
 
-function canonical(value){return JSON.stringify(value,Object.keys(value).sort());}
+function canonical(value) {
+  if(value===null||typeof value!=="object")return JSON.stringify(value);
+  if(Array.isArray(value))return "["+value.map(canonical).join(",")+"]";
+  return "{"+Object.keys(value).sort().map(key=>JSON.stringify(key)+":"+canonical(value[key])).join(",")+"}";
+}
 function signature(intent){return crypto.createHash("sha256").update(canonical(intent)).digest("hex");}
 
 function reject(reason,message){return {ok:false,reason,message};}
