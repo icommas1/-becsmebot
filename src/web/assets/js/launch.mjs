@@ -5,6 +5,10 @@ try {
   const markup=await response.text();
   document.body.dataset.view="radar";
   document.body.innerHTML=markup;
+  const home=document.createElement("a");
+  home.href="/home";home.textContent="BECS Home";
+  home.style.cssText="display:inline-flex;align-items:center;min-height:44px;padding:0 12px;flex-shrink:0;color:inherit;white-space:nowrap";
+  document.querySelector(".view-nav")?.prepend(home);
   const sourceLink=document.createElement("a");
   sourceLink.href="/assets/sources.html";
   sourceLink.textContent="Sources & tools";

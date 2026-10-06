@@ -1,0 +1,78 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#0c1110">
+  <title>BECS · Home</title>
+  <link rel="icon" type="image/jpeg" href="/assets/becs-logo.jpg">
+  <link rel="apple-touch-icon" href="/assets/becs-logo.jpg">
+  <link rel="stylesheet" href="/assets/home.css">
+</head>
+<body>
+  <a class="skip" href="#main">Skip to main content</a>
+  <div class="shell">
+    <header class="topbar">
+      <a class="brand" href="/home" aria-label="BECS Home">BECS<span>HOME</span></a>
+      <a class="terminal-link" href="/terminal">Open terminal <span aria-hidden="true">↗</span></a>
+    </header>
+    <main id="main">
+      <section class="intro" aria-labelledby="page-title">
+        <p class="eyebrow">YOUR BOT, WITHOUT THE CLUTTER</p>
+        <h1 id="page-title">One place to check in.</h1>
+        <p class="lede">See what happened, what needs attention, and where to go next.</p>
+      </section>
+      <div class="workspace">
+        <section class="assistant" aria-labelledby="assistant-title">
+          <div class="section-heading"><h2 id="assistant-title">Ask BECS</h2><span class="mode">Guided answers</span></div>
+          <p class="helper">Status and recorded activity. No AI model is connected to this page.</p>
+          <section class="answer" aria-labelledby="answer-title" aria-live="polite" aria-atomic="true" role="status">
+            <p class="eyebrow" id="answer-label">BECS / STATUS</p>
+            <h3 id="answer-title">Checking BecsBot…</h3>
+            <p id="answer-text">Reading existing service status. No market scan or AI request is started.</p>
+            <p id="answer-source" class="micro"></p>
+          </section>
+          <div class="quick-questions" aria-label="Suggested questions">
+            <button type="button" data-intent="status">What’s happening?</button>
+            <button type="button" data-intent="attention">What needs attention?</button>
+            <button type="button" data-intent="activity">Show recorded activity</button>
+          </div>
+          <form id="question-form">
+            <label for="question">Or ask in your own words</label>
+            <div class="composer"><input id="question" name="question" type="text" maxlength="200" autocomplete="off" placeholder="How is the bot doing?" aria-describedby="question-hint"><button id="ask" type="submit" disabled>Ask <span aria-hidden="true">↑</span></button></div>
+            <p id="question-hint" class="micro">Matched on this device. Don’t enter keys, seed phrases or other secrets.</p>
+          </form>
+          <section id="activity-panel" class="activity" hidden aria-labelledby="activity-title">
+            <h3 id="activity-title">Recent server-paper events</h3>
+            <p class="micro">Up to five events, newest sequence first—not complete history, profit, or a live wallet.</p>
+            <ol id="activity-list"></ol>
+            <p id="activity-note" class="micro"></p>
+          </section>
+          <a id="sign-in" class="action-link" href="/api/auth/github" hidden>Sign in with your BecsBot GitHub account <span aria-hidden="true">↗</span></a>
+          <p id="auth-hint" class="micro" hidden>Existing sign-in returns to the terminal. Choose BECS Home there to come back.</p>
+        </section>
+        <aside class="sidebar" aria-label="BecsBot status and details">
+          <section class="status-card" aria-labelledby="status-title">
+            <div class="section-heading"><h2 id="status-title">At a glance</h2><span id="connection" class="badge">Checking</span></div>
+            <dl>
+              <div><dt>Live execution</dt><dd id="execution">Unverified</dd></div>
+              <div><dt>Last market scan</dt><dd id="scan-time">Not checked</dd></div>
+              <div><dt>Scan freshness</dt><dd id="freshness">Unverified</dd></div>
+              <div><dt>Server paper account</dt><dd id="paper-state">Not checked</dd></div>
+              <div><dt>Outcome report</dt><dd id="report-state">Not checked</dd></div>
+            </dl>
+            <p id="checked-at" class="micro">No current read yet.</p>
+            <button id="refresh" type="button" class="refresh">Refresh status <span aria-hidden="true">↻</span></button>
+            <p id="request-note" class="micro" role="status">No background polling.</p>
+          </section>
+          <section class="usage-card" aria-labelledby="usage-title"><h2 id="usage-title">Usage stays explicit.</h2><p>This page makes no AI or provider calls. Existing server scans and hosting are separate.</p><button id="usage" type="button" class="text-button">What uses credits?</button></section>
+          <details class="details"><summary>More detail, only when needed</summary><nav aria-label="Advanced BecsBot views"><a href="/terminal">Radar, Signals &amp; paper account <span aria-hidden="true">↗</span></a><a href="/superagent">Recorded outcome report <span aria-hidden="true">↗</span></a><a href="/memory">Memory evidence <span aria-hidden="true">↗</span></a></nav><p id="version" class="micro">Source version unverified.</p></details>
+        </aside>
+      </div>
+      <noscript><p class="noscript">JavaScript is needed to check status. No private data is included in this page. Use the existing terminal link above.</p></noscript>
+    </main>
+    <footer><span>BECS · One workspace.</span><span>Read-only home. No orders or setting changes.</span></footer>
+  </div>
+  <script type="module" src="/assets/js/home.mjs"></script>
+</body>
+</html>
