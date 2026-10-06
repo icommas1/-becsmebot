@@ -23,13 +23,13 @@ async function githubIdentity(config,code,verifier) {
   if(!Number.isSafeInteger(user.id)||typeof user.login!=="string"||!user.login)throw Error("GitHub identity unavailable");
   return {id:String(user.id),login:user.login}; // OAuth token is neither stored nor sent to the browser.
 }
-function mountPaperRoutes(app,{config,store,market,archive=null,identity=githubIdentity,agentTools=null}) {
+function mountPaperRoutes(app,{config,store,market,archive=null,identity=githubIdentity,agentTools=null,liveRouting=null}) {
   app.get("/api/paper/capabilities",(_req,res)=>res.json({enabled:!!config.enabled}));
   if(!config.enabled)return;
   const service=createPaperService({store,market}),owner="github:"+config.ownerId;
   let hits=[],active=0,memoryReads=0;
   function limit(_req,res,next){const now=Date.now();hits=hits.filter(at=>at>now-60000);if(hits.length>=120){res.set("Retry-After","60");return res.status(429).json({error:"Paper requests busy. Try again shortly."});}hits.push(now);next();}
-  app.use(["/api/auth","/api/paper/account","/api/paper/commands","/api/paper/events","/api/paper/proofs","/api/paper/verify","/api/research","/api/memory","/api/agent"],limit);
+  app.use(["/api/auth","/api/paper/account","/api/paper/commands","/api/paper/events","/api/paper/proofs","/api/paper/verify","/api/research","/api/memory","/api/agent","/api/live/route-preview"],limit);
   const safe=(fn,unavailable="Server paper account temporarily unavailable. Retry the same action.")=>async(req,res)=>{try{await fn(req,res);}catch(error){res.status([400,401,403,409].includes(error.status)?error.status:503).json({error:[400,401,403,409].includes(error.status)?error.message:unavailable});}};
   async function authenticated(req,res){const user=await store.session(cookie(req,SESSION));if(user!==owner){res.status(401).json({error:"Sign in to your server paper account."});return null;}return user;}
   function sameOrigin(req,res){if(req.get("Origin")!==config.origin||req.get("Sec-Fetch-Site")==="cross-site"){res.status(403).json({error:"Same-origin request required."});return false;}return true;}
@@ -62,6 +62,23 @@ function mountPaperRoutes(app,{config,store,market,archive=null,identity=githubI
   }));
   app.post("/api/auth/logout",safe(async(req,res)=>{if(!sameOrigin(req,res))return;await store.logout(cookie(req,SESSION));res.clearCookie(SESSION,cookieOptions);res.json({ok:true});}));
   app.get("/api/paper/account",safe(async(req,res)=>{const user=await authenticated(req,res);if(user)res.json(await store.read(user));}));
+  app.post("/api/live/route-preview",safe(async(req,res)=>{
+    if(!sameOrigin(req,res))return;
+    if(!await authenticated(req,res))return;
+    if(!liveRouting?.config?.walletPublicKey||!liveRouting?.transport)return res.status(503).json({error:"Live routing preview is not configured."});
+    const body=req.body||{},mint=/^[1-9A-HJ-NP-Za-km-z]{32,44}$/;
+    if(!mint.test(body.inputMint||"")||!mint.test(body.outputMint||"")||body.inputMint===body.outputMint||
+      !/^\\d+$/.test(String(body.inputAmount||""))||BigInt(body.inputAmount)<1n||BigInt(body.inputAmount)>1000000000000000n)
+      return res.status(400).json({error:"Invalid route preview request."});
+    const slippageBps=body.slippageBps==null?Math.min(100,liveRouting.config.maxSlippageBps):Number(body.slippageBps);
+    if(!Number.isInteger(slippageBps)||slippageBps<1||slippageBps>liveRouting.config.maxSlippageBps)
+      return res.status(400).json({error:"Invalid route preview slippage."});
+    const order=await liveRouting.transport.order(null,{inputMint:body.inputMint,outputMint:body.outputMint,
+      inputAmount:String(body.inputAmount),walletPublicKey:liveRouting.config.walletPublicKey,slippageBps});
+    // Never return Jupiter's assembled transaction or execution request ID from preview.
+    const {transaction:_,requestId:__,...preview}=order;
+    res.json({ok:true,executionEnabled:false,walletPublicKey:liveRouting.config.walletPublicKey,slippageBps,route:preview});
+  },"Live routing preview temporarily unavailable."));
   app.get(['/api/memory/coverage','/api/memory/coverage/export'],safe(async(req,res)=>{
     const user=await authenticated(req,res);if(!user)return;
     if(Object.keys(req.query).length)return res.status(400).json({error:'Coverage queries do not accept caller-supplied scope.'});
