@@ -21,6 +21,7 @@ function createApp(market, paperAccounts={config:{enabled:false}}, walletIntel={
     "X-Frame-Options":"DENY"
   });next();});
   app.get(["/","/terminal"],(_req,res)=>res.sendFile(path.join(__dirname,"../web/dashboard.html")));
+  app.get("/home",(_req,res)=>res.sendFile(path.join(__dirname,"../web/home.html")));
   app.get("/superagent",(_req,res)=>res.sendFile(path.join(__dirname,"../web/superagent.html")));
   app.get("/memory",(_req,res)=>res.sendFile(path.join(__dirname,"../web/memory.html")));
   app.get("/assets/js/memory-config.mjs",(_req,res)=>res.type("text/javascript").send(
