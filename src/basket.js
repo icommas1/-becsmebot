@@ -10,6 +10,8 @@ const {createArchiveCapture,disabledStatus}=require("./archive/capture");
 const path=require("node:path");
 const {runtimeEvidence}=require("./archive/runtime-evidence");
 const {reportConfig}=require("./superagent/config");
+const {liveConfig}=require("./live/config");
+const {createJupiterLiveTransport}=require("./live/jupiter");
 const {createReportReader}=require("./superagent/report");
 
 function readConfig(env=process.env) {
@@ -25,6 +27,8 @@ function start({env=process.env,logger=console,marketFactory=createMarket,wallet
   const config=readConfig(env),archiveSettings=archiveConfig(env);
   const market=marketFactory({apiKey:config.apiKey,dataDir:config.dataDir,captureResearch:archiveSettings.enabled});
   const accounts=paperConfig(env),store=accounts.enabled?createStore(accounts.databaseUrl):null;
+  const liveSettings=liveConfig(env);
+  const liveRouting=liveSettings.walletPublicKey?{config:liveSettings,transport:createJupiterLiveTransport({apiKey:config.apiKey})}:null;
   const agentSettings=require("./agent/config").agentConfig(env,accounts);
   const agentTools=agentSettings.enabled?require("./agent/store").createAgentRegistry(agentSettings):null;
   const reportSettings=reportConfig(env,accounts),reportReader=reportSettings.enabled?createReportReader(reportSettings):null;
@@ -68,7 +72,7 @@ function start({env=process.env,logger=console,marketFactory=createMarket,wallet
     return walletJob;
   }
   const release={commit:/^[0-9a-f]{40}$/i.test(env.RAILWAY_GIT_COMMIT_SHA||"")?env.RAILWAY_GIT_COMMIT_SHA.toLowerCase():null};
-  const server=createApp(market,{config:accounts,store,archive,agentTools,reportReader},walletIntel,archiveStatus,release).listen(config.port,"0.0.0.0",()=>{
+  const server=createApp(market,{config:accounts,store,archive,agentTools,reportReader,liveRouting},walletIntel,archiveStatus,release).listen(config.port,"0.0.0.0",()=>{
     logger.log("BecsBot public Jupiter paper terminal running on port "+server.address().port);
     runtimeJob=(async()=>{
       if(capture){

@@ -9,7 +9,8 @@ function createJupiterLiveTransport({apiKey,fetchImpl=fetch}={}) {
         inputMint:context.inputMint,
         outputMint:context.outputMint,
         amount:String(context.inputAmount),
-        taker:context.walletPublicKey
+        taker:context.walletPublicKey,
+        slippageBps:String(context.slippageBps)
       });
       const response=await fetchImpl(BASE+"/order?"+params,{headers,signal:AbortSignal.timeout(10000)});
       const data=await response.json().catch(()=>null);
