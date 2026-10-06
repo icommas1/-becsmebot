@@ -1,4 +1,4 @@
-# BecsBot Jupiter terminal
+# BecsBotterminal
 
 Public full-page markets and paper trading dashboard. Optional private GitHub sign-in for a separate server paper account. Real transaction routes return 410; the runtime does not load a wallet signer or private key.
 
