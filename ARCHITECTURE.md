@@ -1,3 +1,11 @@
+# Signal-only production transition — 2026-10-07
+
+Production now serves `/api/signals/sources`, `/api/signals?source=<id>`, `/api/basket`, `/api/history` and a minimal feed interface. Source membership, provider labels, timestamp freshness and existing signal arithmetic are preserved. Jupiter/DexScreener feeds are discovery, not search-popularity rankings. Old paper, research, memory and execution services are not started; old feature routes and old assets return 410. BecsSuperAgent is the market browser, analyst and wallet-swap interface.
+
+No SQL migrations, volume removal, credential changes or browser-storage clearing occurs. On the first start the existing chart file is copied once to `DATA_DIR/market-history.before-signal-feed.json` before bounded operational history continues. Databases, pending archive spool, wallets and backups remain intact. Legacy source and offline storage/recovery tools below remain available in the repository; the legacy HTTP app is not used by production.
+
+---
+
 # Architecture
 
 The separate BecsSuperAgent recorded-evidence observer is documented in

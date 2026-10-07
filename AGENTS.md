@@ -1,3 +1,7 @@
+# Current production scope (owner decision, 2026-10-07)
+
+BecsBot production is signal-only. `src/basket.js` starts `src/signals/app.js`. Legacy paper/research/UI modules are retained offline for data recovery and contract regressions, never served by production. Do not delete saved history, databases, wallet data or backups. Keep BecsSuperAgent market browser and analyst; wallet-confirmed swaps belong there. Prior contributor text below describes the retained implementation, not permission to reactivate it.
+
 # BecsBot contributor instructions
 
 BecsBot is a public Jupiter market-observation and paper-trading terminal with browser-local wallets and an optional private server paper account. Its purpose is to display provider data faithfully and make simulated trading behavior inspectable; it is not a wallet, custody service, signal oracle or live execution engine.

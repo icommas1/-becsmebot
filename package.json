@@ -10,7 +10,7 @@
     "test:unit": "node --test test/unit/*.test.js",
     "test:integration": "node --test test/integration/*.test.js",
     "test:mobile": "playwright test",
-    "test:smoke": "node scripts/smoke.js",
+    "test:smoke": "node scripts/signal-smoke.js",
     "verify:storage": "node scripts/verify-storage.js",
     "check": "node scripts/check.js",
     "verify": "npm run check && npm test && npm run test:mobile"

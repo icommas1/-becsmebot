@@ -41,21 +41,16 @@ test('fresh metadata cannot refresh a cached older price',async()=>{
  const market=createMarket({dexRequest:async()=>[],request:async url=>url.startsWith('/price')?{[SOL]:{usdPrice:200}}:url.includes('toptrending/5m')?[{id:SOL,symbol:'SOL',usdPrice:200}]:[{id:SOL,symbol:'SOL'}]});
  await market.scan();const s=market.snapshot();assert.equal(s.radar[0].priceFeed,'trending:5m');assert.equal(s.radar[0].observedAt,Date.parse(s.feeds['trending:5m'].at));
 });
-test('public APIs reject signing, invalid inputs and excessive requests',async()=>{
- const app=createApp({snapshot:()=>createMarket({dexRequest:async()=>[],request:async()=>[]}).snapshot(),search:async()=>[],paperPrices:async mints=>Object.fromEntries(mints.map(m=>[m,null]))});
- const server=app.listen(0,'127.0.0.1');await new Promise(r=>server.once('listening',r));const base='http://127.0.0.1:'+server.address().port;
+test('production APIs expose only signal data and block retired features', async () => {
+ const market=createMarket({dexRequest:async()=>[],request:async()=>[]});
+ const server=createApp(market).listen(0,'127.0.0.1');await new Promise(r=>server.once('listening',r));
+ const base='http://127.0.0.1:'+server.address().port;
  try {
- const basket=await fetch(base+'/api/basket');assert.equal(basket.status,200);
- assert.equal(basket.headers.get('x-content-type-options'),'nosniff');
- assert.equal(basket.headers.get('x-frame-options'),'DENY');
- assert.match(basket.headers.get('content-security-policy'),/frame-ancestors 'none'/);
- assert.equal(basket.headers.get('access-control-allow-origin'),null);
- assert.equal((await fetch(base+'/api/auth/status')).status,404);
- assert.equal((await fetch(base+'/api/sell/quote',{method:'POST',headers:{'x-dashboard-key':'anything'}})).status,410);
- assert.equal((await fetch(base+'/api/search?q=x')).status,400);
- assert.equal((await fetch(base+'/api/paper/prices',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({mints:['invalid']})})).status,400);
- assert.equal((await fetch(base+'/api/paper/prices',{method:'POST',headers:{'Content-Type':'application/json'},body:'{'})).status,400);
- let response;for(let i=0;i<31;i++)response=await fetch(base+'/api/search?q=SOL');assert.equal(response.status,429);
+  const basket=await fetch(base+'/api/basket');assert.equal(basket.status,200);
+  assert.equal(basket.headers.get('x-content-type-options'),'nosniff');
+  assert.match(basket.headers.get('content-security-policy'),/frame-ancestors 'none'/);
+  assert.equal(basket.headers.get('access-control-allow-origin'),null);
+  for(const route of ['/api/auth/status','/api/search?q=SOL','/api/memory','/assets/js/dashboard.mjs'])assert.equal((await fetch(base+route)).status,410);
+  for(const route of ['/api/sell/quote','/api/paper/prices','/api/paper/commands'])assert.equal((await fetch(base+route,{method:'POST'})).status,410);
  }finally{await new Promise(r=>server.close(r));}
 });
-

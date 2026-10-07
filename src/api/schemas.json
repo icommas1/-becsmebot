@@ -3038,6 +3038,340 @@
           "const": "not evaluated"
         }
       }
+    },
+    "signalSource": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "enum": [
+            "recent",
+            "trending:5m",
+            "trending:1h",
+            "trending:6h",
+            "trending:24h",
+            "traded:5m",
+            "traded:1h",
+            "traded:6h",
+            "traded:24h",
+            "organic:5m",
+            "organic:1h",
+            "organic:6h",
+            "organic:24h",
+            "dex:profiles",
+            "dex:updates",
+            "dex:takeovers",
+            "dex:ads",
+            "dex:boosts",
+            "dex:top"
+          ]
+        },
+        "name": {
+          "type": "string",
+          "maxLength": 100
+        },
+        "provider": {
+          "enum": [
+            "Jupiter",
+            "DexScreener"
+          ]
+        },
+        "paidPromotion": {
+          "type": "boolean"
+        },
+        "at": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "format": "date-time"
+        },
+        "count": {
+          "type": [
+            "integer",
+            "null"
+          ],
+          "minimum": 0
+        },
+        "fresh": {
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "id",
+        "name",
+        "provider",
+        "paidPromotion",
+        "at",
+        "count",
+        "fresh"
+      ],
+      "additionalProperties": false
+    },
+    "sourceSignalRow": {
+      "type": "object",
+      "properties": {
+        "mint": {
+          "type": "string",
+          "format": "solana-mint"
+        },
+        "symbol": {
+          "type": "string",
+          "maxLength": 32
+        },
+        "name": {
+          "type": "string",
+          "maxLength": 100
+        },
+        "feeds": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "maxItems": 20
+        },
+        "ranks": {
+          "type": "object",
+          "additionalProperties": {
+            "type": "integer",
+            "minimum": 1
+          }
+        },
+        "priceUsd": {
+          "type": [
+            "number",
+            "null"
+          ],
+          "exclusiveMinimum": 0
+        },
+        "marketCap": {
+          "type": [
+            "number",
+            "null"
+          ],
+          "exclusiveMinimum": 0
+        },
+        "liquidityUsd": {
+          "type": [
+            "number",
+            "null"
+          ],
+          "exclusiveMinimum": 0
+        },
+        "holders": {
+          "type": [
+            "number",
+            "null"
+          ],
+          "exclusiveMinimum": 0
+        },
+        "organicScore": {
+          "type": [
+            "number",
+            "null"
+          ],
+          "minimum": 0,
+          "maximum": 100
+        },
+        "createdAt": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "format": "date-time"
+        },
+        "launchpad": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "isVerified": {
+          "type": "boolean"
+        },
+        "isSus": {
+          "type": "boolean"
+        },
+        "priceFeed": {
+          "type": "string"
+        },
+        "observedAt": {
+          "type": [
+            "integer",
+            "null"
+          ],
+          "minimum": 0
+        },
+        "change5m": {
+          "type": [
+            "number",
+            "null"
+          ]
+        },
+        "change1h": {
+          "type": [
+            "number",
+            "null"
+          ]
+        },
+        "change6h": {
+          "type": [
+            "number",
+            "null"
+          ]
+        },
+        "change24h": {
+          "type": [
+            "number",
+            "null"
+          ]
+        },
+        "volume5m": {
+          "type": [
+            "number",
+            "null"
+          ],
+          "minimum": 0
+        },
+        "volume1h": {
+          "type": [
+            "number",
+            "null"
+          ],
+          "minimum": 0
+        },
+        "volume6h": {
+          "type": [
+            "number",
+            "null"
+          ],
+          "minimum": 0
+        },
+        "volume24h": {
+          "type": [
+            "number",
+            "null"
+          ],
+          "minimum": 0
+        },
+        "source": {
+          "enum": [
+            "recent",
+            "trending:5m",
+            "trending:1h",
+            "trending:6h",
+            "trending:24h",
+            "traded:5m",
+            "traded:1h",
+            "traded:6h",
+            "traded:24h",
+            "organic:5m",
+            "organic:1h",
+            "organic:6h",
+            "organic:24h",
+            "dex:profiles",
+            "dex:updates",
+            "dex:takeovers",
+            "dex:ads",
+            "dex:boosts",
+            "dex:top"
+          ]
+        },
+        "demo": {
+          "const": false
+        },
+        "fresh": {
+          "type": "boolean"
+        },
+        "signal": {
+          "oneOf": [
+            {
+              "type": "null"
+            },
+            {
+              "type": "object",
+              "properties": {
+                "multiple": {
+                  "type": "number",
+                  "exclusiveMinimum": 0
+                },
+                "peakMultiple": {
+                  "type": "number",
+                  "exclusiveMinimum": 0
+                },
+                "firstSeenAt": {
+                  "type": "integer",
+                  "minimum": 0
+                },
+                "observedAt": {
+                  "type": "integer",
+                  "minimum": 0
+                }
+              },
+              "required": [
+                "multiple",
+                "peakMultiple",
+                "firstSeenAt",
+                "observedAt"
+              ],
+              "additionalProperties": false
+            }
+          ]
+        }
+      },
+      "required": [
+        "mint",
+        "symbol",
+        "name",
+        "feeds",
+        "ranks",
+        "priceUsd",
+        "marketCap",
+        "liquidityUsd",
+        "holders",
+        "organicScore",
+        "createdAt",
+        "launchpad",
+        "isVerified",
+        "isSus",
+        "observedAt",
+        "source",
+        "demo",
+        "fresh",
+        "signal"
+      ],
+      "additionalProperties": true
+    },
+    "sourceSignalResponse": {
+      "type": "object",
+      "properties": {
+        "schemaVersion": {
+          "const": 1
+        },
+        "source": {
+          "$ref": "#/definitions/signalSource"
+        },
+        "lastScanAt": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "format": "date-time"
+        },
+        "rows": {
+          "type": "array",
+          "maxItems": 1000,
+          "items": {
+            "$ref": "#/definitions/sourceSignalRow"
+          }
+        }
+      },
+      "required": [
+        "schemaVersion",
+        "source",
+        "lastScanAt",
+        "rows"
+      ],
+      "additionalProperties": false
     }
   }
 }
