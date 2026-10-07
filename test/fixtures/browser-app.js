@@ -3,7 +3,8 @@ const {createApp}=require("../../src/api/app");
 const {fixtureMarket}=require("./market");
 // Each browser context starts with its own actual fixture scan. Suite duration
 // must not age every later test's marks; existing marks are never relabeled.
-async function browserFixtureApp({marketFactory=fixtureMarket,maxContexts=256}={}){
+// Keep the cap above the full multi-browser suite while bounding fixture memory.
+async function browserFixtureApp({marketFactory=fixtureMarket,maxContexts=512}={}){
   const shared=createApp(await marketFactory()),contexts=new Map(),app=express();app.disable("x-powered-by");
   app.use(async(req,res,next)=>{
     if(req.path==="/health")return shared(req,res,next);
