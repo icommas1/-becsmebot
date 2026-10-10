@@ -230,7 +230,7 @@ def jobs(status:str='all',limit:int=100):
     with connection() as db:
         if status=='all': data=db.execute('SELECT * FROM jobs ORDER BY id DESC LIMIT ?',(limit,)).fetchall()
         else:data=db.execute('SELECT * FROM jobs WHERE status=? ORDER BY id DESC LIMIT ?',(status,limit)).fetchall()
-    return {'jobs':[dict(row) for row in data]}
+    return {'jobs':[{**dict(row),'message_preview':''} for row in data]}
 
 @app.post('/api/jobs/{job_id}/retry')
 def retry_job(job_id:int):
@@ -245,7 +245,7 @@ def retry_job(job_id:int):
 @app.get('/api/reviews')
 def reviews():
     with connection() as db:data=db.execute("SELECT * FROM reviews WHERE status='pending' ORDER BY id DESC LIMIT 100").fetchall()
-    return {'reviews':[dict(x) for x in data]}
+    return {'reviews':[{**dict(x),'text':''} for x in data]}
 
 @app.post('/api/reviews/{review_id}')
 def decide_review(review_id:int,payload:ReviewAction):
