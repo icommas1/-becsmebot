@@ -1,4 +1,5 @@
 """Bot destination regressions. All Telegram operations use mocks; no live messages."""
+import os
 import tempfile
 import unittest
 from pathlib import Path
@@ -34,8 +35,8 @@ class FakeClient:
         self.blocked = False
         self.outsider = None
         self.requests = []
-        self.send_message = AsyncMock()
-        self.forward_messages = AsyncMock()
+        self.send_message = AsyncMock(return_value=SimpleNamespace(id=123))
+        self.forward_messages = AsyncMock(return_value=SimpleNamespace(id=124))
 
     async def is_user_authorized(self):
         return self.authorized
@@ -75,6 +76,7 @@ class BotDestinationTests(unittest.IsolatedAsyncioTestCase):
         self.client = FakeClient([Dialog(self.source, 'Signals'), Dialog(self.bot, 'Example Bot'),
                                   Dialog(self.person, 'Example Person')])
         self.manager = PersonalTelegram()
+        self.manager._identity_verified = True
         self.manager.ensure_client = AsyncMock(return_value=self.client)
 
     async def test_bot_username_resolves_as_destination(self):
@@ -199,7 +201,8 @@ class BotDestinationTests(unittest.IsolatedAsyncioTestCase):
         # ASGITransport does not start the production lifespan or delivery worker.
         with tempfile.TemporaryDirectory() as temp, \
              patch.object(database, 'DB_PATH', Path(temp) / 'test.sqlite'), \
-             patch('app.main.manager', self.manager):
+             patch('app.main.manager', self.manager), \
+             patch.dict(os.environ, {'BECS_DEV_AUTH_BYPASS':'true'}):
             database.init_db()
             transport = httpx.ASGITransport(app=app, client=('testclient', 123))
             async with httpx.AsyncClient(transport=transport, base_url='http://testserver') as api:
@@ -226,7 +229,8 @@ class BotDestinationTests(unittest.IsolatedAsyncioTestCase):
         self.client.blocked = True
         with tempfile.TemporaryDirectory() as temp, \
              patch.object(database, 'DB_PATH', Path(temp) / 'test.sqlite'), \
-             patch('app.main.manager', self.manager):
+             patch('app.main.manager', self.manager), \
+             patch.dict(os.environ, {'BECS_DEV_AUTH_BYPASS':'true'}):
             database.init_db()
             transport = httpx.ASGITransport(app=app, client=('testclient', 123))
             async with httpx.AsyncClient(transport=transport, base_url='http://testserver') as api:
@@ -240,3 +244,4 @@ class BotDestinationTests(unittest.IsolatedAsyncioTestCase):
 
 if __name__ == '__main__':
     unittest.main()
+

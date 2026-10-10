@@ -6,6 +6,7 @@ import time
 from .db import connection, event, get_setting, set_setting
 from .engine import decide,dedup_fingerprint
 from .ai import evaluate_text
+from .accounts import account_scope
 
 logger=logging.getLogger('becs.service')
 
@@ -32,6 +33,11 @@ def enqueue(db,route,src,dest,msg_id,text,fp):
 
 
 async def ingest_message(source_id: str, message_id: int, text: str, service):
+    with account_scope(service.account_id):
+        return await _ingest_message(source_id, message_id, text, service)
+
+
+async def _ingest_message(source_id: str, message_id: int, text: str, service):
     """Invoked only by connected Telegram event handler. Does not run on demo messages."""
     if get_setting('paused','false')=='true': return
     routes=[r for r in get_routes() if r['enabled'] and source_id in r['sources']]
@@ -79,6 +85,11 @@ async def background_ai(text, route_id,src,dest):
 
 
 async def delivery_worker(manager, stop: asyncio.Event):
+    with account_scope(manager.account_id):
+        await _delivery_worker(manager, stop)
+
+
+async def _delivery_worker(manager, stop: asyncio.Event):
     """Sequential send loop. One outbound send at a time, honoring Telegram flood waits."""
     while not stop.is_set():
         try:
@@ -102,14 +113,20 @@ async def delivery_worker(manager, stop: asyncio.Event):
             if not job:
                 await asyncio.sleep(0.25);continue
             try:
-                await manager.send(job,job['delivery_style'])
+                receipt = await manager.send(job,job['delivery_style'])
+                if not isinstance(receipt, int) or isinstance(receipt, bool) or receipt <= 0:
+                    from .telegram_client import DeliveryReceiptError
+                    raise DeliveryReceiptError('Telegram did not return a delivery receipt')
                 with connection() as db:
-                    db.execute("UPDATE jobs SET status='sent',sent_at=?,error='' WHERE id=?",(time.time(),job['id']))
+                    db.execute("UPDATE jobs SET status='sent',sent_at=?,telegram_message_id=?,error='' WHERE id=?",(time.time(),receipt,job['id']))
                     event(db,'forwarded',f"Delivered → {job['destination_id']}",job['route_id'],job['source_id'],job['destination_id'])
             except Exception as ex:
+                from .telegram_client import DeliveryReceiptError
                 attempts=job['attempts']+1
                 seconds=getattr(ex,'seconds',None)
-                if isinstance(seconds,int) and seconds>0:
+                if isinstance(ex,DeliveryReceiptError):
+                    delay=0;label='Missing Telegram receipt; verify destination before retry';status='failed'
+                elif isinstance(seconds,int) and seconds>0:
                     delay=min(seconds+1,86400);label=f'Telegram cooldown: {seconds}s';status='queued'
                     if 'FloodWait' in type(ex).__name__:
                         set_setting('account_cooldown_until',str(time.time()+delay))
@@ -127,3 +144,4 @@ async def delivery_worker(manager, stop: asyncio.Event):
         except Exception:
             logger.exception('Delivery worker unexpected error')
             await asyncio.sleep(2)
+

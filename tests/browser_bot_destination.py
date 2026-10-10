@@ -25,10 +25,12 @@ def respond(route):
         # Never load Telegram SDK or contact any external service during tests.
         route.abort()
         return
-    path = url.path
+    path = url.path.replace("/api/accounts/primary/", "/api/")
     method = request.method
     if path.startswith('/api/'):
-        if path == '/api/overview':
+        if path == '/api/auth/session':
+            data = {'token':'mock-browser-token','account_id':'primary','expires_at':None}
+        elif path == '/api/overview':
             data = OVERVIEW
         elif path == '/api/routes' and method == 'GET':
             data = {'routes':saved}
@@ -113,3 +115,4 @@ with sync_playwright() as p:
     assert not errors, errors
     browser.close()
 print('PASS: mobile search, bot selection, deselection, username resolution, create and edit; mocked API only')
+

@@ -1,0 +1,35 @@
+name: Becs multi-account isolation and delivery
+on:
+  push:
+    branches: [feat/becs-multi-account-20261010, becs-forwarding-v1]
+  pull_request:
+    branches: [becs-forwarding-v1]
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - run: pip install -r requirements.txt playwright
+      - name: Backend isolation and forwarding pipeline
+        run: |
+          python -m compileall -q app tests
+          python -m unittest discover -s tests -p 'test_*.py' -v
+      - name: Browser syntax
+        run: |
+          node --check static/app.js
+          node --check static/sw.js
+      - run: python -m playwright install --with-deps chromium
+      - name: Mobile bot destination regression
+        run: python tests/browser_bot_destination.py
+      - name: Mobile and desktop account isolation
+        run: python tests/browser_multi_account.py

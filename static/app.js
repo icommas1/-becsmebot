@@ -2,6 +2,14 @@
 (() => {
 'use strict';
 const tg = window.Telegram?.WebApp;
+const accountId = new URLSearchParams(location.search).get('account') || 'primary';
+const accountNames = {'primary':'Account 1', 'account-2':'Account 2', 'account-3':'Account 3'};
+const accountName = accountNames[accountId] || 'Unknown account';
+const keyName = 'becs_key:' + accountId;
+// Migrate only the legacy primary key; other accounts never reuse it.
+if(accountId==='primary' && !localStorage.getItem(keyName) && sessionStorage.getItem('becs_key')){
+ localStorage.setItem(keyName,sessionStorage.getItem('becs_key'));sessionStorage.removeItem('becs_key');
+}
 try { tg?.ready(); tg?.expand(); tg?.setHeaderColor('#0b1320'); tg?.setBackgroundColor('#090f1b'); } catch (_) {}
 if ('serviceWorker' in navigator && location.protocol === 'https:') navigator.serviceWorker.register('/assets/sw.js').catch(()=>{});
 
@@ -51,10 +59,10 @@ const dom = id => document.getElementById(id);
 
 async function request(path,options={}) {
  const headers={'Accept':'application/json',...(options.body?{'Content-Type':'application/json'}:{}),...(options.headers||{})};
- const auth=sessionStorage.getItem('becs_key'); if(auth)headers['X-Becs-Key']=auth;
+ const auth=localStorage.getItem(keyName); if(auth && !headers['X-Becs-Key'])headers['X-Becs-Key']=auth;
  if(tg?.initData)headers['X-Telegram-Init-Data']=tg.initData;
  let response;
- try { response=await fetch('/api'+path,{...options,headers,cache:'no-store'}); }
+ try { response=await fetch('/api/accounts/'+encodeURIComponent(accountId)+path,{...options,headers,cache:'no-store'}); }
  catch {throw new Error('Becs server is unreachable. Start the FastAPI service and try again.');}
  const payload=await response.json().catch(()=>({detail:response.statusText}));
  if(!response.ok){const e=new Error(typeof payload.detail==='string'?payload.detail:JSON.stringify(payload.detail||'Request failed'));e.status=response.status;throw e;}
@@ -78,7 +86,8 @@ function renderNav(){
  dom('crumb').textContent=({home:'Overview',routes:'Routes',filters:'Regex Lab',queue:'Delivery Queue',inspector:'Message Inspector',more:'System Settings'})[state.page];
  const active=state.overview?.telegram?.authorized;
  dom('sideDot').classList.toggle('online',!!active);
- dom('sideConnection').textContent=active?'Personal account connected':'Telegram not connected';
+ dom('sideConnection').textContent=accountName+(active?' connected':' not connected');
+ dom('accountButton').innerHTML='<span class="account-avatar">'+safe(accountName.slice(-1))+'</span><span>'+safe(accountName)+'</span>'; 
 }
 function pageHead(eyebrow,title,desc,action=''){
  return `<div class="page-head"><div><p class="eyebrow">${eyebrow}</p><h1>${title}</h1><p class="subheading">${desc}</p></div>${action?`<div class="head-actions">${action}</div>`:''}</div>`;
@@ -169,19 +178,22 @@ function queuePage(){
  <div class="panel"><div class="panel-header"><h2>Delivery & review history</h2>${pill('ACCOUNT SEQUENTIAL')}</div>${tabHtml}${state.jobTab==='review'?(reviews||empty('shield','No pending reviews','AI-Gated messages requiring human review will appear here.')):(jobsHtml||empty('queue','No jobs in this view','Jobs appear after Telegram receives qualifying messages through an enabled route.'))}</div>
  <div class="notice" style="margin-top:15px">${icon('shield')} Messages are delivered one at a time. Telegram-imposed cooldowns are respected. This page contains actual locally stored events, not sample forwards.</div>`;
 }
+function accountPanel(){
+ return panel('Account access', `<div class="tag-list">${Object.entries(accountNames).map(([id,name])=>`<a class="button button-small" href="/?account=${id}" ${id===accountId?'aria-current="page"':''}>${safe(name)}</a>`).join('')}</div><p class="small-help">Each login opens only its own account. Switching reloads the page and clears displayed account data.</p><div class="tag-list"><button class="button button-small" data-action="lock-browser">Lock browser</button><button class="button button-small" data-action="reconnect">Reconnect saved Telegram session</button>${accountId==='primary'?'<button class="button button-small" data-action="account-invites">Get additional account access keys</button>':''}</div><div id="accountInvites"></div>`);
+}
 function morePage(){
  const o=state.overview||{}; const t=o.telegram||{};
- return `${pageHead('SYSTEM / PERSONAL EDITION','Account & Settings','Configure your single personal Telegram account, control bot, and optional AI provider.')}
+ return `${pageHead('SYSTEM / '+safe(accountName),'Account & Settings','This account has its own Telegram session, routes, queue, filters and history. Your login stays active until you lock this browser or access is revoked.')}${accountPanel()}
  <div class="dashboard-cols"><div style="display:flex;flex-direction:column;gap:17px"><section class="panel login-card"><div class="panel-header"><h2>Personal Telegram connection</h2>${pill(t.authorized?'Authorized':t.configured?'Not signed in':'Unconfigured',t.authorized?'success':'warn')}</div>
  <div class="notice">${icon('lock')} Login codes and two-step passwords must only be entered here over trusted HTTPS or on your local computer. Never provide them to a Telegram bot chat.</div>
  <div class="divider"></div>
  ${t.authorized?`<div class="notice good">Personal account authorized. Becs can load chats and listen for messages matching enabled routes.</div><p class="helper-line">${safe(t.detail||'Telegram session authorized')}</p><div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:17px"><button class="button" data-action="load-chats">${icon('refresh')} Load chats</button><button class="button button-danger" data-action="disconnect">${icon('logout')} Disconnect</button></div>`:
  `<div class="setup-steps"><span class="step">1</span> Obtain Telegram API ID and hash at my.telegram.org, then place them in your private server .env</div><div class="setup-steps"><span class="step">2</span> Enter your personal phone number and request an official Telegram login challenge.</div><div class="setup-steps"><span class="step">3</span> Enter the code here; complete two-step verification if required.</div><div class="field"><label>Phone number (international format)</label><input id="phone" autocomplete="tel" type="tel" placeholder="+1 555 000 0000"></div><button class="button button-primary" data-action="login-start" ${!t.configured?'disabled title="Server API ID/hash not configured"':''}>Send Telegram code</button><div id="authStage" class="hidden" style="margin-top:14px"><div class="field"><label>Telegram code</label><input id="telegramCode" autocomplete="one-time-code" placeholder="Login code"></div><button class="button" data-action="login-code">Verify code</button><div id="twoFactor" class="field hidden" style="margin-top:15px"><label>Telegram 2-step verification password</label><input id="telegramPassword" type="password" placeholder="Two-step password"><button class="button" data-action="login-password">Verify password</button></div></div>`}
  </section>${panel('Security model',`<div class="health-list"><div class="health-row">${icon('shield')}<div><div class="status-main">Authorized destinations only</div><div class="status-sub">Telegram permissions always apply</div></div></div><div class="health-row">${icon('lock')}<div><div class="status-main">Session stays on server</div><div class="status-sub">Never stored in browser local storage</div></div></div><div class="health-row">${icon('queue')}<div><div class="status-main">Account-aware queue</div><div class="status-sub">Sequential sends and flood-wait handling</div></div></div></div>`)}</div>
- <div style="display:flex;flex-direction:column;gap:17px">${panel('Service configuration',`<div class="health-list"><div class="health-row">${icon('bot')}<div><div class="status-main">Telegram control bot</div><div class="status-sub">Commands /start /status /pause /resume /routes</div></div><span class="right-flex">${pill(o.bot_configured?'Configured':'Needs .env',o.bot_configured?'success':'warn')}</span></div><div class="health-row">${icon('brain')}<div><div class="status-main">Optional Gemini AI gateway</div><div class="status-sub">External API only for selected route modes</div></div><span class="right-flex">${pill(o.ai_configured?'Configured':'Off',o.ai_configured?'success':'')}</span></div><div class="health-row">${icon('server')}<div><div class="status-main">FastAPI + SQLite backend</div><div class="status-sub">Local or self-hosted; no deployment requested</div></div><span class="right-flex">${pill('Running','success')}</span></div></div>`)}${panel('Telegram chats',state.chats.length?`<div style="max-height:290px;overflow-y:auto">${state.chats.map(c=>`<div class="route-brief"><span class="route-glyph">${icon(c.kind==='private'?'person':'document')}</span><div class="route-detail"><strong>${safe(c.title)}</strong><small>${safe(c.kind)} · ${safe(c.id)}</small></div><button class="button button-small" data-copy="${safe(c.id)}">Copy ID</button></div>`).join('')}</div>`:empty('person','No chats loaded','Sign in and press Load chats to see available source and destination identifiers.'),`<button class="small-link" data-action="load-chats">Load →</button>`)}</div></div>`;
+ <div style="display:flex;flex-direction:column;gap:17px">${panel('Service configuration',`<div class="health-list"><div class="health-row">${icon('bot')}<div><div class="status-main">Telegram control bot</div><div class="status-sub">Commands /start /status /pause /resume /routes</div></div><span class="right-flex">${pill(o.bot_configured?'Configured':'Needs .env',o.bot_configured?'success':'warn')}</span></div><div class="health-row">${icon('brain')}<div><div class="status-main">Optional Gemini AI gateway</div><div class="status-sub">External API only for selected route modes</div></div><span class="right-flex">${pill(o.ai_configured?'Configured':'Off',o.ai_configured?'success':'')}</span></div><div class="health-row">${icon('server')}<div><div class="status-main">FastAPI + SQLite backend</div><div class="status-sub">Separate data store for this account</div></div><span class="right-flex">${pill('Running','success')}</span></div></div>`)}${panel('Telegram chats',state.chats.length?`<div style="max-height:290px;overflow-y:auto">${state.chats.map(c=>`<div class="route-brief"><span class="route-glyph">${icon(c.kind==='private'?'person':'document')}</span><div class="route-detail"><strong>${safe(c.title)}</strong><small>${safe(c.kind)} · ${safe(c.id)}</small></div><button class="button button-small" data-copy="${safe(c.id)}">Copy ID</button></div>`).join('')}</div>`:empty('person','No chats loaded','Sign in and press Load chats to see available source and destination identifiers.'),`<button class="small-link" data-action="load-chats">Load →</button>`)}</div></div>`;
 }
 function gatePage(){
- return `<div class="page-head"><div><p class="eyebrow">SECURE ACCESS</p><h1>Becs access required</h1><p class="subheading">Open this inside your authorized Telegram Mini App, or enter your configured server access key.</p></div></div><section class="panel login-card"><div class="notice warn">${icon('lock')} ${safe(state.apiError||'Protected backend')}</div><div class="field" style="margin-top:20px"><label>BECS_ADMIN_TOKEN</label><input id="adminKey" type="password" autocomplete="off" placeholder="Enter your server access key"></div><button class="button button-primary" data-action="unlock">Unlock Becs</button><p class="small-help">Your key stays in this browser tab session only. Local development on 127.0.0.1 is permitted without a key.</p></section>`;
+ return `<div class="page-head"><div><p class="eyebrow">SECURE ACCESS</p><h1>Becs access required</h1><p class="subheading">Open this inside your authorized Telegram Mini App, or enter your configured server access key.</p></div></div><section class="panel login-card"><div class="notice warn">${icon('lock')} ${safe(state.apiError||'Protected backend')}</div><div class="field" style="margin-top:20px"><label>${safe(accountName)} access key</label><input id="adminKey" type="password" autocomplete="off" placeholder="Enter your server access key"></div><button class="button button-primary" data-action="unlock">Unlock Becs</button><p class="small-help">Access stays signed in on this browser with no automatic timeout. Use Lock browser in Settings to remove access from this device.</p></section>`;
 }
 function render(){renderNav();dom('mainView').innerHTML=state.apiError?gatePage():state.page==='home'?overviewPage():state.page==='routes'?routesPage():state.page==='filters'?filtersPage():state.page==='queue'?queuePage():state.page==='inspector'?inspectorPage():morePage();}
 
@@ -263,7 +275,10 @@ const actionMap={
  'login-start':(el)=>login('start',{phone:dom('phone').value},el),
  'login-code':(el)=>login('code',{code:dom('telegramCode').value},el),
  'login-password':(el)=>login('password',{password:dom('telegramPassword').value},el),
- 'unlock':async()=>{sessionStorage.setItem('becs_key',dom('adminKey').value);await reload();if(state.apiError)toast('Invalid access key or server configuration',true);}
+ 'unlock':async()=>{try{const result=await request('/auth/session',{method:'POST',headers:{'X-Becs-Key':dom('adminKey').value}});localStorage.setItem(keyName,result.token);await reload();}catch(e){toast(e.message,true);}},
+ 'lock-browser':()=>{localStorage.removeItem(keyName);sessionStorage.removeItem('becs_key');state.overview=null;state.routes=[];state.jobs=[];state.reviews=[];state.chats=[];state.inspections=[];state.apiError='Browser locked. Enter this account’s access key to continue.';render();},
+ 'reconnect':async()=>{try{await request('/telegram/reconnect',{method:'POST'});await reload();}catch(e){toast(e.message,true);}},
+ 'account-invites':async()=>{try{const result=await request('/account-invites');dom('accountInvites').innerHTML=result.accounts.map(a=>`<div class="field"><label>${safe(accountNames[a.id])} access key</label><input readonly type="password" value="${safe(a.access_key)}"><button class="button button-small" data-copy="${safe(a.access_key)}">Copy access key</button><p class="small-help">Login: ${safe(location.origin+a.url)}</p></div>`).join('');}catch(e){toast(e.message,true);}}
 };
 document.addEventListener('click',async event=>{
  const target=event.target.closest('[data-nav],[data-mode],[data-action],[data-edit],[data-delete],[data-jobtab],[data-retry],[data-approve],[data-reject],[data-copy],[data-usechat],[data-filter-preset],[data-route-preset],[data-inspector-kind]');if(!target)return;
@@ -279,7 +294,7 @@ document.addEventListener('click',async event=>{
  if(target.dataset.retry){await retryJob(Number(target.dataset.retry));return;}
  if(target.dataset.approve){await reviewItem(Number(target.dataset.approve),true);return;}
  if(target.dataset.reject){await reviewItem(Number(target.dataset.reject),false);return;}
- if(target.dataset.copy){try{await navigator.clipboard.writeText(target.dataset.copy);toast('Chat ID copied');}catch{toast('Clipboard unavailable; copy the ID manually',true);}return;}
+ if(target.dataset.copy){try{await navigator.clipboard.writeText(target.dataset.copy);toast('Copied');}catch{toast('Clipboard unavailable; copy the ID manually',true);}return;}
  if(target.dataset.usechat){let input=dom(target.dataset.which==='source'?'routeSources':'routeDests');let vals=input.value.split(',').map(x=>x.trim()).filter(Boolean);if(!vals.includes(target.dataset.usechat))vals.push(target.dataset.usechat);input.value=vals.join(', ');toast('Chat added to '+target.dataset.which+'s');}
 });
 document.addEventListener('change',event=>{const t=event.target;if(t.dataset.routeToggle){toggleRoute(Number(t.dataset.routeToggle),t.checked);}if(t.dataset.pickchat){togglePickedChat(t.dataset.pickchat,t.dataset.role,t.checked);}});
@@ -290,5 +305,11 @@ dom('refreshBtn').addEventListener('click',()=>reload());
 dom('modalClose').addEventListener('click',closeModal);
 dom('modal').addEventListener('click',event=>{if(event.target===dom('modal'))closeModal();});
 document.addEventListener('keydown',event=>{if(event.key==='Escape'&&!dom('modal').classList.contains('hidden'))closeModal();});
-reload();
+async function boot(){
+ if(!accountNames[accountId]){state.apiError='Unknown account. Open one of the three account login URLs.';render();return;}
+ try{const session=await request('/auth/session',{method:'POST'});if(session.token)localStorage.setItem(keyName,session.token);}catch(_){}
+ await reload();
+}
+boot();
 })();
+

@@ -25,16 +25,19 @@ from .db import connection, init_db, as_dict, get_setting, set_setting, event
 from .engine import decide, dedup_fingerprint
 from .service import get_routes, enqueue, delivery_worker
 from .telegram_client import PersonalTelegram, telegram_bot_poll
+from .accounts import (ACCOUNT_IDS, AccountManager, account_scope, current_account,
+                       account_env, access_key, browser_token, accepts_key)
 
 logging.basicConfig(level=os.getenv('BECS_LOG_LEVEL','INFO'))
 ROOT=Path(__file__).resolve().parents[1]
 STATIC=ROOT / 'static'
-manager=PersonalTelegram()
+managers={account_id:PersonalTelegram(account_id) for account_id in ACCOUNT_IDS}
+manager=AccountManager(managers)
 
 
 def is_valid_init_data(raw: str) -> bool:
     token=os.getenv('TELEGRAM_BOT_TOKEN','')
-    allowed=os.getenv('BECS_ALLOWED_TELEGRAM_ID','')
+    allowed=account_env('BECS_ALLOWED_TELEGRAM_ID')
     if not raw or not token or not allowed or len(raw)>8192:return False
     try:
         data=dict(parse_qsl(raw,keep_blank_values=True,strict_parsing=True))
@@ -56,46 +59,81 @@ def is_authorized(request: Request)->bool:
     host=request.headers.get('host','').lower().split(':')[0]
     client=request.client.host if request.client else ''
     # Local development only. Never run the development listener on 0.0.0.0.
-    if (host in ('localhost','127.0.0.1','[::1]') and client in ('127.0.0.1','::1')) or (host=='testserver' and client=='testclient'):
+    if os.getenv('BECS_DEV_AUTH_BYPASS')=='true' and (
+        (host in ('localhost','127.0.0.1','[::1]') and client in ('127.0.0.1','::1'))
+        or (host=='testserver' and client=='testclient')):
         return True
-    configured=os.getenv('BECS_ADMIN_TOKEN','')
     key=request.headers.get('x-becs-key','')
-    if configured and key and hmac.compare_digest(key,configured):return True
+    if accepts_key(key):return True
     raw=request.headers.get('x-telegram-init-data','')
     return is_valid_init_data(raw)
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    init_db()
     stop=asyncio.Event()
+    tasks=[]
+    keys=[access_key(key) for key in ACCOUNT_IDS if access_key(key)]
+    identities=[account_env('BECS_ALLOWED_TELEGRAM_ID',key) for key in ACCOUNT_IDS if account_env('BECS_ALLOWED_TELEGRAM_ID',key)]
+    if len(keys)!=len(set(keys)) or len(identities)!=len(set(identities)):
+        raise RuntimeError('Account access keys and allowed Telegram IDs must be unique')
+    for account_id in ACCOUNT_IDS:
+        with account_scope(account_id):init_db()
+    for account_id, client in managers.items():
+        with account_scope(account_id):
+            try:
+                if os.getenv('TELEGRAM_API_ID') and os.getenv('TELEGRAM_API_HASH'):
+                    await client.ensure_client()
+            except Exception:
+                logging.exception('Telegram %s not connected; use Settings to authorize', account_id)
+            tasks.append(asyncio.create_task(delivery_worker(client,stop)))
+    # A single poller dispatches each command using its verified Telegram sender.
+    tasks.append(asyncio.create_task(telegram_bot_poll(managers,stop)))
     try:
-        if os.getenv('TELEGRAM_API_ID') and os.getenv('TELEGRAM_API_HASH'):
-            await manager.ensure_client()
-    except Exception:
-        logging.exception('Telegram account not connected; use Settings to authorize')
-    tasks=[asyncio.create_task(delivery_worker(manager,stop)),asyncio.create_task(telegram_bot_poll(manager,stop))]
-    yield
-    stop.set()
-    for task in tasks: task.cancel()
-    await asyncio.gather(*tasks,return_exceptions=True)
-    await manager.disconnect()
+        yield
+    finally:
+        stop.set()
+        for task in tasks: task.cancel()
+        await asyncio.gather(*tasks,return_exceptions=True)
+        await asyncio.gather(*(client.disconnect() for client in managers.values()),return_exceptions=True)
 
 
-app=FastAPI(title='Becs Crypto Forwarding',version='1.0.0',lifespan=lifespan,docs_url=None,redoc_url=None)
+app=FastAPI(title='Becs Crypto Forwarding',version='2.0.0',lifespan=lifespan,docs_url=None,redoc_url=None)
 
 @app.middleware('http')
 async def protect_api(request:Request,call_next):
-    if request.url.path.startswith('/api/') and request.url.path!='/api/health' and not is_authorized(request):
-        return JSONResponse(status_code=401,content={'detail':'Access denied. Open inside your authorized Telegram Mini App or enter your server access key.'})
-    response=await call_next(request)
-    if request.url.path.startswith('/api/'):
+    path=request.scope['path']
+    account_id='primary'
+    if path.startswith('/api/accounts/'):
+        parts=path.split('/',4)
+        if len(parts)!=5 or parts[3] not in ACCOUNT_IDS or parts[4].startswith('accounts/'):
+            return JSONResponse(status_code=404,content={'detail':'Unknown account endpoint'},headers={'Cache-Control':'no-store'})
+        account_id=parts[3]
+        path='/api/'+parts[4]
+        request.scope['path']=path
+        request.scope['raw_path']=path.encode()
+    with account_scope(account_id):
+        if path.startswith('/api/') and path!='/api/health' and not is_authorized(request):
+            return JSONResponse(status_code=401,content={'detail':'Access denied for this account. Enter its access key or open its authorized Telegram Mini App.'},headers={'Cache-Control':'no-store'})
+        response=await call_next(request)
+    if path.startswith('/api/'):
         response.headers['Cache-Control']='no-store'
     response.headers['X-Content-Type-Options']='nosniff'
     return response
 
 @app.get('/api/health')
-def health():return {'ok':True,'service':'becs','version':'1.0.0'}
+def health():return {'ok':True,'service':'becs','version':'2.0.0'}
+
+@app.post('/api/auth/session')
+def persistent_login():
+    token=browser_token()
+    if not token:raise HTTPException(503,'Account access is not configured')
+    return {'account_id':current_account.get(),'token':token,'expires_at':None}
+
+@app.get('/api/account-invites')
+def account_invites():
+    if current_account.get()!='primary':raise HTTPException(403,'Only the primary owner can provision account access')
+    return {'accounts':[{'id':key,'url':'/?account='+key,'access_key':access_key(key)} for key in ACCOUNT_IDS[1:]]}
 
 @app.get('/api/overview')
 async def overview():
@@ -119,7 +157,7 @@ async def overview():
             graph.append(db.execute(
                 "SELECT COUNT(*) FROM jobs WHERE status='sent' AND sent_at>=? AND sent_at<?",(start,end)).fetchone()[0])
     cooldown_remaining=max(0,int(float(get_setting('account_cooldown_until','0'))-time.time()))
-    return {'stats':stats,'activity':activity,'graph':graph,'cooldown_seconds':cooldown_remaining,'paused':get_setting('paused','false')=='true',
+    return {'account_id':current_account.get(),'stats':stats,'activity':activity,'graph':graph,'cooldown_seconds':cooldown_remaining,'paused':get_setting('paused','false')=='true',
             'telegram':await manager.status(),'ai_configured':bool(os.getenv('GEMINI_API_KEY')),
             'bot_configured':bool(os.getenv('TELEGRAM_BOT_TOKEN'))}
 
@@ -305,6 +343,12 @@ async def disconnect_telegram():
     await manager.disconnect(logout=False)
     return {'connected':False,'detail':'Server connection closed; authorized session retained'}
 
+@app.post('/api/telegram/reconnect')
+async def reconnect_telegram():
+    await manager.ensure_client()
+    return await manager.status()
+
 app.mount('/assets',StaticFiles(directory=str(STATIC)),name='assets')
 @app.get('/')
 async def index():return FileResponse(STATIC/'index.html')
+
