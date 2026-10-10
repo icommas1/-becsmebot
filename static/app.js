@@ -325,7 +325,10 @@ async function boot(){
     cache:'no-store',credentials:'same-origin'
    });
    if(!response.ok){
-    if(response.status===403)throw new Error('Telegram identity was not accepted. Ask the owner to verify your numeric Telegram ID in Railway, then close and reopen the Mini App.');
+    if(response.status===403){
+     const details=await response.json().catch(()=>({}));
+     throw new Error(details.detail || 'Telegram account not authorized.');
+    }
     throw new Error('Unable to identify Telegram account. Close and reopen the Mini App.');
    }
    const resolved=await response.json();
