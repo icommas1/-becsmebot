@@ -1,0 +1,23 @@
+name: Isolated Becs crypto filters
+on:
+  push:
+    branches: [test/becs-isolated-filters-20261010]
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  filter-regressions:
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - run: pip install -r requirements.txt
+      - run: python -m unittest discover -s tests -p 'test_isolated_crypto_filters.py' -v
+      - run: node --check static/app.js
+      - run: python -m compileall -q app
