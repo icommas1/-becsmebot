@@ -2,7 +2,7 @@
 (() => {
 'use strict';
 const tg = window.Telegram?.WebApp;
-const accountId = new URLSearchParams(location.search).get('account') || 'primary';
+let accountId = new URLSearchParams(location.search).get('account') || 'primary';
 // Telegram may omit launch data after an in-app URL redirect. Preserve only this
 // tab's signed launch payload, never an unverified user ID or an owner key.
 const INIT_KEY = 'becs_telegram_signed_launch';
@@ -13,8 +13,8 @@ if (telegramInitData) {
  try { telegramInitData = sessionStorage.getItem(INIT_KEY) || ''; } catch (_) {}
 }
 const accountNames = {'primary':'Account 1', 'account-2':'Doc', 'account-3':'Account 3'};
-const accountName = accountNames[accountId] || 'Unknown account';
-const keyName = 'becs_key:' + accountId;
+let accountName = accountNames[accountId] || 'Unknown account';
+let keyName = 'becs_key:' + accountId;
 let authEpoch = 0;
 // Migrate only the legacy primary key; other accounts never reuse it.
 if(accountId==='primary' && !localStorage.getItem(keyName) && sessionStorage.getItem('becs_key')){
@@ -327,17 +327,21 @@ async function boot(){
    if(!response.ok){
     if(response.status===403){
      const details=await response.json().catch(()=>({}));
-     throw new Error(details.detail || 'Telegram account not authorized.');
+     throw new Error((details.detail || 'Telegram account not authorized.')+(details.verified_user_id?' Verified Telegram ID: '+details.verified_user_id:''));
     }
     throw new Error('Unable to identify Telegram account. Close and reopen the Mini App.');
    }
    const resolved=await response.json();
    if(!accountNames[resolved.account_id])throw new Error('Unrecognized account');
    if(resolved.account_id!==accountId){
+    // Switching without a page navigation preserves the signed launch data.
+    authEpoch++;
+    accountId=resolved.account_id;
+    accountName=accountNames[accountId];
+    keyName='becs_key:'+accountId;
     const url=new URL(location.href);
-    url.searchParams.set('account',resolved.account_id);
-    location.replace(url.pathname+url.search+url.hash);
-    return;
+    url.searchParams.set('account',accountId);
+    history.replaceState(null,'',url.pathname+url.search+url.hash);
    }
   }catch(e){state.apiError=e.message;render();return;}
  }
