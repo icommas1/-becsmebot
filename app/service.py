@@ -52,6 +52,10 @@ async def ingest_message(source_id: str, message_id: int, text: str, service):
             address=addr['address']
             if route.get('network','both') not in ('both',addr['network']):continue
             fingerprint=hashlib.sha256((addr['network']+':'+address.lower()).encode()).hexdigest()
+            # Store only the detected address and network in token events.
+            # No original message text, media, or separate token-memory table.
+            with connection() as db:
+                event(db,'contract',f"{addr['network'].upper()} · {address}",route['id'],source_id)
             for dest in route['destinations']:
                 if dest==source_id:continue
                 with connection() as db:enqueue(db,route,source_id,dest,message_id,address,fingerprint)
