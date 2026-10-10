@@ -11,7 +11,7 @@ from app.main import app, verified_telegram_user_id
 
 def signed_launch(user_id, token):
     data={'auth_date':str(int(time.time())),'query_id':'AA_test','user':json.dumps({'id':user_id},separators=(',',':'))}
-    text='\\n'.join(f'{k}={v}' for k,v in sorted(data.items()))
+    text='\n'.join(f'{k}={v}' for k,v in sorted(data.items()))
     secret=hmac.new(b'WebAppData',token.encode(),hashlib.sha256).digest()
     data['hash']=hmac.new(secret,text.encode(),hashlib.sha256).hexdigest()
     return urlencode(data)
