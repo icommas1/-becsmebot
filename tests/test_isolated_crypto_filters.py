@@ -27,4 +27,35 @@ class IsolatedCryptoFilterTests(unittest.TestCase):
         self.assertEqual(decide('price $28K '+SOL,route(pattern=pattern))['decision'],'block')
     def test_bad_regex_is_not_allowed(self):
         self.assertEqual(decide(SOL,route(pattern='('))['decision'],'invalid')
+
+class ForwardingIntegrationTests(unittest.TestCase):
+    def test_contract_only_with_emoji_and_blacklist(self):
+        import asyncio
+        from contextlib import contextmanager
+        from unittest.mock import patch
+        from app import service
+        sent=[]
+        @contextmanager
+        def fake_connection():
+            yield object()
+        route={'id':1,'enabled':True,'sources':['-1001'],'destinations':['5486942816'],'network':'both','allowed':'re:📈|🚀','blocked':'scam','pattern':'','dedup_minutes':60}
+        with patch.object(service,'get_routes',return_value=[route]),patch.object(service,'get_setting',return_value='false'),patch.object(service,'connection',fake_connection),patch.object(service,'enqueue',side_effect=lambda db,r,s,d,m,t,fp:sent.append(t)),patch.object(service,'event'):
+            asyncio.run(service.ingest_message('-1001',1,'🚀 MC $28K '+SOL+' https://x.com/abc/status/123',None))
+            asyncio.run(service.ingest_message('-1001',2,'🚀 scam '+SOL,None))
+            asyncio.run(service.ingest_message('-1001',3,'📊 '+SOL,None))
+        self.assertEqual(sent,[SOL])
+    def test_optional_regex_is_enforced(self):
+        import asyncio
+        from contextlib import contextmanager
+        from unittest.mock import patch
+        from app import service
+        sent=[]
+        @contextmanager
+        def fake_connection():yield object()
+        route={'id':1,'enabled':True,'sources':['-1001'],'destinations':['5486942816'],'network':'both','allowed':'','blocked':'','pattern':r'(?s)(?=[\\s\\S]*https?://)(?=[\\s\\S]*\\d).*','dedup_minutes':60}
+        with patch.object(service,'get_routes',return_value=[route]),patch.object(service,'get_setting',return_value='false'),patch.object(service,'connection',fake_connection),patch.object(service,'enqueue',side_effect=lambda db,r,s,d,m,t,fp:sent.append(t)),patch.object(service,'event'):
+            asyncio.run(service.ingest_message('-1001',1,SOL,None))
+            asyncio.run(service.ingest_message('-1001',2,'https://x.com/u/status/123 '+SOL,None))
+        self.assertEqual(sent,[SOL])
+
 if __name__=='__main__':unittest.main()
