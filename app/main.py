@@ -223,6 +223,20 @@ def simulate(payload:Simulation):
     result['fingerprint']=dedup_fingerprint(payload.text,result)[:16]
     return result
 
+@app.get('/api/inspector')
+def inspector(limit:int=100, kind:str='all'):
+    limit=max(1,min(limit,200))
+    allowed={'all','blocked','duplicate','queued','forwarded','review','error','contract','ai'}
+    if kind not in allowed: raise HTTPException(422,'Unknown event kind')
+    with connection() as db:
+        sql="""SELECT e.*,r.name AS route_name FROM events e
+            LEFT JOIN routes r ON r.id=e.route_id"""
+        if kind=='all':
+            rows=db.execute(sql+" WHERE e.kind IN ('blocked','duplicate','queued','forwarded','review','error','contract','ai') ORDER BY e.id DESC LIMIT ?",(limit,)).fetchall()
+        else:
+            rows=db.execute(sql+" WHERE e.kind=? ORDER BY e.id DESC LIMIT ?",(kind,limit)).fetchall()
+    return {'items':[dict(row) for row in rows], 'source':'recorded_events'}
+
 @app.get('/api/jobs')
 def jobs(status:str='all',limit:int=100):
     limit=max(1,min(limit,200))
@@ -230,7 +244,7 @@ def jobs(status:str='all',limit:int=100):
     with connection() as db:
         if status=='all': data=db.execute('SELECT * FROM jobs ORDER BY id DESC LIMIT ?',(limit,)).fetchall()
         else:data=db.execute('SELECT * FROM jobs WHERE status=? ORDER BY id DESC LIMIT ?',(status,limit)).fetchall()
-    return {'jobs':[{**dict(row),'message_preview':''} for row in data]}
+    return {'jobs':[dict(row) for row in data]}
 
 @app.post('/api/jobs/{job_id}/retry')
 def retry_job(job_id:int):
@@ -245,7 +259,7 @@ def retry_job(job_id:int):
 @app.get('/api/reviews')
 def reviews():
     with connection() as db:data=db.execute("SELECT * FROM reviews WHERE status='pending' ORDER BY id DESC LIMIT 100").fetchall()
-    return {'reviews':[{**dict(x),'text':''} for x in data]}
+    return {'reviews':[dict(x) for x in data]}
 
 @app.post('/api/reviews/{review_id}')
 def decide_review(review_id:int,payload:ReviewAction):
