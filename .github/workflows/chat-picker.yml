@@ -1,0 +1,21 @@
+name: Becs chat picker checks
+on:
+  push:
+    branches:
+      - feature/becs-chat-picker
+  workflow_dispatch:
+jobs:
+  tests:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - run: pip install -r requirements.txt
+      - run: python -m compileall -q app
+      - run: python -m unittest discover -s tests -p 'test_chat_picker.py' -v
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - run: node --check static/app.js
