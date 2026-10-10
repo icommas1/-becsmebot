@@ -42,12 +42,30 @@ async def ingest_message(source_id: str, message_id: int, text: str, service):
         # Optional keyword controls affect eligibility, never the forwarded payload.
         lower=text.lower()
         from .engine import split_terms
-        blocked=split_terms(route.get('blocked',''))
-        if any(word.lower() in lower for word in blocked):continue
-        allowed=split_terms(route.get('allowed',''))
-        if allowed:
-            matches=[word for word in allowed if word.lower() in lower]
-            if not (len(matches)==len(allowed) if route.get('match_mode')=='all' else bool(matches)):continue
+        # Filters only inspect the incoming text in memory. No message body is saved.
+        import regex as safe_regex
+        def matches_rule(rule):
+            rule=rule.strip()
+            if not rule:return False
+            if rule.startswith('re:'):
+                pattern=rule[3:]
+                if len(pattern)>250:return False
+                try:return bool(safe_regex.search(pattern,text,flags=safe_regex.IGNORECASE,timeout=0.025))
+                except (safe_regex.error,TimeoutError,ValueError):return False
+            return rule.lower() in lower
+        blocked=route.get('blocked','')
+        if blocked.startswith('re:'):
+            if matches_rule(blocked):continue
+        elif any(matches_rule(word) for word in split_terms(blocked)):continue
+        allowed=route.get('allowed','')
+        if allowed.startswith('re:'):
+            if not matches_rule(allowed):continue
+        elif allowed:
+            terms=split_terms(allowed)
+            hits=[matches_rule(term) for term in terms]
+            if not (all(hits) if route.get('match_mode')=='all' else any(hits)):continue
+        pattern=route.get('pattern','').strip()
+        if pattern and not matches_rule('re:'+pattern):continue
         for addr in addresses:
             address=addr['address']
             if route.get('network','both') not in ('both',addr['network']):continue
