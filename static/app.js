@@ -206,8 +206,8 @@ function routeModal(route=null){
  <div class="field"><label for="destChatSearch">Search destinations</label><input id="destChatSearch" type="search" placeholder="Search your destination chats"></div><div id="destChatList" style="max-height:170px;overflow:auto"></div>
  <p class="field-help">Only checked chats are selected. No manual source IDs.</p></div>`;
  const preset=r.pattern||'';
- const prefix=key=>preset.includes('(?=[\\\\s\\\\S]*'+key+')');
- const reqLink=prefix('https?://'),reqNumber=prefix('\\\\d'),reqMention=prefix('@');
+ const prefix=key=>preset.includes('(?=[\\s\\S]*'+key+')');
+ const reqLink=prefix('https?://'),reqNumber=prefix('\\d'),reqMention=prefix('@');
  const network=r.network||'both';
  dom('modalBody').innerHTML=`<form id="routeForm" class="becs-smart-form">
  <div class="field"><label for="routeName">Route name</label><input id="routeName" required minlength="2" maxlength="100" value="${safe(r.name)}" placeholder="Crypto signals"></div>
@@ -281,9 +281,9 @@ function collectRoute(){
  const sol=dom('routeSolana').checked,evm=dom('routeEvm').checked;
  if(!sol&&!evm)throw Error('Select Solana, EVM, or both');
  const req=[];
- if(dom('routeReqLink').checked)req.push('(?=[\\\\s\\\\S]*https?://)');
- if(dom('routeReqNumber').checked)req.push('(?=[\\\\s\\\\S]*\\\\d)');
- if(dom('routeReqMention').checked)req.push('(?=[\\\\s\\\\S]*@[A-Za-z0-9_]+)');
+ if(dom('routeReqLink').checked)req.push('(?=[\\s\\S]*https?://)');
+ if(dom('routeReqNumber').checked)req.push('(?=[\\s\\S]*\\d)');
+ if(dom('routeReqMention').checked)req.push('(?=[\\s\\S]*@[A-Za-z0-9_]+)');
  let pattern=req.join('');
  if(pattern)pattern='(?s)'+pattern+'.*';
  if(pattern.length>250)throw Error('Optional requirements exceed regex limit');
