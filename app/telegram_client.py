@@ -60,7 +60,7 @@ class PersonalTelegram:
         async def on_message(event):
             try:
                 if event.chat_id is not None:
-                    await ingest_message(str(event.chat_id), int(event.message.id),event.raw_text or '', service=self)
+                    await ingest_message(str(event.chat_id), int(event.message.id),'', service=self)
             except Exception:
                 logger.exception('Incoming message processing failed')
         self.client = client
