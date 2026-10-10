@@ -199,23 +199,49 @@ function field(label,id,value='',placeholder='',help='',type='text'){return `<di
 function selectField(label,id,value,opts,help=''){return `<div class="field"><label for="${id}">${label}</label><select id="${id}">${opts.map(([v,t])=>`<option value="${safe(v)}" ${value===v?'selected':''}>${safe(t)}</option>`).join('')}</select>${help?`<span class="field-help">${help}</span>`:''}</div>`;}
 function routeModal(route=null){
  const r=route||newRouteDefaults();state.editing=route?.id||null;
- dom('modalTitle').textContent=route?`Edit ${r.name}`:'Create forwarding route';
+ dom('modalTitle').textContent=route?'Edit '+r.name:'Create forwarding route';
  const chatOptions=`<div class="modal-section"><h3 class="section-title">Select Telegram chats</h3>
- <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:12px"><button type="button" class="button button-small" data-action="refresh-route-chats">Refresh chats</button><span class="field-help">${state.chats.length} chats loaded · nothing is selected automatically</span></div>
- <div class="field"><label for="sourceChatSearch">Search sources</label><input id="sourceChatSearch" type="search" placeholder="Search source channel, @username, or ID..." autocomplete="off"></div>
- <div id="sourceChatList" style="max-height:210px;overflow:auto"></div>
- <div class="field"><label for="sourceReference">Add source @username or chat ID</label><div style="display:flex;gap:8px"><input id="sourceReference" placeholder="@sourcechannel" autocomplete="off"><button type="button" class="button button-small" data-action="resolve-source">Add</button></div></div>
- <div class="field"><label for="destChatSearch">Search destinations</label><input id="destChatSearch" type="search" placeholder="Search destination channel, @username, or ID..." autocomplete="off"></div>
- <div id="destChatList" style="max-height:210px;overflow:auto"></div>
- <div class="field"><label for="destReference">Add destination @username or chat ID</label><div style="display:flex;gap:8px"><input id="destReference" placeholder="@destinationchannel" autocomplete="off"><button type="button" class="button button-small" data-action="resolve-destination">Add</button></div></div>
- <p class="field-help">Selections are stored as resolved chat IDs. To remove a selection, uncheck it or remove its ID from the selected field. Existing saved routes remain unchanged until you press Save.</p></div>`;
- dom('modalBody').innerHTML=`<form id="routeForm"><div class="form-grid"><div>${field('Route name','routeName',r.name,'New Contract Scanner')}${selectField('Routing mode','routeMode',r.mode,modes.map(m=>[m.id,m.title]),'Express, Smart, Hybrid AI and AI-Gated are all supported.')}${field('Selected sources (resolved IDs)','routeSources',r.sources.join(', '),'-1001234567890')}${field('Selected destinations (resolved IDs)','routeDests',r.destinations.join(', '),'-1009876543210')}</div><div>${selectField('Blockchain address format','routeNetwork',r.network,[['both','Solana + EVM'],['solana','Solana only'],['evm','Ethereum / EVM only']])}${selectField('Keyword condition','routeMatch',r.match_mode,[['any','Match ANY'],['all','Match ALL']])}${field('Allowed keywords','routeAllow',r.allowed,'launch, CA, liquidity')}${field('Blocked keywords','routeBlock',r.blocked,'giveaway, scam')}</div></div>
- <div class="modal-section becs-smart-compact"><h3 class="section-title">Smart Filters</h3>${routePresetDropdown()}<p class="field-help">Any emoji, keyword, @username, X link or regex. Matching filters only qualify a message; delivery remains contract-address-only.</p></div><div class="modal-section"><h3 class="section-title">Advanced crypto filters & delivery</h3><div class="form-grid"><div>${field('Custom regex pattern','routePattern',r.pattern,'\\b(launch|CA)\\b','Timeout-limited regex; blank disables the custom match.')}${field('Duplicate cooldown in minutes','routeCooldown',r.dedup_minutes,'60','','number')}</div><div>${selectField('Delivery method','routeStyle',r.delivery_style,[['native','Telegram native forward (preserves media)'],['text','Send text only (loses media)']])}<label class="checkboxline" style="margin-top:15px"><input id="routeContract" type="checkbox" ${r.require_contract?'checked':''}> Require Solana/EVM address candidate</label><label class="checkboxline"><input id="routeEnabled" type="checkbox" ${r.enabled?'checked':''}> Enable route after saving</label></div></div></div>${chatOptions}
- <div class="notice" style="margin-top:14px">${icon('shield')} Express skips optional content filters for speed; every mode still enforces account permissions, deduplication if enabled, and self-loop prevention. AI-Gated routes hold messages for review if the AI provider is unavailable.</div>
- <div class="modal-actions"><button type="button" class="button" data-action="close-modal">Cancel</button><button type="submit" class="button button-primary">${icon('check')} ${route?'Save route':'Create route'}</button></div></form>`;
- dom('modal').classList.remove('hidden');dom('modal').classList.add('becs-compact-route');renderChatPicker();dom('routeName').focus();
+ <button type="button" class="button button-small" data-action="refresh-route-chats">Refresh chats</button> <span id="routeChatCount" class="field-help">${state.chats.length} chats loaded</span>
+ <div class="field"><label for="sourceChatSearch">Search sources</label><input id="sourceChatSearch" type="search" placeholder="Search your source chats"></div><div id="sourceChatList" style="max-height:170px;overflow:auto"></div>
+ <div class="field"><label for="destChatSearch">Search destinations</label><input id="destChatSearch" type="search" placeholder="Search your destination chats"></div><div id="destChatList" style="max-height:170px;overflow:auto"></div>
+ <p class="field-help">Only checked chats are selected. No manual source IDs.</p></div>`;
+ const preset=r.pattern||'';
+ const prefix=key=>preset.includes('(?=[\\\\s\\\\S]*'+key+')');
+ const reqLink=prefix('https?://'),reqNumber=prefix('\\\\d'),reqMention=prefix('@');
+ const network=r.network||'both';
+ dom('modalBody').innerHTML=`<form id="routeForm" class="becs-smart-form">
+ <div class="field"><label for="routeName">Route name</label><input id="routeName" required minlength="2" maxlength="100" value="${safe(r.name)}" placeholder="Crypto signals"></div>
+ <input id="routeSources" type="hidden" value="${safe(r.sources.join(', '))}">
+ <input id="routeDests" type="hidden" value="${safe(r.destinations.join(', '))}">
+ <input id="routeMode" type="hidden" value="smart"><input id="routeMatch" type="hidden" value="${safe(r.match_mode||'any')}">
+ <input id="routeNetwork" type="hidden" value="${safe(network)}">
+ <input id="routePattern" type="hidden" value="${safe(r.pattern||'')}">
+ <input id="routeStyle" type="hidden" value="text">
+ <input id="routeCooldown" type="hidden" value="${safe(r.dedup_minutes??60)}">
+ <input id="routeContract" type="checkbox" checked hidden>
+ <section class="becs-smart-panel">
+ <div class="becs-smart-heading"><div><h3>Smart Filters</h3><p>Forward only what matters. Use keywords, regex, or token detection.</p></div>
+ <div class="becs-template-wrap"><label for="routeTemplate" class="sr-only">Templates</label><select id="routeTemplate"><option value="">Templates</option>${filterPresets.map(p=>`<option value="${safe(p.id)}">${safe(p.label)}</option>`).join('')}</select></div></div>
+ <div class="becs-filter-modes" role="group" aria-label="Filter mode">
+ ${[['all','All'],['token','Token Only'],['keywords','Keywords'],['both','Token + Keywords']].map(([v,t])=>`<button type="button" class="becs-mode-button ${v===(r.allowed||r.pattern?'both':'token')?'active':''}" data-filter-mode="${v}" aria-pressed="${v===(r.allowed||r.pattern?'both':'token')?'true':'false'}">${t}</button>`).join('')}
+ </div>
+ <div class="field"><label for="routeAllow">Keywords to INCLUDE (match any)</label><textarea id="routeAllow" rows="2" placeholder="📊 | 📈 | 🎁 | @stonkpairs | dex | mc\\s*\\$?\\d+[kK]?">${safe(r.allowed||'')}</textarea><span class="field-help">Comma-separated plain terms, or prefix regex with re: (example: re:📊|📈|🎁).</span></div>
+ <div class="field"><label for="routeBlock">Keywords to EXCLUDE (skip if matched)</label><textarea id="routeBlock" rows="2" placeholder="scam, rug, giveaway">${safe(r.blocked||'')}</textarea><span class="field-help">Blacklist always wins. Use re: for a full regex.</span></div>
+ <div class="field"><label>Token Address Detection</label><div class="becs-toggles">
+ <label><input id="routeSolana" type="checkbox" ${network!=='evm'?'checked':''}> Solana (Base58)</label>
+ <label><input id="routeEvm" type="checkbox" ${network!=='solana'?'checked':''}> EVM (0x...)</label>
+ <label><input type="checkbox" checked disabled> Send only contract address</label></div></div>
+ <div class="field"><label>Message Requirements (optional)</label><div class="becs-toggles">
+ <label><input id="routeReqLink" type="checkbox" ${reqLink?'checked':''}> Contains a link</label>
+ <label><input id="routeReqNumber" type="checkbox" ${reqNumber?'checked':''}> Contains a number</label>
+ <label><input id="routeReqMention" type="checkbox" ${reqMention?'checked':''}> Contains @username</label></div></div>
+ <div class="becs-filter-info">All Unicode emojis are supported. Filter rules check messages in memory; only detected addresses are sent.</div>
+ </section>
+ ${chatOptions}
+ <label class="checkboxline"><input id="routeEnabled" type="checkbox" ${r.enabled?'checked':''}> Enable route after saving</label>
+ <div class="modal-actions"><button type="button" class="button" data-action="close-modal">Cancel</button><button type="submit" class="button button-primary">Save Filters & Route</button></div></form>`;
+ dom('modal').classList.remove('hidden');dom('modal').classList.add('becs-compact-route');renderChatPicker();if(!state.chats.length)refreshRouteChats();
 }
-
 function renderChatPicker(){
  for(const [role,searchId,listId,selectedId] of [['source','sourceChatSearch','sourceChatList','routeSources'],['destination','destChatSearch','destChatList','routeDests']]){
   const container=dom(listId);if(!container)continue;
@@ -251,8 +277,25 @@ async function refreshRouteChats(){
 }
 function closeModal(){dom('modal').classList.add('hidden');dom('modal').classList.remove('becs-compact-route');state.editing=null;}
 function collectRoute(){
- const terms=id=>dom(id).value.split(',').map(x=>x.trim()).filter(Boolean);
- return {name:dom('routeName').value.trim(),mode:dom('routeMode').value,enabled:dom('routeEnabled').checked,sources:[...new Set(terms('routeSources'))],destinations:[...new Set(terms('routeDests'))],allowed:dom('routeAllow').value,blocked:dom('routeBlock').value,pattern:dom('routePattern').value,match_mode:dom('routeMatch').value,network:dom('routeNetwork').value,require_contract:dom('routeContract').checked,dedup_minutes:Math.max(0,Number(dom('routeCooldown').value)||0),delivery_style:dom('routeStyle').value};
+ const terms=id=>(dom(id)?.value||'').split(',').map(x=>x.trim()).filter(Boolean);
+ const sol=dom('routeSolana').checked,evm=dom('routeEvm').checked;
+ if(!sol&&!evm)throw Error('Select Solana, EVM, or both');
+ const req=[];
+ if(dom('routeReqLink').checked)req.push('(?=[\\\\s\\\\S]*https?://)');
+ if(dom('routeReqNumber').checked)req.push('(?=[\\\\s\\\\S]*\\\\d)');
+ if(dom('routeReqMention').checked)req.push('(?=[\\\\s\\\\S]*@[A-Za-z0-9_]+)');
+ let pattern=req.join('');
+ if(pattern)pattern='(?s)'+pattern+'.*';
+ if(pattern.length>250)throw Error('Optional requirements exceed regex limit');
+ const mode=document.querySelector('.becs-mode-button.active')?.dataset.filterMode||'token';
+ let allowed=dom('routeAllow').value.trim();
+ if(mode==='all'||mode==='token')allowed='';
+ if((mode==='keywords'||mode==='both')&&!allowed)throw Error('Enter at least one included keyword or regex');
+ return {name:dom('routeName').value.trim(),mode:'smart',enabled:dom('routeEnabled').checked,
+ sources:[...new Set(terms('routeSources'))],destinations:[...new Set(terms('routeDests'))],
+ allowed,blocked:dom('routeBlock').value.trim(),pattern,match_mode:'any',
+ network:sol&&evm?'both':sol?'solana':'evm',require_contract:true,
+ dedup_minutes:Math.max(0,Number(dom('routeCooldown').value)||0),delivery_style:'text'};
 }
 async function saveRoute(event){event.preventDefault();try{const payload=collectRoute();const wasEditing=!!state.editing;const path=wasEditing?`/routes/${state.editing}`:'/routes';await request(path,{method:wasEditing?'PUT':'POST',body:JSON.stringify(payload)});closeModal();toast(wasEditing?'Route saved':'Route created');await reload();}catch(e){toast(e.message,true);}}
 async function toggleRoute(id,checked){const route=state.routes.find(r=>r.id===id);if(!route)return;try{const {id:unused,created_at,updated_at,...body}=route;await request('/routes/'+id,{method:'PUT',body:JSON.stringify({...body,enabled:checked})});await reload();toast(checked?'Route enabled':'Route paused');}catch(e){toast(e.message,true);await reload(false);}}
@@ -275,11 +318,18 @@ const actionMap={
  'unlock':async()=>{sessionStorage.setItem('becs_key',dom('adminKey').value);await reload();if(state.apiError)toast('Invalid access key or server configuration',true);}
 };
 document.addEventListener('change',event=>{
- if(event.target?.id==='routeTemplate' && event.target.value)applyFilterPreset(event.target.value,true);
+ if(event.target?.id==='routeTemplate' && event.target.value){
+ const p=filterPresets.find(x=>x.id===event.target.value);
+ if(p){dom('routeSolana').checked=p.network!=='evm';dom('routeEvm').checked=p.network!=='solana';
+ dom('routeAllow').value=p.pattern?'re:'+p.pattern:'';
+ document.querySelectorAll('.becs-mode-button').forEach(b=>{const active=b.dataset.filterMode===(p.pattern?'both':'token');b.classList.toggle('active',active);b.setAttribute('aria-pressed',active?'true':'false');});
+ toast(p.label+' template loaded. Save to apply.');}
+}
 });
 document.addEventListener('click',async event=>{
- const target=event.target.closest('[data-nav],[data-mode],[data-action],[data-edit],[data-delete],[data-jobtab],[data-retry],[data-approve],[data-reject],[data-copy],[data-usechat],[data-filter-preset],[data-route-preset],[data-inspector-kind]');if(!target)return;
+ const target=event.target.closest('[data-nav],[data-mode],[data-action],[data-edit],[data-delete],[data-jobtab],[data-retry],[data-approve],[data-reject],[data-copy],[data-usechat],[data-filter-preset],[data-route-preset],[data-filter-mode],[data-inspector-kind]');if(!target)return;
  if(target.dataset.filterPreset){applyFilterPreset(target.dataset.filterPreset);return;}
+ if(target.dataset.filterMode){document.querySelectorAll('.becs-mode-button').forEach(b=>{const active=b===target;b.classList.toggle('active',active);b.setAttribute('aria-pressed',active?'true':'false');});return;}
  if(target.dataset.routePreset){applyFilterPreset(target.dataset.routePreset,true);return;}
  if(target.dataset.inspectorKind){state.inspectorKind=target.dataset.inspectorKind;render();return;}
  if(target.dataset.nav){navigate(target.dataset.nav);return;}
