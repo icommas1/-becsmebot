@@ -168,13 +168,51 @@ function selectField(label,id,value,opts,help=''){return `<div class="field"><la
 function routeModal(route=null){
  const r=route||newRouteDefaults();state.editing=route?.id||null;
  dom('modalTitle').textContent=route?`Edit ${r.name}`:'Create forwarding route';
- const chatHint=state.chats.length?`<span class="field-help">${state.chats.length} chats loaded. Tap “Use chat” below to fill source or destination IDs.</span>`:'<span class="field-help">Enter signed numeric chat IDs. Sign in and load chats from Settings to discover them.</span>';
- const chatOptions=state.chats.length?`<div class="modal-section"><h3 class="section-title">Available Telegram chats</h3>${chatHint}<div style="max-height:185px;overflow:auto">${state.chats.slice(0,100).map(c=>`<div class="route-brief"><div class="route-detail"><strong>${safe(c.title)}</strong><small>${safe(c.id)}</small></div><button class="button button-small" data-usechat="${safe(c.id)}" data-which="source">+ Source</button><button class="button button-small" data-usechat="${safe(c.id)}" data-which="destination">+ Destination</button></div>`).join('')}</div></div>`:'';
- dom('modalBody').innerHTML=`<form id="routeForm"><div class="form-grid"><div>${field('Route name','routeName',r.name,'New Contract Scanner')}${selectField('Routing mode','routeMode',r.mode,modes.map(m=>[m.id,m.title]),'Express, Smart, Hybrid AI and AI-Gated are all supported.')}${field('Sources — comma-separated chat IDs','routeSources',r.sources.join(', '),'-1001234567890')}${field('Destinations — comma-separated chat IDs','routeDests',r.destinations.join(', '),'-1009876543210')}</div><div>${selectField('Blockchain address format','routeNetwork',r.network,[['both','Solana + EVM'],['solana','Solana only'],['evm','Ethereum / EVM only']])}${selectField('Keyword condition','routeMatch',r.match_mode,[['any','Match ANY'],['all','Match ALL']])}${field('Allowed keywords','routeAllow',r.allowed,'launch, CA, liquidity')}${field('Blocked keywords','routeBlock',r.blocked,'giveaway, scam')}</div></div>
+ const chatOptions=`<div class="modal-section"><h3 class="section-title">Telegram chat picker</h3>
+ <div class="field"><label>Search your accessible chats</label><input id="chatSearch" placeholder="Search channel or group name..." autocomplete="off"></div>
+ <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:12px"><button type="button" class="button button-small" data-action="refresh-route-chats">Refresh chats</button><span class="field-help">${state.chats.length} loaded · select multiple sources and destinations</span></div>
+ <div id="routeChatList" style="max-height:240px;overflow:auto"></div>
+ <div class="form-grid"><div class="field"><label>Add public @username or numeric ID</label><input id="chatReference" placeholder="@channel or -100..." autocomplete="off"></div>
+ <div style="display:flex;align-items:end;gap:8px"><button type="button" class="button button-small" data-action="resolve-source">+ Source</button><button type="button" class="button button-small" data-action="resolve-destination">+ Destination</button></div></div>
+ <p class="field-help">Becs validates access and destination posting rights, then stores resolved chat IDs. Existing route selections are preserved.</p></div>`;
+ dom('modalBody').innerHTML=`<form id="routeForm"><div class="form-grid"><div>${field('Route name','routeName',r.name,'New Contract Scanner')}${selectField('Routing mode','routeMode',r.mode,modes.map(m=>[m.id,m.title]),'Express, Smart, Hybrid AI and AI-Gated are all supported.')}${field('Selected sources (resolved IDs)','routeSources',r.sources.join(', '),'-1001234567890')}${field('Selected destinations (resolved IDs)','routeDests',r.destinations.join(', '),'-1009876543210')}</div><div>${selectField('Blockchain address format','routeNetwork',r.network,[['both','Solana + EVM'],['solana','Solana only'],['evm','Ethereum / EVM only']])}${selectField('Keyword condition','routeMatch',r.match_mode,[['any','Match ANY'],['all','Match ALL']])}${field('Allowed keywords','routeAllow',r.allowed,'launch, CA, liquidity')}${field('Blocked keywords','routeBlock',r.blocked,'giveaway, scam')}</div></div>
  <div class="modal-section"><h3 class="section-title">Advanced crypto filters & delivery</h3><div class="form-grid"><div>${field('Custom regex pattern','routePattern',r.pattern,'\\b(launch|CA)\\b','Timeout-limited regex; blank disables the custom match.')}${field('Duplicate cooldown in minutes','routeCooldown',r.dedup_minutes,'60','','number')}</div><div>${selectField('Delivery method','routeStyle',r.delivery_style,[['native','Telegram native forward (preserves media)'],['text','Send text only (loses media)']])}<label class="checkboxline" style="margin-top:15px"><input id="routeContract" type="checkbox" ${r.require_contract?'checked':''}> Require Solana/EVM address candidate</label><label class="checkboxline"><input id="routeEnabled" type="checkbox" ${r.enabled?'checked':''}> Enable route after saving</label></div></div></div>${chatOptions}
  <div class="notice" style="margin-top:14px">${icon('shield')} Express skips optional content filters for speed; every mode still enforces account permissions, deduplication if enabled, and self-loop prevention. AI-Gated routes hold messages for review if the AI provider is unavailable.</div>
  <div class="modal-actions"><button type="button" class="button" data-action="close-modal">Cancel</button><button type="submit" class="button button-primary">${icon('check')} ${route?'Save route':'Create route'}</button></div></form>`;
- dom('modal').classList.remove('hidden');dom('routeName').focus();
+ dom('modal').classList.remove('hidden');renderChatPicker();dom('routeName').focus();
+}
+
+function renderChatPicker(){
+ const container=dom('routeChatList');if(!container)return;
+ const q=(dom('chatSearch')?.value||'').trim().toLowerCase();
+ const sourceIds=(dom('routeSources')?.value||'').split(',').map(x=>x.trim());
+ const destIds=(dom('routeDests')?.value||'').split(',').map(x=>x.trim());
+ const items=state.chats.filter(c=>(c.title+' '+(c.username||'')+' '+c.id).toLowerCase().includes(q));
+ container.innerHTML=items.length?items.map(c=>`<div class="route-brief"><div class="route-detail"><strong>${safe(c.title)}</strong><small>${safe(c.username||c.kind)} · ${safe(c.id)}</small></div><label class="checkboxline"><input type="checkbox" data-pickchat="${safe(c.id)}" data-role="source" ${sourceIds.includes(c.id)?'checked':''}>Source</label><label class="checkboxline"><input type="checkbox" data-pickchat="${safe(c.id)}" data-role="destination" ${destIds.includes(c.id)?'checked':''}>Dest</label></div>`).join(''):'<p class="field-help">No matching chats. Refresh or add a public @username.</p>';
+}
+function togglePickedChat(id,role,checked){
+ const input=dom(role==='source'?'routeSources':'routeDests');
+ const other=dom(role==='source'?'routeDests':'routeSources');
+ if(checked&&other.value.split(',').map(x=>x.trim()).includes(id)){toast('A chat cannot be both source and destination',true);renderChatPicker();return;}
+ const values=input.value.split(',').map(x=>x.trim()).filter(Boolean);
+ input.value=(checked?[...new Set([...values,id])]:values.filter(x=>x!==id)).join(', ');
+ renderChatPicker();
+}
+async function addChatReference(role){
+ const input=dom('chatReference');const reference=input?.value.trim();if(!reference)return;
+ try{
+  const item=await request('/telegram/resolve',{method:'POST',body:JSON.stringify({reference,role})});
+  const other=dom(role==='source'?'routeDests':'routeSources');
+  if(other.value.split(',').map(x=>x.trim()).includes(item.id))throw new Error('This chat is already selected on the other side');
+  const target=dom(role==='source'?'routeSources':'routeDests');
+  target.value=[...new Set([...target.value.split(',').map(x=>x.trim()).filter(Boolean),item.id])].join(', ');
+  if(!state.chats.some(c=>c.id===item.id))state.chats.push(item);
+  input.value='';renderChatPicker();toast(item.title+' validated and added');
+ }catch(e){toast(e.message,true);}
+}
+async function refreshRouteChats(){
+ try{const data=await request('/telegram/chats');state.chats=data.chats;renderChatPicker();toast(state.chats.length+' chats loaded');}
+ catch(e){toast(e.message,true);}
 }
 function closeModal(){dom('modal').classList.add('hidden');state.editing=null;}
 function collectRoute(){
@@ -194,6 +232,7 @@ const actionMap={
  'new-route':()=>routeModal(), 'open-routes':()=>navigate('routes'),'open-filters':()=>navigate('filters'),'open-queue':()=>navigate('queue'),'open-settings':()=>navigate('more'),
  'refresh':()=>reload(), 'pause':()=>updatePause(true), 'resume':()=>updatePause(false),'close-modal':closeModal,
  'run-sim':simulate,'load-chats':loadChats,
+ 'refresh-route-chats':refreshRouteChats,'resolve-source':()=>addChatReference('source'),'resolve-destination':()=>addChatReference('destination'),
  'disconnect':async()=>{if(!confirm('Disconnect the server from Telegram? The saved session will remain available for reconnect.'))return;try{await request('/telegram/disconnect',{method:'POST'});await reload();toast('Telegram disconnected');}catch(e){toast(e.message,true);}},
  'login-start':(el)=>login('start',{phone:dom('phone').value},el),
  'login-code':(el)=>login('code',{code:dom('telegramCode').value},el),
@@ -214,7 +253,8 @@ document.addEventListener('click',async event=>{
  if(target.dataset.copy){try{await navigator.clipboard.writeText(target.dataset.copy);toast('Chat ID copied');}catch{toast('Clipboard unavailable; copy the ID manually',true);}return;}
  if(target.dataset.usechat){let input=dom(target.dataset.which==='source'?'routeSources':'routeDests');let vals=input.value.split(',').map(x=>x.trim()).filter(Boolean);if(!vals.includes(target.dataset.usechat))vals.push(target.dataset.usechat);input.value=vals.join(', ');toast('Chat added to '+target.dataset.which+'s');}
 });
-document.addEventListener('change',event=>{const t=event.target;if(t.dataset.routeToggle){toggleRoute(Number(t.dataset.routeToggle),t.checked);}});
+document.addEventListener('change',event=>{const t=event.target;if(t.dataset.routeToggle){toggleRoute(Number(t.dataset.routeToggle),t.checked);}if(t.dataset.pickchat){togglePickedChat(t.dataset.pickchat,t.dataset.role,t.checked);}});
+document.addEventListener('input',event=>{if(event.target.id==='chatSearch')renderChatPicker();});
 document.addEventListener('submit',event=>{if(event.target.id==='routeForm')saveRoute(event);});
 dom('accountButton').addEventListener('click',()=>navigate('more'));
 dom('refreshBtn').addEventListener('click',()=>reload());

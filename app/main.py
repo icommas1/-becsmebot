@@ -19,6 +19,8 @@ from fastapi.responses import FileResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 
 from .models import RouteInput, Simulation, PhoneInput, CodeInput, PasswordInput, ReviewAction
+from pydantic import BaseModel, Field
+from typing import Literal
 from .db import connection, init_db, as_dict, get_setting, set_setting, event
 from .engine import decide, dedup_fingerprint
 from .service import get_routes, enqueue, delivery_worker
@@ -158,17 +160,45 @@ def save_route(db, route:RouteInput,route_id=None):
         VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)''',[ *vals,now])
     return cur.lastrowid
 
+
+class ChatResolveInput(BaseModel):
+    reference: str = Field(min_length=1, max_length=80)
+    role: Literal['source', 'destination']
+
+@app.post('/api/telegram/resolve')
+async def resolve_chat(payload: ChatResolveInput):
+    try:
+        return await manager.resolve_chat(payload.reference, payload.role)
+    except Exception as ex:
+        raise HTTPException(422, str(ex)[:180])
+
+async def canonicalize_route(route: RouteInput):
+    # Preserve all other route fields. Resolve both new and legacy references at save time.
+    sources = [await manager.resolve_chat(ref, 'source') for ref in route.sources]
+    destinations = [await manager.resolve_chat(ref, 'destination') for ref in route.destinations]
+    source_ids = list(dict.fromkeys(item['id'] for item in sources))
+    destination_ids = list(dict.fromkeys(item['id'] for item in destinations))
+    if set(source_ids) & set(destination_ids):
+        raise HTTPException(422, 'A chat cannot be both source and destination')
+    return route.model_copy(update={'sources':source_ids, 'destinations':destination_ids})
+
 @app.post('/api/routes')
-def create_route(route:RouteInput):
+async def create_route(route:RouteInput):
     validate_route(route)
+    try: route = await canonicalize_route(route)
+    except HTTPException: raise
+    except Exception as ex: raise HTTPException(422, str(ex)[:180])
     with connection() as db:
         id=save_route(db,route)
         event(db,'route',f'Route created: {route.name}',id)
         return {'route':as_dict(db.execute('SELECT * FROM routes WHERE id=?',(id,)).fetchone())}
 
 @app.put('/api/routes/{route_id}')
-def update_route(route_id:int,route:RouteInput):
+async def update_route(route_id:int,route:RouteInput):
     validate_route(route)
+    try: route = await canonicalize_route(route)
+    except HTTPException: raise
+    except Exception as ex: raise HTTPException(422, str(ex)[:180])
     with connection() as db:
         if not db.execute('SELECT 1 FROM routes WHERE id=?',(route_id,)).fetchone():raise HTTPException(404,'Route not found')
         save_route(db,route,route_id)

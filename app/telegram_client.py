@@ -126,8 +126,66 @@ class PersonalTelegram:
         result=[]
         async for d in client.iter_dialogs(limit=250):
             if d.is_group or d.is_channel or d.is_user:
-                result.append({'id':str(d.id),'title':d.name,'kind':'channel' if d.is_channel else 'group' if d.is_group else 'private'})
+                result.append({'id':str(d.id),'title':d.name,'kind':'channel' if d.is_channel else 'group' if d.is_group else 'private', 'username': '@'+d.entity.username if getattr(d.entity,'username',None) else ''})
         return result
+
+
+    async def resolve_chat(self, reference, role='destination'):
+        """Resolve a dialog or @username to a stable ID, checking account access."""
+        from telethon import utils
+        from telethon.tl.types import Channel, Chat, User
+        client = await self.ensure_client()
+        if not await client.is_user_authorized():
+            raise ValueError('Sign in to your personal Telegram account first')
+        ref = str(reference).strip()
+        if not ref or len(ref) > 80:
+            raise ValueError('Enter a Telegram @username or numeric chat ID')
+        if ref.startswith('@'):
+            import re
+            if not re.fullmatch(r'@[A-Za-z][A-Za-z0-9_]{4,31}', ref):
+                raise ValueError('Invalid public Telegram username')
+        elif not (ref.lstrip('-').isdigit() and ref not in ('0', '-0')):
+            raise ValueError('Use a public @username or a numeric chat ID')
+        dialogs = [d async for d in client.iter_dialogs(limit=None)]
+        entity = None
+        if ref.startswith('@'):
+            entity = await client.get_entity(ref)
+        else:
+            for dialog in dialogs:
+                if str(dialog.id) == ref:
+                    entity = dialog.entity
+                    break
+            if entity is None:
+                raise ValueError('Chat ID not found in your accessible Telegram chats')
+        peer_id = str(utils.get_peer_id(entity))
+        matching = next((d for d in dialogs if str(d.id) == peer_id), None)
+        if matching is None:
+            raise ValueError('Join or open this chat in your Telegram account before selecting it')
+        if role == 'source':
+            # Updates from chats outside the authorized account's dialogs are not monitored.
+            pass
+        elif role == 'destination':
+            if isinstance(entity, Channel) and entity.broadcast:
+                rights = getattr(entity, 'admin_rights', None)
+                if not (getattr(entity, 'creator', False) or (rights and rights.post_messages)):
+                    raise ValueError('You need channel posting permission for this destination')
+            if isinstance(entity, (Channel, Chat)):
+                banned = getattr(entity, 'banned_rights', None)
+                if banned and getattr(banned, 'send_messages', False):
+                    raise ValueError('Sending messages is restricted in this destination')
+                default_banned = getattr(entity, 'default_banned_rights', None)
+                if default_banned and getattr(default_banned, 'send_messages', False):
+                    rights = getattr(entity, 'admin_rights', None)
+                    if not (getattr(entity, 'creator', False) or rights):
+                        raise ValueError('Members cannot send messages to this destination')
+            if isinstance(entity, User) and (getattr(entity, 'deleted', False) or getattr(entity, 'bot', False)):
+                raise ValueError('This private user or bot is not an eligible forwarding destination')
+        else:
+            raise ValueError('Invalid chat role')
+        return {'id': peer_id, 'title': matching.name, 'kind':
+                'channel' if matching.is_channel else 'group' if matching.is_group else 'private',
+                'username': '@' + entity.username if getattr(entity, 'username', None) else '',
+                'role': role, 'validated': True}
 
     async def send(self, job, delivery_style):
         client=await self.ensure_client()
