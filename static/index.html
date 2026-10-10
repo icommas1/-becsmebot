@@ -5,6 +5,7 @@
 <title>Becs · Crypto Forwarding Terminal</title>
 <link rel="manifest" href="/assets/manifest.webmanifest"><link rel="icon" type="image/svg+xml" href="/assets/icon.svg">
 <link rel="stylesheet" href="/assets/styles.css">
+<link rel="stylesheet" href="/assets/dashboard-session.css?v=1">
 <script src="https://telegram.org/js/telegram-web-app.js?64"></script>
 </head><body>
 <div class="app-shell" id="app">
@@ -19,11 +20,13 @@
   <div class="top-left"><span class="mobile-logo">becs<span class="blue">.</span></span><span class="breadcrumb">WORKSPACE <b>/</b> <strong id="crumb">Overview</strong></span></div>
   <div class="top-right"><span class="mini-label">PERSONAL V1</span><button class="icon-button" id="refreshBtn" aria-label="Refresh dashboard" title="Refresh">⟳</button><button class="account-chip" id="accountButton"><span class="account-avatar">01</span><span>Account</span><span class="chevron">⌄</span></button></div>
 </header>
+<div id="sessionBar" class="session-bar" hidden><span id="sessionCountdown" role="timer">Locks in 5:00</span><button type="button" id="dashboardLogout" class="button button-small">Log out</button></div>
 <main id="mainView" class="page-content" aria-live="polite"></main>
 <nav id="bottomNav" class="bottom-nav" aria-label="Main navigation"></nav>
 </div>
 </div>
 <div id="toastRegion" class="toast-region" aria-live="polite"></div>
 <div class="modal-backdrop hidden" id="modal" role="dialog" aria-modal="true" aria-labelledby="modalTitle"><div class="modal-sheet"><div class="modal-header"><div><p class="eyebrow">AUTOMATION WORKSPACE</p><h2 id="modalTitle">New route</h2></div><button id="modalClose" class="icon-button" aria-label="Close">×</button></div><div id="modalBody"></div></div></div>
-<script src="/assets/app.js?v=smart-filters-v2" defer></script>
+<script src="/assets/dashboard-session.js?v=1" defer></script>
+<script src="/assets/app.js?v=five-minute-session-1" defer></script>
 </body></html>

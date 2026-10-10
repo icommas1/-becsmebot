@@ -50,15 +50,7 @@ const state={page:'home',overview:null,routes:[],jobs:[],reviews:[],chats:[],ins
 const dom = id => document.getElementById(id);
 
 async function request(path,options={}) {
- const headers={'Accept':'application/json',...(options.body?{'Content-Type':'application/json'}:{}),...(options.headers||{})};
- const auth=sessionStorage.getItem('becs_key'); if(auth)headers['X-Becs-Key']=auth;
- if(tg?.initData)headers['X-Telegram-Init-Data']=tg.initData;
- let response;
- try { response=await fetch('/api'+path,{...options,headers,cache:'no-store'}); }
- catch {throw new Error('Becs server is unreachable. Start the FastAPI service and try again.');}
- const payload=await response.json().catch(()=>({detail:response.statusText}));
- if(!response.ok){const e=new Error(typeof payload.detail==='string'?payload.detail:JSON.stringify(payload.detail||'Request failed'));e.status=response.status;throw e;}
- return payload;
+ return window.BecsSession.request('/api'+path,options);
 }
 function toast(message,isError=false){const el=document.createElement('div');el.className='toast'+(isError?' error':'');el.textContent=message;dom('toastRegion').append(el);setTimeout(()=>el.remove(),4200);}
 async function reload(full=true){
@@ -181,7 +173,7 @@ function morePage(){
  <div style="display:flex;flex-direction:column;gap:17px">${panel('Service configuration',`<div class="health-list"><div class="health-row">${icon('bot')}<div><div class="status-main">Telegram control bot</div><div class="status-sub">Commands /start /status /pause /resume /routes</div></div><span class="right-flex">${pill(o.bot_configured?'Configured':'Needs .env',o.bot_configured?'success':'warn')}</span></div><div class="health-row">${icon('brain')}<div><div class="status-main">Optional Gemini AI gateway</div><div class="status-sub">External API only for selected route modes</div></div><span class="right-flex">${pill(o.ai_configured?'Configured':'Off',o.ai_configured?'success':'')}</span></div><div class="health-row">${icon('server')}<div><div class="status-main">FastAPI + SQLite backend</div><div class="status-sub">Local or self-hosted; no deployment requested</div></div><span class="right-flex">${pill('Running','success')}</span></div></div>`)}${panel('Telegram chats',state.chats.length?`<div style="max-height:290px;overflow-y:auto">${state.chats.map(c=>`<div class="route-brief"><span class="route-glyph">${icon(c.kind==='private'?'person':'document')}</span><div class="route-detail"><strong>${safe(c.title)}</strong><small>${safe(c.kind)} · ${safe(c.id)}</small></div><button class="button button-small" data-copy="${safe(c.id)}">Copy ID</button></div>`).join('')}</div>`:empty('person','No chats loaded','Sign in and press Load chats to see available source and destination identifiers.'),`<button class="small-link" data-action="load-chats">Load →</button>`)}</div></div>`;
 }
 function gatePage(){
- return `<div class="page-head"><div><p class="eyebrow">SECURE ACCESS</p><h1>Becs access required</h1><p class="subheading">Open this inside your authorized Telegram Mini App, or enter your configured server access key.</p></div></div><section class="panel login-card"><div class="notice warn">${icon('lock')} ${safe(state.apiError||'Protected backend')}</div><div class="field" style="margin-top:20px"><label>BECS_ADMIN_TOKEN</label><input id="adminKey" type="password" autocomplete="off" placeholder="Enter your server access key"></div><button class="button button-primary" data-action="unlock">Unlock Becs</button><p class="small-help">Your key stays in this browser tab session only. Local development on 127.0.0.1 is permitted without a key.</p></section>`;
+ return `<div class="page-head"><div><p class="eyebrow">SECURE ACCESS / FIVE MINUTES</p><h1>Unlock Becs</h1><p class="subheading">One unlock lasts five minutes, including reopening this Mini App. Activity never extends the timer.</p></div></div><section class="panel login-card"><div class="notice warn">${icon('lock')} ${safe(state.apiError||'Dashboard locked')}</div><div class="field" style="margin-top:20px"><label for="adminKey">Server access key</label><input id="adminKey" type="password" autocomplete="current-password" placeholder="Your BECS_ADMIN_TOKEN"></div><div class="session-unlock-actions"><button type="button" class="button button-primary" data-action="unlock">Unlock for 5 minutes</button>${tg?.initData?'<button type="button" class="button" data-action="unlock-telegram">Unlock with Telegram</button>':''}<button type="button" class="button button-subtle" data-action="retry-session">Retry session</button></div><p class="small-help">Your key is not saved in browser storage. A secure session cookie lasts at most five minutes. Logging out locks the dashboard only; Telegram forwarding continues.</p></section>`;
 }
 function render(){renderNav();dom('mainView').innerHTML=state.apiError?gatePage():state.page==='home'?overviewPage():state.page==='routes'?routesPage():state.page==='filters'?filtersPage():state.page==='queue'?queuePage():state.page==='inspector'?inspectorPage():morePage();}
 
@@ -263,7 +255,9 @@ const actionMap={
  'login-start':(el)=>login('start',{phone:dom('phone').value},el),
  'login-code':(el)=>login('code',{code:dom('telegramCode').value},el),
  'login-password':(el)=>login('password',{password:dom('telegramPassword').value},el),
- 'unlock':async()=>{sessionStorage.setItem('becs_key',dom('adminKey').value);await reload();if(state.apiError)toast('Invalid access key or server configuration',true);}
+ 'unlock':el=>unlockDashboard(el,false),
+ 'unlock-telegram':el=>unlockDashboard(el,true),
+ 'retry-session':()=>window.BecsSession.restore()
 };
 document.addEventListener('click',async event=>{
  const target=event.target.closest('[data-nav],[data-mode],[data-action],[data-edit],[data-delete],[data-jobtab],[data-retry],[data-approve],[data-reject],[data-copy],[data-usechat],[data-filter-preset],[data-route-preset],[data-inspector-kind]');if(!target)return;
@@ -290,5 +284,24 @@ dom('refreshBtn').addEventListener('click',()=>reload());
 dom('modalClose').addEventListener('click',closeModal);
 dom('modal').addEventListener('click',event=>{if(event.target===dom('modal'))closeModal();});
 document.addEventListener('keydown',event=>{if(event.key==='Escape'&&!dom('modal').classList.contains('hidden'))closeModal();});
-reload();
+async function unlockDashboard(button,viaTelegram){
+ const input=dom('adminKey');
+ const key=input?.value||'';
+ if(input)input.value='';
+ if(button)button.disabled=true;
+ try{
+  await window.BecsSession.login(viaTelegram?{init_data:tg?.initData||''}:{admin_token:key});
+ }catch(error){toast(error.message,true);}
+ finally{if(button)button.disabled=false;}
+}
+function lockDashboard(message){
+ state.overview=null;state.routes=[];state.jobs=[];state.reviews=[];
+ state.chats=[];state.inspections=[];state.simResult=null;
+ state.labText='';state.labAllow='';state.labBlock='';state.labPattern='';
+ state.apiError=message;state.page='home';state.editing=null;
+ dom('modal').classList.add('hidden');dom('modalBody').replaceChildren();
+ dom('toastRegion').replaceChildren();
+ render();
+}
+window.BecsSession.start({onUnlock:()=>reload(),onLock:lockDashboard});
 })();
