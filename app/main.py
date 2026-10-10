@@ -35,24 +35,33 @@ managers={account_id:PersonalTelegram(account_id) for account_id in ACCOUNT_IDS}
 manager=AccountManager(managers)
 
 
-def is_valid_init_data(raw: str) -> bool:
+def verified_telegram_user_id(raw: str):
+    """Verify Telegram launch HMAC once, then return only the signed numeric ID."""
     token=os.getenv('TELEGRAM_BOT_TOKEN','')
-    allowed=account_env('BECS_ALLOWED_TELEGRAM_ID')
-    if not raw or not token or not allowed or len(raw)>8192:return False
+    if not raw or not token or len(raw)>8192:return None
     try:
-        data=dict(parse_qsl(raw,keep_blank_values=True,strict_parsing=True))
+        pairs=parse_qsl(raw,keep_blank_values=True,strict_parsing=True)
+        data=dict(pairs)
+        if len(pairs)!=len(data):return None
         given=data.pop('hash')
-        # Ed25519 signature is not included in Bot API HMAC validation.
         data.pop('signature',None)
         timestamp=int(data['auth_date'])
-        if not 0<=time.time()-timestamp<=86400:return False
-        text='\n'.join(f'{k}={v}' for k,v in sorted(data.items()))
+        if not 0<=time.time()-timestamp<=86400:return None
+        signed='\\n'.join(f'{k}={v}' for k,v in sorted(data.items()))
         secret=hmac.new(b'WebAppData',token.encode(),hashlib.sha256).digest()
-        expected=hmac.new(secret,text.encode(),hashlib.sha256).hexdigest()
-        if not hmac.compare_digest(given,expected):return False
-        return str(json.loads(data['user'])['id'])==allowed
+        expected=hmac.new(secret,signed.encode(),hashlib.sha256).hexdigest()
+        if not hmac.compare_digest(given,expected):return None
+        user_id=json.loads(data['user'])['id']
+        if isinstance(user_id,bool) or not str(user_id).isdigit():return None
+        return str(user_id)
     except (ValueError,KeyError,TypeError,OverflowError):
-        return False
+        return None
+
+
+def is_valid_init_data(raw: str) -> bool:
+    user_id=verified_telegram_user_id(raw)
+    allowed=account_env('BECS_ALLOWED_TELEGRAM_ID')
+    return bool(user_id and allowed and hmac.compare_digest(user_id,allowed))
 
 
 def is_authorized(request: Request)->bool:
@@ -126,16 +135,15 @@ def health():return {'ok':True,'service':'becs','version':'2.0.0'}
 
 @app.post('/api/telegram/resolve-account')
 async def resolve_telegram_account(request: Request):
-    """Resolve an authenticated Telegram Mini App user to exactly one account."""
-    raw = request.headers.get('x-telegram-init-data', '')
-    matches = []
-    for account_id in ACCOUNT_IDS:
-        with account_scope(account_id):
-            if is_valid_init_data(raw):
-                matches.append(account_id)
-    if len(matches) != 1:
-        raise HTTPException(403, 'Telegram account is not authorized for a Becs workspace')
-    return {'account_id': matches[0]}
+    """Route a verified Telegram user to the one authorized workspace."""
+    user_id=verified_telegram_user_id(request.headers.get('x-telegram-init-data',''))
+    if not user_id:
+        raise HTTPException(403,'Telegram Mini App authentication could not be verified. Reopen through @becsmebot.')
+    matches=[account_id for account_id in ACCOUNT_IDS
+             if account_env('BECS_ALLOWED_TELEGRAM_ID',account_id)==user_id]
+    if len(matches)!=1:
+        raise HTTPException(403,'This verified Telegram user ID is not assigned to a Becs account.')
+    return {'account_id':matches[0]}
 
 
 @app.post('/api/auth/session')
