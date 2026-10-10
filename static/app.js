@@ -150,7 +150,7 @@ function filtersPage(){
 }
 function inspectorPage(){
  const rows=state.inspections.filter(x=>state.inspectorKind==='all'||x.kind===state.inspectorKind);
- const kinds=['all','blocked','duplicate','queued','forwarded','review','error'];
+ const kinds=['all','contract','blocked','duplicate','queued','forwarded','review','error'];
  return `${pageHead('AUDIT / LIVE ROUTING','Live Message Inspector','Actual routing decisions, duplicate suppression and delivery events.')}
  <section class="panel"><div class="panel-header"><h2>Recorded events</h2><button class="button button-small" data-action="refresh-inspector">${icon('refresh')} Refresh</button></div>
  <div class="queue-tabs">${kinds.map(k=>`<button class="tab-button ${state.inspectorKind===k?'active':''}" data-inspector-kind="${k}">${safe(k)}</button>`).join('')}</div>
