@@ -47,7 +47,7 @@ def verified_telegram_user_id(raw: str):
         data.pop('signature',None)
         timestamp=int(data['auth_date'])
         if not 0<=time.time()-timestamp<=86400:return None
-        signed='\\n'.join(f'{k}={v}' for k,v in sorted(data.items()))
+        signed='\n'.join(f'{k}={v}' for k,v in sorted(data.items()))
         secret=hmac.new(b'WebAppData',token.encode(),hashlib.sha256).digest()
         expected=hmac.new(secret,signed.encode(),hashlib.sha256).hexdigest()
         if not hmac.compare_digest(given,expected):return None
