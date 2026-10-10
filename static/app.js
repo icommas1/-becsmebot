@@ -3,6 +3,15 @@
 'use strict';
 const tg = window.Telegram?.WebApp;
 const accountId = new URLSearchParams(location.search).get('account') || 'primary';
+// Telegram may omit launch data after an in-app URL redirect. Preserve only this
+// tab's signed launch payload, never an unverified user ID or an owner key.
+const INIT_KEY = 'becs_telegram_signed_launch';
+let telegramInitData = tg?.initData || '';
+if (telegramInitData) {
+ try { sessionStorage.setItem(INIT_KEY,telegramInitData); } catch (_) {}
+} else {
+ try { telegramInitData = sessionStorage.getItem(INIT_KEY) || ''; } catch (_) {}
+}
 const accountNames = {'primary':'Account 1', 'account-2':'Doc', 'account-3':'Account 3'};
 const accountName = accountNames[accountId] || 'Unknown account';
 const keyName = 'becs_key:' + accountId;
@@ -62,7 +71,7 @@ async function request(path,options={}) {
  const requestEpoch=authEpoch;
  const headers={'Accept':'application/json',...(options.body?{'Content-Type':'application/json'}:{}),...(options.headers||{})};
  const auth=localStorage.getItem(keyName); if(auth && !headers['X-Becs-Key'])headers['X-Becs-Key']=auth;
- if(tg?.initData)headers['X-Telegram-Init-Data']=tg.initData;
+ if(telegramInitData)headers['X-Telegram-Init-Data']=telegramInitData;
  let response;
  try { response=await fetch('/api/accounts/'+encodeURIComponent(accountId)+path,{...options,headers,cache:'no-store'}); }
  catch {throw new Error('Becs server is unreachable. Start the FastAPI service and try again.');}
@@ -309,13 +318,16 @@ dom('modalClose').addEventListener('click',closeModal);
 dom('modal').addEventListener('click',event=>{if(event.target===dom('modal'))closeModal();});
 document.addEventListener('keydown',event=>{if(event.key==='Escape'&&!dom('modal').classList.contains('hidden'))closeModal();});
 async function boot(){
- if(tg?.initData){
+ if(telegramInitData){
   try{
    const response=await fetch('/api/telegram/resolve-account',{
-    method:'POST',headers:{'X-Telegram-Init-Data':tg.initData},
+    method:'POST',headers:{'X-Telegram-Init-Data':telegramInitData},
     cache:'no-store',credentials:'same-origin'
    });
-   if(!response.ok)throw new Error('This Telegram user is not authorized for a Becs account.');
+   if(!response.ok){
+    if(response.status===403)throw new Error('Telegram identity was not accepted. Ask the owner to verify your numeric Telegram ID in Railway, then close and reopen the Mini App.');
+    throw new Error('Unable to identify Telegram account. Close and reopen the Mini App.');
+   }
    const resolved=await response.json();
    if(!accountNames[resolved.account_id])throw new Error('Unrecognized account');
    if(resolved.account_id!==accountId){
