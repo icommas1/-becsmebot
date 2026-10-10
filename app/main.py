@@ -223,6 +223,20 @@ def simulate(payload:Simulation):
     result['fingerprint']=dedup_fingerprint(payload.text,result)[:16]
     return result
 
+@app.get('/api/inspector')
+def inspector(limit:int=100, kind:str='all'):
+    limit=max(1,min(limit,200))
+    allowed={'all','blocked','duplicate','queued','forwarded','review','error','contract','ai'}
+    if kind not in allowed: raise HTTPException(422,'Unknown event kind')
+    with connection() as db:
+        sql="""SELECT e.*,r.name AS route_name FROM events e
+            LEFT JOIN routes r ON r.id=e.route_id"""
+        if kind=='all':
+            rows=db.execute(sql+" WHERE e.kind IN ('blocked','duplicate','queued','forwarded','review','error','contract','ai') ORDER BY e.id DESC LIMIT ?",(limit,)).fetchall()
+        else:
+            rows=db.execute(sql+" WHERE e.kind=? ORDER BY e.id DESC LIMIT ?",(kind,limit)).fetchall()
+    return {'items':[dict(row) for row in rows], 'source':'recorded_events'}
+
 @app.get('/api/jobs')
 def jobs(status:str='all',limit:int=100):
     limit=max(1,min(limit,200))

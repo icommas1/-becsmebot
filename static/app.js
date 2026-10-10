@@ -45,8 +45,8 @@ const fmt = number => Intl.NumberFormat().format(number||0);
 const age = value => { if (!value) return ''; const seconds=Math.max(0,Math.floor(Date.now()/1000-value)); return seconds<60?'just now':seconds<3600?Math.floor(seconds/60)+'m ago':seconds<86400?Math.floor(seconds/3600)+'h ago':new Date(value*1000).toLocaleDateString(); };
 const navigate = name => { state.page=name; render(); window.scrollTo({top:0,behavior:'smooth'}); };
 const modes = [{id:'express',title:'Express',sub:'Fastest',ico:'bolt',cls:'mode-express',help:'Forward with essential route checks; no AI or optional content filters in the critical path.'},{id:'smart',title:'Smart',sub:'Filtered',ico:'filter',cls:'mode-smart',help:'Use local keyword, address, regex and duplicate rules before queueing.'},{id:'hybrid',title:'Hybrid',sub:'AI Assist',ico:'brain',cls:'mode-hybrid',help:'Local filters decide first; AI can analyze afterward without blocking delivery.'},{id:'ai-gated',title:'AI-Gated',sub:'AI Decision',ico:'shield',cls:'mode-ai-gated',help:'Require AI approval before forwarding. If AI is unavailable, messages are held for review.'}];
-const nav=[['home','Home','home'],['routes','Routes','routes'],['filters','Filters','filter'],['queue','Queue','queue'],['more','More','more']];
-const state={page:'home',overview:null,routes:[],jobs:[],reviews:[],chats:[],jobTab:'all',simResult:null,modeExplain:'smart',busy:false,apiError:'',chatSearch:'',editing:null};
+const nav=[['home','Home','home'],['routes','Routes','routes'],['filters','Smart Filters','filter'],['queue','Queue','queue'],['inspector','Inspector','activity'],['more','More','more']];
+const state={page:'home',overview:null,routes:[],jobs:[],reviews:[],chats:[],inspections:[],inspectorKind:'all',jobTab:'all',simResult:null,modeExplain:'smart',busy:false,apiError:'',chatSearch:'',editing:null};
 const dom = id => document.getElementById(id);
 
 async function request(path,options={}) {
@@ -64,10 +64,10 @@ function toast(message,isError=false){const el=document.createElement('div');el.
 async function reload(full=true){
  try{
   const calls=[request('/overview'),request('/routes')];
-  if(full)calls.push(request('/jobs?limit=100'),request('/reviews'));
+  if(full)calls.push(request('/jobs?limit=100'),request('/reviews'),request('/inspector?limit=100'));
   const result=await Promise.all(calls);
   state.overview=result[0];state.routes=result[1].routes;
-  if(full){state.jobs=result[2].jobs;state.reviews=result[3].reviews;}
+  if(full){state.jobs=result[2].jobs;state.reviews=result[3].reviews;state.inspections=result[4].items;}
   state.apiError='';render();
  }catch(e){state.apiError=e.message;render();}
 }
@@ -75,7 +75,7 @@ function renderNav(){
  const html=nav.map(([id,label,ico])=>`<button class="nav-item ${state.page===id?'active':''}" data-nav="${id}">${icon(ico)} ${label}</button>`).join('');
  dom('sideNav').innerHTML=html;
  dom('bottomNav').innerHTML=nav.map(([id,label,ico])=>`<button class="bottom-tab ${state.page===id?'active':''}" data-nav="${id}" aria-label="${label}" ${state.page===id?'aria-current="page"':''}>${icon(ico)}<span>${label}</span></button>`).join('');
- dom('crumb').textContent=({home:'Overview',routes:'Routes',filters:'Regex Lab',queue:'Delivery Queue',more:'System Settings'})[state.page];
+ dom('crumb').textContent=({home:'Overview',routes:'Routes',filters:'Regex Lab',queue:'Delivery Queue',inspector:'Message Inspector',more:'System Settings'})[state.page];
  const active=state.overview?.telegram?.authorized;
  dom('sideDot').classList.toggle('online',!!active);
  dom('sideConnection').textContent=active?'Personal account connected':'Telegram not connected';
@@ -121,13 +121,26 @@ function routesPage(){
  <div class="top-hero"><div class="hero-left"><span class="hero-symbol">${icon('routes')}</span><div><b>One personal Telegram account</b><small>Multiple configurable routes · one outbound send at a time</small></div></div>${pill(`${state.routes.filter(r=>r.enabled).length} active`,'success')}</div>
  ${content?`<div class="route-list">${content}</div>`:empty('routes','No routes configured','Create your first Express, Smart, Hybrid or AI-Gated crypto route.',`<button class="button button-primary" data-action="new-route">${icon('plus')} Build first route</button>`)}`;
 }
+const filterPresets=[
+ {id:'solana',label:'Solana CA',network:'solana',contract:true,pattern:''},
+ {id:'evm',label:'EVM CA',network:'evm',contract:true,pattern:''},
+ {id:'both',label:'Any CA',network:'both',contract:true,pattern:''},
+ {id:'launch',label:'Launch / Presale',network:'both',contract:false,pattern:'(launch|presale|liquidity)'},
+ {id:'clear',label:'Clear preset',network:'both',contract:false,pattern:''}
+];
+function applyFilterPreset(id,route=false){
+ const p=filterPresets.find(x=>x.id===id);if(!p)return;
+ const n=dom(route?'routeNetwork':'labNetwork'),c=dom(route?'routeContract':'labContract'),rx=dom(route?'routePattern':'labPattern');
+ if(n)n.value=p.network;if(c)c.checked=p.contract;if(rx)rx.value=p.pattern;
+ toast(p.label+' preset applied. Review before saving.');
+}
 const currentSimRoute=()=>({name:'Filter Lab',mode:'smart',enabled:false,sources:[],destinations:[],allowed:dom('labAllow')?.value||'',blocked:dom('labBlock')?.value||'',pattern:dom('labPattern')?.value||'',match_mode:dom('labMatch')?.value||'any',network:dom('labNetwork')?.value||'both',require_contract:dom('labContract')?.checked||false,dedup_minutes:60,delivery_style:'native'});
 function filtersPage(){
  const addresses=state.simResult?.addresses||[];const res=state.simResult;
  return `${pageHead('CRYPTO ENGINE / LOCAL TEST','Crypto Filter Lab','Test contract detection, custom regex, keyword rules and blacklists without forwarding anything.')}
  <div class="lab-grid"><section class="panel"><div class="panel-header"><h2>Message and filter rules</h2>${pill('SAFE SIMULATION')}</div>
  <div class="field"><label>Incoming crypto message</label><textarea id="labMessage" rows="6" placeholder="Paste any Telegram crypto message here...">${safe(state.labText??'NEW SOL launch · CA: So11111111111111111111111111111111111111112 · liquidity locked')}</textarea></div>
- <div class="form-grid"><div class="field"><label>Blockchain format</label><select id="labNetwork"><option value="both">Solana + EVM</option><option value="solana">Solana only</option><option value="evm">Ethereum / EVM only</option></select></div><div class="field"><label>Keyword logic</label><select id="labMatch"><option value="any">Match ANY keyword</option><option value="all">Match ALL keywords</option></select></div></div>
+ <div class="field"><label>Smart Filters V2 — quick rules</label><div style="display:flex;gap:8px;flex-wrap:wrap">${filterPresets.map(p=>`<button type="button" class="button button-small" data-filter-preset="${p.id}">${safe(p.label)}</button>`).join('')}</div><span class="field-help">Presets fill the form. Test filter previews the decision without forwarding.</span></div><div class="form-grid"><div class="field"><label>Blockchain format</label><select id="labNetwork"><option value="both">Solana + EVM</option><option value="solana">Solana only</option><option value="evm">Ethereum / EVM only</option></select></div><div class="field"><label>Keyword logic</label><select id="labMatch"><option value="any">Match ANY keyword</option><option value="all">Match ALL keywords</option></select></div></div>
  <div class="field"><label>Allowed keywords (comma-separated)</label><input id="labAllow" value="${safe(state.labAllow??'launch, liquidity, CA')}" placeholder="launch, liquidity, CA"></div>
  <div class="field"><label>Blocked keywords</label><input id="labBlock" value="${safe(state.labBlock??'scam, giveaway')}" placeholder="scam, giveaway"></div>
  <div class="field"><label>Custom regex (optional)</label><input id="labPattern" spellcheck="false" value="${safe(state.labPattern??'')}" placeholder="\\b(launch|presale)\\b"><span class="field-help">Timeout-protected regex. Custom patterns require a match when provided.</span></div>
@@ -135,6 +148,16 @@ function filtersPage(){
  <button class="button button-primary" data-action="run-sim">${icon('flask')} Test filter</button></section>
  <section class="panel"><div class="panel-header"><h2>Decision inspector</h2>${pill('LOCAL ONLY')}</div>${res?`<div class="lab-result"><div style="display:flex;justify-content:space-between;align-items:center"><b>Evaluation result</b>${pill(res.decision.toUpperCase(),res.decision==='forward'?'success':res.decision==='invalid'?'error':'warn')}</div><p class="helper-line">${safe(res.reason)}</p></div><div class="result-detail"><span>Address candidates</span><b>${addresses.length}</b></div><div class="result-detail"><span>Keyword matches</span><b>${safe(res.allowed_hits.join(', ')||'None')}</b></div><div class="result-detail"><span>Blacklist hits</span><b>${safe(res.blocked_hits.join(', ')||'None')}</b></div><div class="result-detail"><span>Custom regex</span><b>${res.regex_match?'Matched':'Not matched / inactive'}</b></div><div class="divider"></div><h3 class="section-title">Extracted addresses</h3>${addresses.length?`<div class="tag-list">${addresses.map(a=>`<span class="chip">${safe(a.network)} · ${safe(a.address)}</span>`).join('')}</div>`:'<p class="helper-line">No valid Solana / EVM address-format candidates found.</p>'}<p class="small-help">Address-format detection does not prove token-mint validity or confirm on-chain contracts. The simulator makes no network requests.</p>`:empty('flask','Ready to test','Set up filter rules and click Test filter to see the exact decision.')}</section></div>`;
 }
+function inspectorPage(){
+ const rows=state.inspections.filter(x=>state.inspectorKind==='all'||x.kind===state.inspectorKind);
+ const kinds=['all','blocked','duplicate','queued','forwarded','review','error'];
+ return `${pageHead('AUDIT / LIVE ROUTING','Live Message Inspector','Actual routing decisions, duplicate suppression and delivery events.')}
+ <section class="panel"><div class="panel-header"><h2>Recorded events</h2><button class="button button-small" data-action="refresh-inspector">${icon('refresh')} Refresh</button></div>
+ <div class="queue-tabs">${kinds.map(k=>`<button class="tab-button ${state.inspectorKind===k?'active':''}" data-inspector-kind="${k}">${safe(k)}</button>`).join('')}</div>
+ ${rows.length?rows.map(x=>`<div class="job-line"><span class="event-icon ${x.kind==='forwarded'?'success':'warn'}">${icon(x.kind==='duplicate'?'copy':x.kind==='forwarded'?'check':'activity')}</span><div class="job-details"><b>${safe(x.kind.toUpperCase())} · ${safe(x.route_name||'Route #'+(x.route_id??'?'))}</b><small>${safe(x.detail)}</small><small>Source ${safe(x.source_id||'—')} → Destination ${safe(x.destination_id||'—')} · ${age(x.created_at)}</small></div></div>`).join(''):empty('activity','No recorded events','New messages processed by enabled routes will appear here.')}</section>
+ <p class="small-help">Recorded events only, not samples. Blocked events include filter reasons but do not yet include message IDs. Queued does not mean delivered; check Queue for confirmed sends.</p>`;
+}
+async function refreshInspector(){try{state.inspections=(await request('/inspector?limit=100')).items;render();}catch(e){toast(e.message,true);}}
 function queuePage(){
  const jobs=state.jobs.filter(j=>state.jobTab==='all'||j.status===state.jobTab);
  const tabs=[['all','All'],['queued','Pending'],['sent','Delivered'],['failed','Failed'],['review','Review']];
@@ -160,7 +183,7 @@ function morePage(){
 function gatePage(){
  return `<div class="page-head"><div><p class="eyebrow">SECURE ACCESS</p><h1>Becs access required</h1><p class="subheading">Open this inside your authorized Telegram Mini App, or enter your configured server access key.</p></div></div><section class="panel login-card"><div class="notice warn">${icon('lock')} ${safe(state.apiError||'Protected backend')}</div><div class="field" style="margin-top:20px"><label>BECS_ADMIN_TOKEN</label><input id="adminKey" type="password" autocomplete="off" placeholder="Enter your server access key"></div><button class="button button-primary" data-action="unlock">Unlock Becs</button><p class="small-help">Your key stays in this browser tab session only. Local development on 127.0.0.1 is permitted without a key.</p></section>`;
 }
-function render(){renderNav();dom('mainView').innerHTML=state.apiError?gatePage():state.page==='home'?overviewPage():state.page==='routes'?routesPage():state.page==='filters'?filtersPage():state.page==='queue'?queuePage():morePage();}
+function render(){renderNav();dom('mainView').innerHTML=state.apiError?gatePage():state.page==='home'?overviewPage():state.page==='routes'?routesPage():state.page==='filters'?filtersPage():state.page==='queue'?queuePage():state.page==='inspector'?inspectorPage():morePage();}
 
 function newRouteDefaults(m='smart'){return {name:'',mode:m,enabled:false,sources:[],destinations:[],allowed:'',blocked:'',pattern:'',match_mode:'any',network:'both',require_contract:false,dedup_minutes:60,delivery_style:'native'};}
 function field(label,id,value='',placeholder='',help='',type='text'){return `<div class="field"><label for="${id}">${label}</label><input id="${id}" type="${type}" value="${safe(value)}" placeholder="${safe(placeholder)}">${help?`<span class="field-help">${help}</span>`:''}</div>`;}
@@ -178,7 +201,7 @@ function routeModal(route=null){
  <div class="field"><label for="destReference">Add destination @username or chat ID</label><div style="display:flex;gap:8px"><input id="destReference" placeholder="@destinationchannel" autocomplete="off"><button type="button" class="button button-small" data-action="resolve-destination">Add</button></div></div>
  <p class="field-help">Selections are stored as resolved chat IDs. To remove a selection, uncheck it or remove its ID from the selected field. Existing saved routes remain unchanged until you press Save.</p></div>`;
  dom('modalBody').innerHTML=`<form id="routeForm"><div class="form-grid"><div>${field('Route name','routeName',r.name,'New Contract Scanner')}${selectField('Routing mode','routeMode',r.mode,modes.map(m=>[m.id,m.title]),'Express, Smart, Hybrid AI and AI-Gated are all supported.')}${field('Selected sources (resolved IDs)','routeSources',r.sources.join(', '),'-1001234567890')}${field('Selected destinations (resolved IDs)','routeDests',r.destinations.join(', '),'-1009876543210')}</div><div>${selectField('Blockchain address format','routeNetwork',r.network,[['both','Solana + EVM'],['solana','Solana only'],['evm','Ethereum / EVM only']])}${selectField('Keyword condition','routeMatch',r.match_mode,[['any','Match ANY'],['all','Match ALL']])}${field('Allowed keywords','routeAllow',r.allowed,'launch, CA, liquidity')}${field('Blocked keywords','routeBlock',r.blocked,'giveaway, scam')}</div></div>
- <div class="modal-section"><h3 class="section-title">Advanced crypto filters & delivery</h3><div class="form-grid"><div>${field('Custom regex pattern','routePattern',r.pattern,'\\b(launch|CA)\\b','Timeout-limited regex; blank disables the custom match.')}${field('Duplicate cooldown in minutes','routeCooldown',r.dedup_minutes,'60','','number')}</div><div>${selectField('Delivery method','routeStyle',r.delivery_style,[['native','Telegram native forward (preserves media)'],['text','Send text only (loses media)']])}<label class="checkboxline" style="margin-top:15px"><input id="routeContract" type="checkbox" ${r.require_contract?'checked':''}> Require Solana/EVM address candidate</label><label class="checkboxline"><input id="routeEnabled" type="checkbox" ${r.enabled?'checked':''}> Enable route after saving</label></div></div></div>${chatOptions}
+ <div class="modal-section"><h3 class="section-title">Smart filter presets</h3><div style="display:flex;gap:8px;flex-wrap:wrap">${filterPresets.map(p=>`<button type="button" class="button button-small" data-route-preset="${p.id}">${safe(p.label)}</button>`).join('')}</div><p class="field-help">Presets update network, contract requirement and regex. Existing routes are unchanged until Save.</p></div><div class="modal-section"><h3 class="section-title">Advanced crypto filters & delivery</h3><div class="form-grid"><div>${field('Custom regex pattern','routePattern',r.pattern,'\\b(launch|CA)\\b','Timeout-limited regex; blank disables the custom match.')}${field('Duplicate cooldown in minutes','routeCooldown',r.dedup_minutes,'60','','number')}</div><div>${selectField('Delivery method','routeStyle',r.delivery_style,[['native','Telegram native forward (preserves media)'],['text','Send text only (loses media)']])}<label class="checkboxline" style="margin-top:15px"><input id="routeContract" type="checkbox" ${r.require_contract?'checked':''}> Require Solana/EVM address candidate</label><label class="checkboxline"><input id="routeEnabled" type="checkbox" ${r.enabled?'checked':''}> Enable route after saving</label></div></div></div>${chatOptions}
  <div class="notice" style="margin-top:14px">${icon('shield')} Express skips optional content filters for speed; every mode still enforces account permissions, deduplication if enabled, and self-loop prevention. AI-Gated routes hold messages for review if the AI provider is unavailable.</div>
  <div class="modal-actions"><button type="button" class="button" data-action="close-modal">Cancel</button><button type="submit" class="button button-primary">${icon('check')} ${route?'Save route':'Create route'}</button></div></form>`;
  dom('modal').classList.remove('hidden');renderChatPicker();dom('routeName').focus();
@@ -233,7 +256,7 @@ async function reviewItem(id,approve){try{await request('/reviews/'+id,{method:'
 async function retryJob(id){try{await request('/jobs/'+id+'/retry',{method:'POST'});await reload();toast('Job requeued');}catch(e){toast(e.message,true);}}
 const actionMap={
  'new-route':()=>routeModal(), 'open-routes':()=>navigate('routes'),'open-filters':()=>navigate('filters'),'open-queue':()=>navigate('queue'),'open-settings':()=>navigate('more'),
- 'refresh':()=>reload(), 'pause':()=>updatePause(true), 'resume':()=>updatePause(false),'close-modal':closeModal,
+ 'refresh':()=>reload(),'refresh-inspector':refreshInspector, 'pause':()=>updatePause(true), 'resume':()=>updatePause(false),'close-modal':closeModal,
  'run-sim':simulate,'load-chats':loadChats,
  'refresh-route-chats':refreshRouteChats,'resolve-source':()=>addChatReference('source'),'resolve-destination':()=>addChatReference('destination'),
  'disconnect':async()=>{if(!confirm('Disconnect the server from Telegram? The saved session will remain available for reconnect.'))return;try{await request('/telegram/disconnect',{method:'POST'});await reload();toast('Telegram disconnected');}catch(e){toast(e.message,true);}},
@@ -243,7 +266,10 @@ const actionMap={
  'unlock':async()=>{sessionStorage.setItem('becs_key',dom('adminKey').value);await reload();if(state.apiError)toast('Invalid access key or server configuration',true);}
 };
 document.addEventListener('click',async event=>{
- const target=event.target.closest('[data-nav],[data-mode],[data-action],[data-edit],[data-delete],[data-jobtab],[data-retry],[data-approve],[data-reject],[data-copy],[data-usechat]');if(!target)return;
+ const target=event.target.closest('[data-nav],[data-mode],[data-action],[data-edit],[data-delete],[data-jobtab],[data-retry],[data-approve],[data-reject],[data-copy],[data-usechat],[data-filter-preset],[data-route-preset],[data-inspector-kind]');if(!target)return;
+ if(target.dataset.filterPreset){applyFilterPreset(target.dataset.filterPreset);return;}
+ if(target.dataset.routePreset){applyFilterPreset(target.dataset.routePreset,true);return;}
+ if(target.dataset.inspectorKind){state.inspectorKind=target.dataset.inspectorKind;render();return;}
  if(target.dataset.nav){navigate(target.dataset.nav);return;}
  if(target.dataset.mode){state.modeExplain=target.dataset.mode;render();return;}
  if(target.dataset.action){await actionMap[target.dataset.action]?.(target);return;}
