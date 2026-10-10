@@ -3,7 +3,7 @@
 'use strict';
 const tg = window.Telegram?.WebApp;
 const accountId = new URLSearchParams(location.search).get('account') || 'primary';
-const accountNames = {'primary':'Account 1', 'account-2':'Account 2', 'account-3':'Account 3'};
+const accountNames = {'primary':'Account 1', 'account-2':'Doc', 'account-3':'Account 3'};
 const accountName = accountNames[accountId] || 'Unknown account';
 const keyName = 'becs_key:' + accountId;
 let authEpoch = 0;
