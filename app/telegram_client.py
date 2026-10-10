@@ -188,13 +188,27 @@ class PersonalTelegram:
                 'role': role, 'validated': True}
 
     async def send(self, job, delivery_style):
+        """Native Telegram forward; resolve source and destination against accessible dialogs."""
         client=await self.ensure_client()
-        if not await client.is_user_authorized(): raise RuntimeError('Telegram sign-in required')
-        source=self.peer(job['source_id']); destination=self.peer(job['destination_id'])
-        if delivery_style=='text':
-            await client.send_message(destination, job['message_preview'], link_preview=False)
-        else:
-            await client.forward_messages(destination, int(job['message_id']), from_peer=source)
+        if not await client.is_user_authorized():
+            raise RuntimeError('Telegram sign-in required')
+        # A bare numeric ID is not always enough for Telegram to construct an
+        # InputPeer: channels and users also need an access hash. Resolve from
+        # the connected account's dialogs rather than forwarding raw IDs.
+        ids={str(job['source_id']),str(job['destination_id'])}
+        peers={}
+        async for dialog in client.iter_dialogs(limit=None):
+            if str(dialog.id) in ids:
+                peers[str(dialog.id)]=await client.get_input_entity(dialog.entity)
+                if len(peers)==len(ids):break
+        missing=ids-set(peers)
+        if missing:
+            raise LookupError('Selected Telegram chat is no longer accessible: '+', '.join(sorted(missing)))
+        await client.forward_messages(
+            peers[str(job['destination_id'])],
+            int(job['message_id']),
+            from_peer=peers[str(job['source_id'])]
+        )
 
     async def disconnect(self, logout=False):
         if self.client:
