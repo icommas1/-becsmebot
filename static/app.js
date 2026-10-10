@@ -207,7 +207,7 @@ function routeModal(route=null){
  <p class="field-help">Only checked chats are selected. No manual source IDs.</p></div>`;
  const preset=r.pattern||'';
  const prefix=key=>preset.includes('(?=[\\s\\S]*'+key+')');
- const reqLink=prefix('https?://'),reqNumber=prefix('\\d'),reqMention=prefix('@');
+ const reqLink=prefix('https?://'),reqNumber=prefix('\\d'),reqMention=prefix('@[A-Za-z0-9_]+');
  const network=r.network||'both';
  dom('modalBody').innerHTML=`<form id="routeForm" class="becs-smart-form">
  <div class="field"><label for="routeName">Route name</label><input id="routeName" required minlength="2" maxlength="100" value="${safe(r.name)}" placeholder="Crypto signals"></div>
@@ -286,6 +286,7 @@ function collectRoute(){
  if(dom('routeReqMention').checked)req.push('(?=[\\s\\S]*@[A-Za-z0-9_]+)');
  let pattern=req.join('');
  if(pattern)pattern='(?s)'+pattern+'.*';
+ else pattern=dom('routePattern').value||'';
  if(pattern.length>250)throw Error('Optional requirements exceed regex limit');
  const mode=document.querySelector('.becs-mode-button.active')?.dataset.filterMode||'token';
  let allowed=dom('routeAllow').value.trim();
