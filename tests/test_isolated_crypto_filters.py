@@ -17,12 +17,12 @@ class IsolatedCryptoFilterTests(unittest.TestCase):
     def test_blocked_keyword_takes_priority(self):
         self.assertEqual(decide('🎁 giveaway '+SOL,route(blocked='giveaway'))['decision'],'block')
     def test_x_status_regex(self):
-        pattern=r'https?://(?:www\\.)?(?:x\\.com|twitter\\.com)/[A-Za-z0-9_]+/status/\\d+'
+        pattern=r'https?://(?:www\.)?(?:x\.com|twitter\.com)/[A-Za-z0-9_]+/status/\d+'
         self.assertEqual(decide('https://x.com/example/status/123 '+SOL,route(pattern=pattern))['decision'],'forward')
         self.assertEqual(decide('https://twitter.com/example/status/123 '+SOL,route(pattern=pattern))['decision'],'forward')
         self.assertEqual(decide('https://x.com/example '+SOL,route(pattern=pattern))['decision'],'block')
     def test_market_cap_regex(self):
-        pattern=r'(?i)\\b(?:mc|market cap)\\s*[:=$ ]*\\s*\\$?\\d+(?:\\.\\d+)?\\s*[kmb]\\b'
+        pattern=r'(?i)\b(?:mc|market cap)\s*[:=$ ]*\s*\$?\d+(?:\.\d+)?\s*[kmb]\b'
         self.assertEqual(decide('MC $28K '+SOL,route(pattern=pattern))['decision'],'forward')
         self.assertEqual(decide('price $28K '+SOL,route(pattern=pattern))['decision'],'block')
     def test_bad_regex_is_not_allowed(self):
