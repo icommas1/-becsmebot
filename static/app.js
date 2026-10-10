@@ -45,7 +45,7 @@ const fmt = number => Intl.NumberFormat().format(number||0);
 const age = value => { if (!value) return ''; const seconds=Math.max(0,Math.floor(Date.now()/1000-value)); return seconds<60?'just now':seconds<3600?Math.floor(seconds/60)+'m ago':seconds<86400?Math.floor(seconds/3600)+'h ago':new Date(value*1000).toLocaleDateString(); };
 const navigate = name => { state.page=name; render(); window.scrollTo({top:0,behavior:'smooth'}); };
 const modes = [{id:'express',title:'Express',sub:'Fastest',ico:'bolt',cls:'mode-express',help:'Forward with essential route checks; no AI or optional content filters in the critical path.'},{id:'smart',title:'Smart',sub:'Filtered',ico:'filter',cls:'mode-smart',help:'Use local keyword, address, regex and duplicate rules before queueing.'},{id:'hybrid',title:'Hybrid',sub:'AI Assist',ico:'brain',cls:'mode-hybrid',help:'Local filters decide first; AI can analyze afterward without blocking delivery.'},{id:'ai-gated',title:'AI-Gated',sub:'AI Decision',ico:'shield',cls:'mode-ai-gated',help:'Require AI approval before forwarding. If AI is unavailable, messages are held for review.'}];
-const nav=[['home','Home','home'],['routes','Routes','routes'],['filters','Filters','filter'],['queue','Queue','queue'],['more','More','more']];
+const nav=[['home','Home','home'],['routes','Routes','routes'],['more','Settings','more']];
 const state={page:'home',overview:null,routes:[],jobs:[],reviews:[],chats:[],jobTab:'all',simResult:null,modeExplain:'smart',busy:false,apiError:'',chatSearch:'',editing:null};
 const dom = id => document.getElementById(id);
 
@@ -64,10 +64,10 @@ function toast(message,isError=false){const el=document.createElement('div');el.
 async function reload(full=true){
  try{
   const calls=[request('/overview'),request('/routes')];
-  if(full)calls.push(request('/jobs?limit=100'),request('/reviews'));
+  if(full){}
   const result=await Promise.all(calls);
   state.overview=result[0];state.routes=result[1].routes;
-  if(full){state.jobs=result[2].jobs;state.reviews=result[3].reviews;}
+  if(full){state.jobs=[];state.reviews=[];}
   state.apiError='';render();
  }catch(e){state.apiError=e.message;render();}
 }
@@ -95,33 +95,19 @@ function activityRow(evt){
 }
 function briefRoute(route){const m=modes.find(x=>x.id===route.mode)||modes[1];return `<div class="route-brief"><span class="route-glyph">${icon(m.ico,m.cls)}</span><div class="route-detail"><strong>${safe(route.name)}</strong><small>${m.title} · ${route.sources.length} sources → ${route.destinations.length} destinations</small></div>${pill(route.enabled?'Enabled':'Draft',route.enabled?'success':'')}</div>`;}
 function overviewPage(){
- const o=state.overview;const st=o.stats;const status=o.telegram;
- const note=status.authorized?'Connection authorized':status.configured?'Sign in to enable forwarding':'API credentials not configured';
- const chart=o.graph||[];const max=Math.max(1,...chart);
- const chartHtml=`<div class="terminal-chart" role="img" aria-label="Actual messages delivered each hour over the past 12 hours">${chart.map(v=>`<div class="bar" title="${v} sent" style="height:${Math.max(2,v/max*100)}%"></div>`).join('')}</div><div class="chart-labels"><span>12 HOURS AGO</span><span>${chart.some(Boolean)?'LIVE DELIVERY RECORDS':'AWAITING FIRST DELIVERY'}</span><span>NOW</span></div>`;
- const accountStatus=status.authorized?['Connected','good']:status.configured?['Sign in required','warning']:['Needs setup','warning'];
- const rows=[['person','Telegram account',note,...accountStatus],['routes','Forwarding engine',o.paused?'Paused':'Ready for routes',o.paused?'Paused':'Enabled',o.paused?'warning':'good'],['brain','AI provider',o.ai_configured?'Key configured — optional':'Local filters work without AI',o.ai_configured?'Configured':'Optional',o.ai_configured?'good':''],['queue','Outgoing queue',o.cooldown_seconds?`Account cooldown: ${o.cooldown_seconds}s`:'One personal account · sequential sends',`${st.queued} pending`,o.cooldown_seconds?'warning':st.failed?'warning':'']];
- const health=`<div class="health-list">${rows.map(([ico,label,desc,right,dot])=>`<div class="health-row"><span class="left-icon">${icon(ico)}</span><div><div class="status-main">${label}</div><div class="status-sub">${safe(desc)}</div></div><div class="status-right"><span class="dot ${dot||''}"></span>${safe(right)}</div></div>`).join('')}</div>`;
- const quick=`<div class="quick-grid">${[['plus','New route','new-route'],['flask','Regex lab','open-filters'],['queue','View queue','open-queue'],[o.paused?'play':'pause',o.paused?'Resume':'Pause',o.paused?'resume':'pause']].map(([ico,label,act])=>`<button class="quick-tool" data-action="${act}">${icon(ico)}<span>${label}</span></button>`).join('')}</div>`;
- return `${pageHead('PERSONAL TERMINAL / LIVE DATA','Command Center','Real controls, crypto routing and delivery status — all in one place.',`<button class="button button-primary" data-action="new-route">${icon('plus')} New route</button>`)}
- <div class="top-hero"><div class="hero-left"><span class="hero-symbol">${icon(o.paused?'pause':'shield')}</span><div><b>${o.paused?'Forwarding is paused':status.authorized?'Personal account connected':'Connect your personal Telegram account'}</b><small>${status.authorized?'Ready to process eligible incoming messages':'Setup is required before live forwarding can begin'}</small></div></div><button class="button button-small button-subtle" data-action="open-settings">${status.authorized?'Account details':'Setup'} ${icon('chevron')}</button></div>
- <div class="summary-grid">${metric('FORWARDED',''+st.forwarded,'send','Confirmed deliveries')}${metric('CONTRACTS',st.contracts,'document','Address candidates seen')}${metric('DUPLICATES',st.duplicates,'copy','Suppressed deliveries')}${metric('ROUTES',st.enabled_routes,'routes',st.routes+' total configurations')}</div>
- <div class="dashboard-cols">
- <div style="display:flex;flex-direction:column;gap:17px">${panel('System status',health,`<button class="small-link" data-action="open-settings">Details →</button>`)}${panel('Routing modes',modeTiles(),`<button class="small-link" data-action="open-routes">Manage →</button>`)}${panel('Delivery activity',chartHtml,`<button class="small-link" data-action="open-queue">Queue →</button>`)}</div>
- <div style="display:flex;flex-direction:column;gap:17px">${panel('Quick actions',quick)}${panel('My automations',o.stats.routes?state.routes.slice(0,5).map(briefRoute).join(''):empty('routes','No routes yet','Create your first crypto forwarding route with the Route Builder.',`<button class="button button-small" data-action="new-route">${icon('plus')} Create a route</button>`),`<button class="small-link" data-action="open-routes">View all →</button>`)}${panel('Recent activity',o.activity.length?o.activity.slice(0,6).map(activityRow).join(''):empty('activity','No live events yet','Activity appears here when you create routes, process messages, or test deliveries.'))}</div></div>
- <div style="margin-top:17px">${panel('Queue intelligence',`<div class="queue-strip"><div class="queue-metric"><span>WAITING</span><strong>${st.queued}</strong></div><div class="queue-metric"><span>FAILED</span><strong>${st.failed}</strong></div><div class="queue-metric"><span>REQUIRES REVIEW</span><strong>${st.reviews}</strong></div><div class="queue-metric"><span>DELIVERY STRATEGY</span><strong>${o.cooldown_seconds?`${o.cooldown_seconds}s wait`:'Sequential'}</strong></div><button class="button button-small" data-action="open-queue">Inspect queue ${icon('chevron')}</button></div>`)}</div><p class="footer-label">BECS PERSONAL TERMINAL · ACTUAL STORED METRICS · NO LIVE CONNECTION UNTIL SIGN-IN</p>`;
+ const o=state.overview||{},s=o.stats||{},t=o.telegram||{};
+ return `${pageHead('BECS / TELEGRAM','Forwarding Dashboard','Forward messages between selected Telegram chats. No content analysis or message text storage.',`<button class="button button-primary" data-action="new-route">${icon('plus')} New route</button>`)}
+ <div class="summary-grid">${metric('ACTIVE ROUTES',s.enabled_routes||0,'routes','Configured forwarding routes')}${metric('DELIVERED',s.forwarded||0,'send','Telegram deliveries')}</div>
+ <section class="panel"><div class="panel-header"><h2>Telegram connection</h2>${pill(t.authorized?'Connected':'Setup required',t.authorized?'success':'warn')}</div>
+ <p class="small-help">${t.authorized?'Telegram is connected.':'Connect your Telegram account to load chats.'}</p>
+ <div class="tag-list"><button class="button" data-action="open-routes">Manage routes</button><button class="button" data-action="open-settings">Telegram settings</button><button class="button" data-action="${o.paused?'resume':'pause'}">${o.paused?'Resume forwarding':'Pause forwarding'}</button></div></section>`;
 }
 function routesPage(){
- const action=`<button class="button button-primary" data-action="new-route">${icon('plus')} New route</button>`;
- const content=state.routes.map(r=>{
-  const m=modes.find(x=>x.id===r.mode)||modes[1];
-  return `<article class="route-card"><div class="route-head"><span class="route-glyph">${icon(m.ico,m.cls)}</span><div class="route-detail"><div class="route-name">${safe(r.name)}</div><div class="route-meta">Route #${r.id} · ${m.title}</div></div>${pill(r.enabled?'Enabled':'Paused',r.enabled?'success':'')}</div><div class="route-tags">${pill(`${r.network.toUpperCase()} FORMAT`)}${pill(r.dedup_minutes?`${r.dedup_minutes}m dedupe`:'No dedupe')}${r.require_contract?pill('Contract required'):''}</div><div class="route-arrows"><span>${r.sources.length} source${r.sources.length===1?'':'s'}</span>${icon('arrow')}<span>${r.destinations.length} destination${r.destinations.length===1?'':'s'}</span></div><div class="route-meta" style="margin-top:9px">${safe(r.sources.slice(0,3).join(', ')||'Not selected')} → ${safe(r.destinations.slice(0,2).join(', ')||'Not selected')}</div><div class="route-footer"><label class="toggle" title="Enable or disable route"><input type="checkbox" data-route-toggle="${r.id}" ${r.enabled?'checked':''}><span></span></label><div class="route-buttons"><button class="button button-small" data-edit="${r.id}">${icon('edit')} Edit</button><button class="button button-small button-danger" data-delete="${r.id}">${icon('trash')}</button></div></div></article>`;
- }).join('');
- return `${pageHead('ROUTING / AUTOMATIONS','Forwarding Routes','Build a route, assign a mode, select authorized chats, and configure contract filters.',action)}
- <div class="top-hero"><div class="hero-left"><span class="hero-symbol">${icon('routes')}</span><div><b>One personal Telegram account</b><small>Multiple configurable routes · one outbound send at a time</small></div></div>${pill(`${state.routes.filter(r=>r.enabled).length} active`,'success')}</div>
- ${content?`<div class="route-list">${content}</div>`:empty('routes','No routes configured','Create your first Express, Smart, Hybrid or AI-Gated crypto route.',`<button class="button button-primary" data-action="new-route">${icon('plus')} Build first route</button>`)}`;
+ const cards=state.routes.map(r=>`<article class="route-card"><div class="route-head"><span class="route-glyph">${icon('routes')}</span><div class="route-detail"><div class="route-name">${safe(r.name)}</div><div class="route-meta">${r.sources.length} sources → ${r.destinations.length} destinations</div></div>${pill(r.enabled?'Enabled':'Paused',r.enabled?'success':'')}</div>
+ <div class="route-footer"><label class="toggle"><input type="checkbox" data-route-toggle="${r.id}" ${r.enabled?'checked':''}><span></span></label><div class="route-buttons"><button class="button button-small" data-edit="${r.id}">Edit</button><button class="button button-small button-danger" data-delete="${r.id}">Delete</button></div></div></article>`).join('');
+ return `${pageHead('BECS / ROUTES','Forwarding Routes','Choose your source and destination chats.',`<button class="button button-primary" data-action="new-route">${icon('plus')} New route</button>`)}
+ ${cards?`<div class="route-list">${cards}</div>`:empty('routes','No routes yet','Choose Telegram chats to create your first forwarding route.')}`;
 }
-const currentSimRoute=()=>({name:'Filter Lab',mode:'smart',enabled:false,sources:[],destinations:[],allowed:dom('labAllow')?.value||'',blocked:dom('labBlock')?.value||'',pattern:dom('labPattern')?.value||'',match_mode:dom('labMatch')?.value||'any',network:dom('labNetwork')?.value||'both',require_contract:dom('labContract')?.checked||false,dedup_minutes:60,delivery_style:'native'});
 function filtersPage(){
  const addresses=state.simResult?.addresses||[];const res=state.simResult;
  return `${pageHead('CRYPTO ENGINE / LOCAL TEST','Crypto Filter Lab','Test contract detection, custom regex, keyword rules and blacklists without forwarding anything.')}
@@ -148,7 +134,7 @@ function queuePage(){
 }
 function morePage(){
  const o=state.overview||{}; const t=o.telegram||{};
- return `${pageHead('SYSTEM / PERSONAL EDITION','Account & Settings','Configure your single personal Telegram account, control bot, and optional AI provider.')}
+ return `${pageHead('SYSTEM / PERSONAL EDITION','Account & Settings','Manage your personal Telegram connection.')}
  <div class="dashboard-cols"><div style="display:flex;flex-direction:column;gap:17px"><section class="panel login-card"><div class="panel-header"><h2>Personal Telegram connection</h2>${pill(t.authorized?'Authorized':t.configured?'Not signed in':'Unconfigured',t.authorized?'success':'warn')}</div>
  <div class="notice">${icon('lock')} Login codes and two-step passwords must only be entered here over trusted HTTPS or on your local computer. Never provide them to a Telegram bot chat.</div>
  <div class="divider"></div>
@@ -167,30 +153,33 @@ function field(label,id,value='',placeholder='',help='',type='text'){return `<di
 function selectField(label,id,value,opts,help=''){return `<div class="field"><label for="${id}">${label}</label><select id="${id}">${opts.map(([v,t])=>`<option value="${safe(v)}" ${value===v?'selected':''}>${safe(t)}</option>`).join('')}</select>${help?`<span class="field-help">${help}</span>`:''}</div>`;}
 function routeModal(route=null){
  const r=route||newRouteDefaults();state.editing=route?.id||null;
- dom('modalTitle').textContent=route?`Edit ${r.name}`:'Create forwarding route';
- const chatOptions=`<div class="modal-section"><h3 class="section-title">Select Telegram chats</h3>
- <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:12px"><button type="button" class="button button-small" data-action="refresh-route-chats">Refresh chats</button><span class="field-help">${state.chats.length} chats loaded · nothing is selected automatically</span></div>
- <div class="field"><label for="sourceChatSearch">Search sources</label><input id="sourceChatSearch" type="search" placeholder="Search source channel, @username, or ID..." autocomplete="off"></div>
- <div id="sourceChatList" style="max-height:210px;overflow:auto"></div>
- <div class="field"><label for="sourceReference">Add source @username or chat ID</label><div style="display:flex;gap:8px"><input id="sourceReference" placeholder="@sourcechannel" autocomplete="off"><button type="button" class="button button-small" data-action="resolve-source">Add</button></div></div>
- <div class="field"><label for="destChatSearch">Search destinations</label><input id="destChatSearch" type="search" placeholder="Search destination channel, @username, or ID..." autocomplete="off"></div>
- <div id="destChatList" style="max-height:210px;overflow:auto"></div>
- <div class="field"><label for="destReference">Add destination @username or chat ID</label><div style="display:flex;gap:8px"><input id="destReference" placeholder="@destinationchannel" autocomplete="off"><button type="button" class="button button-small" data-action="resolve-destination">Add</button></div></div>
- <p class="field-help">Selections are stored as resolved chat IDs. To remove a selection, uncheck it or remove its ID from the selected field. Existing saved routes remain unchanged until you press Save.</p></div>`;
- dom('modalBody').innerHTML=`<form id="routeForm"><div class="form-grid"><div>${field('Route name','routeName',r.name,'New Contract Scanner')}${selectField('Routing mode','routeMode',r.mode,modes.map(m=>[m.id,m.title]),'Express, Smart, Hybrid AI and AI-Gated are all supported.')}${field('Selected sources (resolved IDs)','routeSources',r.sources.join(', '),'-1001234567890')}${field('Selected destinations (resolved IDs)','routeDests',r.destinations.join(', '),'-1009876543210')}</div><div>${selectField('Blockchain address format','routeNetwork',r.network,[['both','Solana + EVM'],['solana','Solana only'],['evm','Ethereum / EVM only']])}${selectField('Keyword condition','routeMatch',r.match_mode,[['any','Match ANY'],['all','Match ALL']])}${field('Allowed keywords','routeAllow',r.allowed,'launch, CA, liquidity')}${field('Blocked keywords','routeBlock',r.blocked,'giveaway, scam')}</div></div>
- <div class="modal-section"><h3 class="section-title">Advanced crypto filters & delivery</h3><div class="form-grid"><div>${field('Custom regex pattern','routePattern',r.pattern,'\\b(launch|CA)\\b','Timeout-limited regex; blank disables the custom match.')}${field('Duplicate cooldown in minutes','routeCooldown',r.dedup_minutes,'60','','number')}</div><div>${selectField('Delivery method','routeStyle',r.delivery_style,[['native','Telegram native forward (preserves media)'],['text','Send text only (loses media)']])}<label class="checkboxline" style="margin-top:15px"><input id="routeContract" type="checkbox" ${r.require_contract?'checked':''}> Require Solana/EVM address candidate</label><label class="checkboxline"><input id="routeEnabled" type="checkbox" ${r.enabled?'checked':''}> Enable route after saving</label></div></div></div>${chatOptions}
- <div class="notice" style="margin-top:14px">${icon('shield')} Express skips optional content filters for speed; every mode still enforces account permissions, deduplication if enabled, and self-loop prevention. AI-Gated routes hold messages for review if the AI provider is unavailable.</div>
- <div class="modal-actions"><button type="button" class="button" data-action="close-modal">Cancel</button><button type="submit" class="button button-primary">${icon('check')} ${route?'Save route':'Create route'}</button></div></form>`;
- dom('modal').classList.remove('hidden');renderChatPicker();dom('routeName').focus();
+ dom('modalTitle').textContent=route?'Edit forwarding route':'New forwarding route';
+ dom('modalBody').innerHTML=`<form id="routeForm">
+ <div class="field"><label for="routeName">Route name</label><input id="routeName" required minlength="2" maxlength="100" value="${safe(r.name)}" placeholder="My forwarding route"></div>
+ <input id="routeSources" type="hidden" value="${safe(r.sources.join(', '))}">
+ <input id="routeDests" type="hidden" value="${safe(r.destinations.join(', '))}">
+ <div class="modal-section"><h3 class="section-title">Select Telegram chats</h3>
+ <button type="button" class="button button-small" data-action="refresh-route-chats">Refresh chats</button> <span id="routeChatCount" class="field-help">${state.chats.length} chats loaded</span>
+ <div class="field"><label for="sourceChatSearch">Search sources</label><input id="sourceChatSearch" type="search" placeholder="Search Telegram chats"></div>
+ <p id="sourceSelectionSummary" class="field-help"></p><div id="sourceChatList" style="max-height:230px;overflow:auto"></div>
+ <div class="field"><label for="destChatSearch">Search destinations</label><input id="destChatSearch" type="search" placeholder="Search Telegram chats"></div>
+ <p id="destSelectionSummary" class="field-help"></p><div id="destChatList" style="max-height:230px;overflow:auto"></div>
+ <p class="small-help">Only selected chats are used. No manual IDs or message content collection.</p></div>
+ <label class="checkboxline"><input id="routeEnabled" type="checkbox" ${r.enabled?'checked':''}> Enable forwarding</label>
+ <div class="modal-actions"><button type="button" class="button" data-action="close-modal">Cancel</button><button type="submit" class="button button-primary">Save route</button></div></form>`;
+ dom('modal').classList.remove('hidden');renderChatPicker();if(!state.chats.length)refreshRouteChats();
 }
-
 function renderChatPicker(){
- for(const [role,searchId,listId,selectedId] of [['source','sourceChatSearch','sourceChatList','routeSources'],['destination','destChatSearch','destChatList','routeDests']]){
+ const count=dom('routeChatCount');if(count)count.textContent=state.chats.length+' chats loaded';
+ for(const [role,searchId,listId,selectedId,summaryId] of [
+ ['source','sourceChatSearch','sourceChatList','routeSources','sourceSelectionSummary'],
+ ['destination','destChatSearch','destChatList','routeDests','destSelectionSummary']]){
   const container=dom(listId);if(!container)continue;
   const q=(dom(searchId)?.value||'').trim().toLowerCase();
   const selected=new Set((dom(selectedId)?.value||'').split(',').map(x=>x.trim()).filter(Boolean));
+  const summary=dom(summaryId);if(summary)summary.textContent='Selected '+(role==='source'?'sources':'destinations')+' ('+selected.size+')';
   const items=state.chats.filter(chat=>(chat.title+' '+(chat.username||'')+' '+chat.id).toLowerCase().includes(q));
-  container.innerHTML=items.length?items.map(chat=>`<label class="route-brief" style="cursor:pointer"><input type="checkbox" data-pickchat="${safe(chat.id)}" data-role="${role}" ${selected.has(String(chat.id))?'checked':''}><span class="route-detail"><strong>${safe(chat.title)}</strong><small>${safe(chat.username||chat.kind)} · ${safe(chat.id)}</small></span></label>`).join(''):'<p class="field-help">No matching chats. Refresh the list or add a public @username.</p>';
+  container.innerHTML=items.length?items.map(chat=>`<label class="route-brief" style="cursor:pointer"><input type="checkbox" data-pickchat="${safe(chat.id)}" data-role="${role}" ${selected.has(String(chat.id))?'checked':''}><span class="route-detail"><strong>${safe(chat.title)}</strong><small>${safe(chat.username||chat.kind)} · ${safe(chat.id)}</small></span></label>`).join(''):'<p class="field-help">No matching chats. Refresh chats or change your search.</p>';
  }
 }
 function togglePickedChat(id,role,checked){
@@ -219,8 +208,10 @@ async function refreshRouteChats(){
 }
 function closeModal(){dom('modal').classList.add('hidden');state.editing=null;}
 function collectRoute(){
- const terms=id=>dom(id).value.split(',').map(x=>x.trim()).filter(Boolean);
- return {name:dom('routeName').value.trim(),mode:dom('routeMode').value,enabled:dom('routeEnabled').checked,sources:[...new Set(terms('routeSources'))],destinations:[...new Set(terms('routeDests'))],allowed:dom('routeAllow').value,blocked:dom('routeBlock').value,pattern:dom('routePattern').value,match_mode:dom('routeMatch').value,network:dom('routeNetwork').value,require_contract:dom('routeContract').checked,dedup_minutes:Math.max(0,Number(dom('routeCooldown').value)||0),delivery_style:dom('routeStyle').value};
+ const terms=id=>(dom(id)?.value||'').split(',').map(x=>x.trim()).filter(Boolean);
+ return {name:dom('routeName').value.trim(),mode:'express',enabled:dom('routeEnabled').checked,
+ sources:[...new Set(terms('routeSources'))],destinations:[...new Set(terms('routeDests'))],
+ allowed:'',blocked:'',pattern:'',match_mode:'any',network:'both',require_contract:false,dedup_minutes:0,delivery_style:'native'};
 }
 async function saveRoute(event){event.preventDefault();try{const payload=collectRoute();const wasEditing=!!state.editing;const path=wasEditing?`/routes/${state.editing}`:'/routes';await request(path,{method:wasEditing?'PUT':'POST',body:JSON.stringify(payload)});closeModal();toast(wasEditing?'Route saved':'Route created');await reload();}catch(e){toast(e.message,true);}}
 async function toggleRoute(id,checked){const route=state.routes.find(r=>r.id===id);if(!route)return;try{const {id:unused,created_at,updated_at,...body}=route;await request('/routes/'+id,{method:'PUT',body:JSON.stringify({...body,enabled:checked})});await reload();toast(checked?'Route enabled':'Route paused');}catch(e){toast(e.message,true);await reload(false);}}
