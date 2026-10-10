@@ -309,6 +309,23 @@ dom('modalClose').addEventListener('click',closeModal);
 dom('modal').addEventListener('click',event=>{if(event.target===dom('modal'))closeModal();});
 document.addEventListener('keydown',event=>{if(event.key==='Escape'&&!dom('modal').classList.contains('hidden'))closeModal();});
 async function boot(){
+ if(tg?.initData){
+  try{
+   const response=await fetch('/api/telegram/resolve-account',{
+    method:'POST',headers:{'X-Telegram-Init-Data':tg.initData},
+    cache:'no-store',credentials:'same-origin'
+   });
+   if(!response.ok)throw new Error('This Telegram user is not authorized for a Becs account.');
+   const resolved=await response.json();
+   if(!accountNames[resolved.account_id])throw new Error('Unrecognized account');
+   if(resolved.account_id!==accountId){
+    const url=new URL(location.href);
+    url.searchParams.set('account',resolved.account_id);
+    location.replace(url.pathname+url.search+url.hash);
+    return;
+   }
+  }catch(e){state.apiError=e.message;render();return;}
+ }
  if(!accountNames[accountId]){state.apiError='Unknown account. Open one of the three account login URLs.';render();return;}
  try{const session=await request('/auth/session',{method:'POST'});if(session.token)localStorage.setItem(keyName,session.token);}catch(_){}
  await reload();
