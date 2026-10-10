@@ -2,3 +2,22 @@
 @media(max-width:1150px){.summary-grid{grid-template-columns:repeat(2,1fr)}.dashboard-cols{grid-template-columns:1fr}.route-list{grid-template-columns:1fr}}
 @media(max-width:760px){.sidebar{display:none}.main-column{margin:0}.topbar{height:62px;padding:0 17px;background:#0b1320}.breadcrumb{display:none}.mobile-logo{display:block;font-weight:850;font-size:26px;letter-spacing:-1.1px}.mini-label{display:none}.top-right{gap:8px}.account-chip{padding:4px;border-radius:50%}.account-chip>span:not(.account-avatar){display:none}.page-content{padding:23px 15px calc(95px + env(safe-area-inset-bottom));}.page-head{margin-bottom:20px}.page-head h1{font-size:25px}.head-actions{gap:6px}.head-actions .button{padding:8px 10px;font-size:11px}.summary-grid{gap:10px;margin-bottom:15px}.metric-card{padding:15px;min-height:117px}.metric-value{font-size:27px}.metric-top{font-size:11px}.panel{padding:17px}.dashboard-cols{gap:13px;margin-top:13px}.mode-grid{gap:6px}.mode-tile{padding:13px 3px}.mode-tile span{font-size:10px}.mode-tile small{font-size:9px}.bottom-nav{position:fixed;inset:auto 0 0;z-index:20;display:grid;grid-template-columns:repeat(5,1fr);background:#0d182aef;backdrop-filter:blur(20px);border-top:1px solid #293b54;padding:8px 8px calc(8px + env(safe-area-inset-bottom))}.bottom-tab{border:0;background:transparent;color:#859bb9;display:flex;flex-direction:column;align-items:center;gap:4px;padding:7px 2px;border-radius:9px;font-size:10px;min-width:0}.bottom-tab .ico{height:21px;width:21px}.bottom-tab.active{color:#9acaff;background:#1d3656}.bottom-tab.active .ico{filter:drop-shadow(0 0 7px #3e9af657)}.lab-grid,.form-grid{grid-template-columns:1fr}.modal-backdrop{align-items:flex-end;padding:0}.modal-sheet{max-height:94vh;border-radius:17px 17px 0 0;padding:23px 17px calc(25px + env(safe-area-inset-bottom))}.quick-grid{gap:7px}.quick-tool{padding:13px 4px}.quick-tool span{font-size:10px}.queue-strip{gap:8px}.queue-metric{min-width:75px}.toast-region{right:13px;left:13px;bottom:calc(88px + env(safe-area-inset-bottom))}.toast{max-width:none}.top-hero{padding:15px;gap:8px}.hero-tag{font-size:10px}.route-list{gap:12px}}
 @media(prefers-reduced-motion:reduce){*,*:before,*:after{scroll-behavior:auto!important;transition:none!important}}
+
+
+/* Scoped compact route-editor adjustments: no changes to the Terminal Pro shell. */
+.becs-compact-route .modal-section{padding-top:10px;padding-bottom:10px;margin-top:9px}
+.becs-compact-route .section-title{font-size:12px;margin:0 0 7px;line-height:1.25}
+.becs-compact-route .field{margin-bottom:8px}
+.becs-compact-route .field label{font-size:11px;margin-bottom:4px}
+.becs-compact-route .field input,
+.becs-compact-route .field select,
+.becs-compact-route .field textarea{min-height:34px;padding:7px 9px;font-size:12px}
+.becs-compact-route .field-help{font-size:10px;line-height:1.35}
+.becs-compact-route .button-small{padding:6px 9px;font-size:11px}
+.becs-compact-route .modal-actions{gap:8px;padding-top:9px}
+.becs-compact-route .becs-template-field{max-width:100%}
+@media(max-width:640px){
+ .becs-compact-route .form-grid{gap:8px}
+ .becs-compact-route .modal-section{padding:9px 0}
+ .becs-compact-route .modal-actions .button{min-height:35px;padding:7px 12px}
+}
