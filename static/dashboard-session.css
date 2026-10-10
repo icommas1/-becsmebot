@@ -1,6 +1,0 @@
-.session-bar{display:flex;justify-content:flex-end;align-items:center;gap:14px;padding:6px 20px;border-bottom:1px solid #21334d;background:#0b1320;color:#a4b9d6;font:12px system-ui}
-.session-bar[hidden]{display:none}
-#sessionCountdown{font-variant-numeric:tabular-nums}
-.session-unlock-actions{display:flex;flex-wrap:wrap;gap:10px}
-.becs-session-checking #mainView,.becs-session-checking #modal,.becs-session-checking #sessionBar{visibility:hidden!important}
-@media(max-width:650px){.session-bar{padding:6px 15px}.session-bar button{min-height:36px}}

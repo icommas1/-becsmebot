@@ -1,4 +1,4 @@
-const CACHE = 'becs-ui-v5-dashboard-session';
-self.addEventListener('install', event => event.waitUntil(caches.open(CACHE).then(c => c.addAll(['/','/assets/styles.css','/assets/app.js','/assets/dashboard-session.js','/assets/dashboard-session.css','/assets/icon.svg','/assets/manifest.webmanifest']))));
+const CACHE = 'becs-ui-v4-smart-filters';
+self.addEventListener('install', event => event.waitUntil(caches.open(CACHE).then(c => c.addAll(['/','/assets/styles.css','/assets/app.js','/assets/icon.svg','/assets/manifest.webmanifest']))));
 self.addEventListener('activate', event => event.waitUntil(caches.keys().then(keys => Promise.all(keys.filter(k=>k!==CACHE).map(k=>caches.delete(k))))));
 self.addEventListener('fetch', event => { if(event.request.method !== 'GET' || new URL(event.request.url).pathname.startsWith('/api/')) return; event.respondWith(fetch(event.request).catch(()=>caches.match(event.request))); });

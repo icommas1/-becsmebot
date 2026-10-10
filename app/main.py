@@ -18,7 +18,6 @@ from fastapi import FastAPI, Request, HTTPException
 from fastapi.responses import FileResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 
-from . import dashboard_session
 from .models import RouteInput, Simulation, PhoneInput, CodeInput, PasswordInput, ReviewAction
 from pydantic import BaseModel, Field
 from typing import Literal
@@ -54,14 +53,21 @@ def is_valid_init_data(raw: str) -> bool:
 
 
 def is_authorized(request: Request)->bool:
-    # Login credentials are exchanged once; protected APIs require a timed session.
-    return dashboard_session.authorize(request)
+    host=request.headers.get('host','').lower().split(':')[0]
+    client=request.client.host if request.client else ''
+    # Local development only. Never run the development listener on 0.0.0.0.
+    if (host in ('localhost','127.0.0.1','[::1]') and client in ('127.0.0.1','::1')) or (host=='testserver' and client=='testclient'):
+        return True
+    configured=os.getenv('BECS_ADMIN_TOKEN','')
+    key=request.headers.get('x-becs-key','')
+    if configured and key and hmac.compare_digest(key,configured):return True
+    raw=request.headers.get('x-telegram-init-data','')
+    return is_valid_init_data(raw)
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     init_db()
-    dashboard_session.init_sessions()
     stop=asyncio.Event()
     try:
         if os.getenv('TELEGRAM_API_ID') and os.getenv('TELEGRAM_API_HASH'):
@@ -77,12 +83,11 @@ async def lifespan(app: FastAPI):
 
 
 app=FastAPI(title='Becs Crypto Forwarding',version='1.0.0',lifespan=lifespan,docs_url=None,redoc_url=None)
-dashboard_session.install(app, is_valid_init_data)
 
 @app.middleware('http')
 async def protect_api(request:Request,call_next):
-    if request.url.path.startswith('/api/') and request.url.path not in dashboard_session.PUBLIC_PATHS and not is_authorized(request):
-        return dashboard_session.denial(request)
+    if request.url.path.startswith('/api/') and request.url.path!='/api/health' and not is_authorized(request):
+        return JSONResponse(status_code=401,content={'detail':'Access denied. Open inside your authorized Telegram Mini App or enter your server access key.'})
     response=await call_next(request)
     if request.url.path.startswith('/api/'):
         response.headers['Cache-Control']='no-store'
@@ -90,7 +95,7 @@ async def protect_api(request:Request,call_next):
     return response
 
 @app.get('/api/health')
-def health():return {'ok':True,'service':'becs','version':'1.0.0','dashboard_session_seconds':300}
+def health():return {'ok':True,'service':'becs','version':'1.0.0'}
 
 @app.get('/api/overview')
 async def overview():
