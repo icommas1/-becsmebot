@@ -286,5 +286,36 @@ class MultiAccountTests(unittest.IsolatedAsyncioTestCase):
         with self.assertRaisesRegex(RuntimeError,'code challenge'):
             await one.sign_in_password('not-a-real-password')
 
+    async def test_unverified_identity_cannot_forward_during_login(self):
+        manager=self.managers['account-2']
+        manager._identity_verified=False
+        with self.assertRaisesRegex(RuntimeError,'sign-in required'):
+            await manager.send({'source_id':'-1001','destination_id':'999','message_id':1,'message_preview':'test'},'text')
+        self.clients['account-2'].send_message.assert_not_awaited()
+
+    async def test_control_bot_dispatches_only_to_matching_private_account(self):
+        from app.telegram_client import telegram_bot_poll
+        stop=asyncio.Event()
+        updates=[]
+        for number,identity,kind in ((1,202,'private'),(2,101,'group'),(3,999,'private')):
+            updates.append({'update_id':number,'message':{'from':{'id':identity},'chat':{'id':identity,'type':kind},'text':'/pause'}})
+        async def get(*args,**kwargs):
+            stop.set()
+            return SimpleNamespace(json=lambda:{'ok':True,'result':updates})
+        client=SimpleNamespace(get=get,post=AsyncMock())
+        context=AsyncMock();context.__aenter__.return_value=client
+        with patch('app.telegram_client.httpx.AsyncClient',return_value=context), account_scope('account-3'):
+            await telegram_bot_poll(self.managers,stop)
+        for account in ACCOUNT_IDS:
+            with account_scope(account):self.assertEqual(db.get_setting('paused'),'true' if account=='account-2' else 'false')
+        client.post.assert_awaited_once()
+        self.assertEqual(client.post.call_args.kwargs['json']['chat_id'],202)
+
+    async def test_duplicate_configured_credentials_fail_before_workers_start(self):
+        with patch.dict(os.environ,{'BECS_ACCOUNT_2_ADMIN_TOKEN':'primary-test-key'}):
+            with self.assertRaisesRegex(RuntimeError,'must be unique'):
+                async with main.lifespan(main.app):pass
+        for manager in self.managers.values():manager.ensure_client.assert_not_awaited()
+
 
 if __name__=='__main__': unittest.main()

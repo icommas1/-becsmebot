@@ -6,6 +6,7 @@ const accountId = new URLSearchParams(location.search).get('account') || 'primar
 const accountNames = {'primary':'Account 1', 'account-2':'Account 2', 'account-3':'Account 3'};
 const accountName = accountNames[accountId] || 'Unknown account';
 const keyName = 'becs_key:' + accountId;
+let authEpoch = 0;
 // Migrate only the legacy primary key; other accounts never reuse it.
 if(accountId==='primary' && !localStorage.getItem(keyName) && sessionStorage.getItem('becs_key')){
  localStorage.setItem(keyName,sessionStorage.getItem('becs_key'));sessionStorage.removeItem('becs_key');
@@ -58,6 +59,7 @@ const state={page:'home',overview:null,routes:[],jobs:[],reviews:[],chats:[],ins
 const dom = id => document.getElementById(id);
 
 async function request(path,options={}) {
+ const requestEpoch=authEpoch;
  const headers={'Accept':'application/json',...(options.body?{'Content-Type':'application/json'}:{}),...(options.headers||{})};
  const auth=localStorage.getItem(keyName); if(auth && !headers['X-Becs-Key'])headers['X-Becs-Key']=auth;
  if(tg?.initData)headers['X-Telegram-Init-Data']=tg.initData;
@@ -65,6 +67,7 @@ async function request(path,options={}) {
  try { response=await fetch('/api/accounts/'+encodeURIComponent(accountId)+path,{...options,headers,cache:'no-store'}); }
  catch {throw new Error('Becs server is unreachable. Start the FastAPI service and try again.');}
  const payload=await response.json().catch(()=>({detail:response.statusText}));
+ if(requestEpoch!==authEpoch)throw new Error('Browser locked. Enter this account’s access key to continue.');
  if(!response.ok){const e=new Error(typeof payload.detail==='string'?payload.detail:JSON.stringify(payload.detail||'Request failed'));e.status=response.status;throw e;}
  return payload;
 }
@@ -276,7 +279,7 @@ const actionMap={
  'login-code':(el)=>login('code',{code:dom('telegramCode').value},el),
  'login-password':(el)=>login('password',{password:dom('telegramPassword').value},el),
  'unlock':async()=>{try{const result=await request('/auth/session',{method:'POST',headers:{'X-Becs-Key':dom('adminKey').value}});localStorage.setItem(keyName,result.token);await reload();}catch(e){toast(e.message,true);}},
- 'lock-browser':()=>{localStorage.removeItem(keyName);sessionStorage.removeItem('becs_key');state.overview=null;state.routes=[];state.jobs=[];state.reviews=[];state.chats=[];state.inspections=[];state.apiError='Browser locked. Enter this account’s access key to continue.';render();},
+ 'lock-browser':()=>{authEpoch++;localStorage.removeItem(keyName);sessionStorage.removeItem('becs_key');state.overview=null;state.routes=[];state.jobs=[];state.reviews=[];state.chats=[];state.inspections=[];state.apiError='Browser locked. Enter this account’s access key to continue.';render();},
  'reconnect':async()=>{try{await request('/telegram/reconnect',{method:'POST'});await reload();}catch(e){toast(e.message,true);}},
  'account-invites':async()=>{try{const result=await request('/account-invites');dom('accountInvites').innerHTML=result.accounts.map(a=>`<div class="field"><label>${safe(accountNames[a.id])} access key</label><input readonly type="password" value="${safe(a.access_key)}"><button class="button button-small" data-copy="${safe(a.access_key)}">Copy access key</button><p class="small-help">Login: ${safe(location.origin+a.url)}</p></div>`).join('');}catch(e){toast(e.message,true);}}
 };
