@@ -1,75 +1,102 @@
-# Signal-only production transition — 2026-10-07
+# Becs · Crypto Telegram Forwarding Terminal
 
-Production now serves `/api/signals/sources`, `/api/signals?source=<id>`, `/api/basket`, `/api/history` and a minimal feed interface. Source membership, provider labels, timestamp freshness and existing signal arithmetic are preserved. Jupiter/DexScreener feeds are discovery, not search-popularity rankings. Old paper, research, memory and execution services are not started; old feature routes and old assets return 410. BecsSuperAgent is the market browser, analyst and wallet-swap interface.
+A standalone, personal-use Telegram crypto forwarding bot + Telegram Mini App web frontend. Terminal Pro dark design. This is a **real local application**, not a screenshot or static mockup. **No public server has been deployed and no Telegram account is connected by default.**
 
-No SQL migrations, volume removal, credential changes or browser-storage clearing occurs. On the first start the existing chart file is copied once to `DATA_DIR/market-history.before-signal-feed.json` before bounded operational history continues. Databases, pending archive spool, wallets and backups remain intact. Legacy source and offline storage/recovery tools below remain available in the repository; the legacy HTTP app is not used by production.
+## What works now
 
----
+- Professional mobile-responsive dark dashboard with **real SQLite-backed metrics**, actual stored activity, four routing modes and a global pause control.
+- Create, edit, enable, pause and delete routes with **multiple sources and destinations** (for your one personal account).
+- `Express`: essential checks (hard blacklist and destination dedupe) then queue; `Smart`: regex, contract address candidates, allow/block keywords, network checks, destination dedupe; `Hybrid AI`: local decisions + optional non-blocking cloud analysis; `AI-Gated`: optional cloud classification before queue; if unavailable/uncertain, hold for review.
+- Solana-format Base58 address candidates (decoded to **32 bytes**) and EVM `0x` address candidates. This is **not on-chain token mint or smart-contract verification**.
+- Custom Python `regex` with a **25 ms evaluation timeout**, limit of 250 characters, keyword ANY/ALL and blacklist priority.
+- Persistent SQLite routing state, queued jobs, review decisions, contracts seen, and event logs.
+- Exact/contract-first duplicate fingerprints per destination, configurable cooldown, one outbound job at a time, Telegram `FloodWait` aware retries, failed job retries, pause/resume.
+- Optional **Telethon personal-account connector** with official phone-code and 2FA login; session strings **encrypted at rest** using a server-side secret.
+- Optional **Telegram control bot** for `/start`, `/status`, `/routes`, `/pause`, `/resume`, and an **Open Mini App** button once an HTTPS Mini App URL is configured.
+- Backend **Telegram Mini App initData validation** with expiry and a single approved Telegram user ID; optional server access key for standalone secure web access.
+- Optional Google Gemini API gateway, invoked only for a route selecting Hybrid/AI-Gated mode. It may have quota, privacy and cost conditions. No API key means deterministic rules still work and AI-Gated messages wait for review.
 
-# BecsBotterminal
+## Run locally (no deployment)
 
-Public full-page markets and paper trading dashboard. Optional private GitHub sign-in for a separate server paper account. Real transaction routes return 410; the runtime does not load a wallet signer or private key.
+Use a computer with Python 3.11+ (not directly runnable as a background Python server on a standard iPhone):
 
-## Connected fundamentals
-
-The terminal links to four supporting screens:
-
-- **Sources & tools** (`/assets/sources.html`): current market-feed status, provider families, paid promotion labels and the eight selected tools.
-- **Sources & engines** (`/research`): owner-only, on-demand public queries through the limited keyless Exa/Parallel readers. Saved recipes remain separate from the paper wallet; results stay in memory and never change trading rules.
-- **Memory evidence** (`/memory`): authenticated retained-paper-event coverage and JSON export, including partial/invalid states. This is evidence inspection; semantic memory and learning are not implemented.
-- **BecsSuperAgent** (`/superagent`): owner/account-scoped recorded purchases and outcomes when its separate observer database is configured. Ingestion is a separately operated CLI; the report defaults off.
-
-The reviewed tool registry also defaults off and grants no execution rights. Its independent evaluator, observer database activation, archive capacity and production backups remain separate operational work. See [INTEGRATIONS.md](INTEGRATIONS.md), [RESEARCH_WORKBENCH.md](RESEARCH_WORKBENCH.md), [AGENT_MEMORY_TOOLS.md](AGENT_MEMORY_TOOLS.md), [SUPERAGENT_OBSERVER.md](SUPERAGENT_OBSERVER.md) and [SUPERAGENT_REPORT.md](SUPERAGENT_REPORT.md). No production feature gate is enabled by merging these implementations.
-
-## Terminal interface
-
-Desktop has a left signal rail, central SVG radar and compact token contacts, right paper wallet/execution module, an observed activity tape and persistent dollar execution dock. iPhone uses bottom navigation, horizontally swipeable cards, 44px trading buttons and native modal slide-up details. $1/$5/$10/custom sizing affects manual dock orders only; automatic buys retain their configured amount. Contact buttons always buy/sell $1.
-
-Radar positions encode age with a small deterministic spacing jitter; blip sizes encode a heuristic activity score from organic score, 5m volume and momentum. Labels appear on hover/focus, and every blip is keyboard selectable. States NEW/HEATING/TRENDING/COOLING use observed age/change/feed membership; EXIT means an auto target sale occurred on that hold. These are display labels, not predictions. No wallet score or external wallet-trade stream is invented. The tape combines newly observed eligible contacts and local paper executions. The sweep is visual instrumentation; scan status remains tied to the actual REST scan. Reduced-motion preferences disable animation.
-
-## Markets and signals
-
-The terminal opens to New launches sorted newest first. Default shared launch filters are age ≤24 hours, market cap ≤$1 million and liquidity ≥$2,000. Missing age/cap, suspicious tokens and stale/unavailable prices are excluded. Launch filters live directly above the radar with a restore button; minimum/maximum age and cap, liquidity, holders, organic score and 5m volume remain adjustable. Age uses token creation time with first pool time as fallback. Older saved unrestricted filters migrate once without clearing paper holds or cash.
-
-Jupiter Tokens V2 provides trending, top traded and organic categories for 5m, 1h, 6h and 24h, plus recent pools and token search. Server scans run every minute. This is REST polling, not a streaming feed. Feed errors and timestamps appear under Feeds.
-
-Server chart observations persist for up to 24 hours in `DATA_DIR/market-history.json`. Signals ranks current multiples against the first retained observation and shows peak multiples and the starting time. It does not claim launch returns or trading profits. Each signal and hold has a token address, Copy CA and Dex Screener link.
-
-## Paper trading
-
-Default buys spend $1.00 before the configurable simulated network fee. Manual and auto buys use the same fill logic and filters. Sell $1 sells up to $1 of the position before the fee; Sell all closes it. Price impact and fees are simulation settings, not executable quotes. SOL input amounts depend on the observed USD price; real exactly-$1 execution is not guaranteed.
-
-Auto source follows the selected launch tab and interval. Radar, Signals and auto buys use the same launch filters; token search respects those filters but does not change the auto source. An optional multiple target above 1 triggers one $1 paper sale per hold, using the same sale logic; 0 disables it. Auto is off after reload and runs only while the page is open. Local paper balances, holds and settings save in this browser. The optional authenticated server account saves them transactionally in PostgreSQL across devices; see [setup instructions](SERVER_PAPER_SETUP.md). Committed server-paper actions also append a private tamper-evident BecsEvent chain and local Merkle proof batches for later external attestation. Server market scanning and charts continue when it closes.
-
-If browser storage is unavailable or full, failed saves are reported and paper state may not survive reload. Market requests time out after 60 seconds so a later refresh can recover; search errors remain visible in Radar.
-
-Buys need recent Tokens V2 and SOL marks. Sells need a recent Jupiter Price V3 mark; omitted prices remain unavailable and cannot produce fills. Price refreshes cover all holds in batches. Last known marks can still appear in estimated portfolio values and are labeled stale.
-
-## Run
-
-Node 22+, `npm ci`, `npm test`, `npm start`. Set `JUPITER_API_KEY`; optionally set `PORT` and persistent `DATA_DIR`. API keys remain server-side. No paid plan is purchased by this project.
-
-Jupiter calls are serialized, spaced 2.2 seconds apart, cached and bounded. One 429 retry uses the reset header. Public search and price endpoints validate inputs and rate limit requests.
-
-Tests cover normalization, incoming feeds and failures, missing prices, history persistence, observed signal multiples, retry/queue behavior, public endpoint validation, blocked signing routes, and paper dollar accounting. Fixtures verify behavior; they do not predict returns or guarantee live liquidity.
-
-## Contributor guide and repository checks
-
-Read [AGENTS.md](AGENTS.md), [ARCHITECTURE.md](ARCHITECTURE.md), [RADAR_SPEC.md](RADAR_SPEC.md), [SIGNALS_SPEC.md](SIGNALS_SPEC.md), [CONTRIBUTING.md](CONTRIBUTING.md), [SECURITY.md](SECURITY.md) and [OPERATIONS.md](OPERATIONS.md). The stable Railway entry point remains `src/basket.js`; market modules, API contracts and browser assets are separated under `src/market`, `src/api` and `src/web`.
-
-Copy `.env.example` to `.env` for local configuration and keep your API key server-side. Use Node 22/24 for CI parity.
-
-```sh
-npm ci
-npm run check
-npm test
-npx playwright install --with-deps chromium webkit
-npm run test:mobile
-npm run test:smoke
+```bash
+cd becs
+python -m venv .venv
+source .venv/bin/activate           # Windows: .venv\\Scripts\\activate
+pip install -r requirements.txt
+cp .env.example .env                # Windows: copy .env.example .env
+python start_local.py
 ```
 
-`npm test` uses no production credentials. The real PostgreSQL test runs when `TEST_DATABASE_URL` points to a disposable database (CI supplies one); otherwise it is skipped. Playwright starts a deterministic local Express fixture on port 4173 and tests iPhone WebKit, mobile Chromium and desktop Chromium. `npm run verify` combines syntax/schema, unit/integration and browser checks. Browser reports and traces are generated locally and ignored by git.
+Then open **http://127.0.0.1:8765** on that same computer. The dashboard, route editor and Regex Lab are available even without Telegram credentials. The server listens **only on 127.0.0.1**, not on the public Internet.
 
-Smoke defaults to the public Railway origin; override `SMOKE_BASE_URL` for a fixture or staging service. It only uses GET requests and checks API contracts, the configured feeds, a recent scan, disabled live trading, terminal controls and logo. Provider degradation is reported without confusing it with a service outage; set `SMOKE_REQUIRE_MARKET_DATA=1` when a strict all-feeds/SOL readiness check is specifically wanted. `SMOKE_ATTEMPTS` allows bounded deployment warm-up retries. `SMOKE_EXPECT_COMMIT` checks the running release independently of research capture; `SMOKE_ARCHIVE_MODE=disabled` enforces the current collection pause (`required` checks a healthy enabled archive, while `auto` accepts either healthy state). `SMOKE_EXPECT_RETAINED_RECORD_HASH` checks retrieval of one previously verified saved record; the production workflow pins that witness even while capture is paused. This is not full archive verification or a backup. GitHub CI runs on PRs/main; Railway smoke runs on main, manually and every six hours. Dependabot checks npm and Actions weekly. API schemas are in `src/api/schemas.json` and validate successful responses and upstream payloads without coercion.
+To run tests:
 
-Radar also offers DexScreener latest profiles, profile updates, community takeovers, paid ads, latest paid boosts and top paid boosts. These public discovery feeds need no additional API key or subscription. Prices, metadata and paper eligibility remain Jupiter-backed. Paid boost rankings are not the DexScreener Trending Score.
+```bash
+pip install pytest pytest-asyncio
+python -m pytest -q
+```
+
+## Connect your *own* Telegram account (optional until ready)
+
+In your private `.env` file:
+
+1. `TELEGRAM_API_ID` and `TELEGRAM_API_HASH`: obtain your own API credentials at <https://my.telegram.org>.
+2. `BECS_SESSION_SECRET`: set a unique, randomly generated 48+ character value. **Back this up privately**; changing it prevents decrypting the saved Telegram session. Example generation using Python: `python -c "import secrets; print(secrets.token_urlsafe(48))"`.
+3. Restart the server. In Becs **More → Personal Telegram connection**, enter your phone, then the Telegram login code, and two-step password if requested. Do **not** paste codes into a bot chat.
+4. Click **Load chats**, then add the source/destination IDs to a route. Ensure you have legal access to the source and permission to post to the destination.
+5. Enable the route. New messages matching those sources enter the sequential send queue. **No historical/backfill scan** is performed.
+
+You can also optionally configure a separate control bot:
+
+- `TELEGRAM_BOT_TOKEN`: your own @BotFather token.
+- `BECS_ALLOWED_TELEGRAM_ID`: **your numeric Telegram user ID**. The control bot ignores other senders, and Mini App authorization accepts only this ID.
+- `BECS_MINI_APP_URL`: an **HTTPS** URL once you explicitly choose to host the app. Until then, Telegram cannot open an externally hosted Mini App. The local browser UI remains available.
+- `BECS_ADMIN_TOKEN`: long random server-side access key for browser/API access when not launched from an authorized Telegram Mini App.
+
+**Do not put secrets in the Mini App frontend**. API credentials, encrypted sessions and AI keys remain on your backend. Never expose the development server directly to the Internet. In future hosting, put it behind HTTPS, authentication and properly configured reverse proxy access controls. Secure the private `.env` and `data/` directory; the encrypted session secret must remain secret too.
+
+## AI (optional)
+
+Set `GEMINI_API_KEY` and optionally `GEMINI_MODEL` for external AI analysis. The configured provider receives the text of messages flowing through Hybrid AI and AI-Gated routes; only enable this for material you have permission to share. Free API quotas/terms may change or be unavailable. Fast Express and Smart processing require no external AI service.
+
+## Project structure
+
+```text
+becs/
+  app/
+    main.py            FastAPI API + authentication + route CRUD
+    db.py              SQLite schema / state
+    engine.py          Crypto regex/keyword/address filters
+    service.py         Ingest, dedupe, sequential delivery, reviews
+    telegram_client.py Telethon account and Telegram control bot
+    ai.py              Optional Gemini interface
+    models.py          Validated route configuration
+  static/
+    index.html         Telegram Mini App HTML
+    styles.css         Terminal Pro design system
+    app.js             API-backed interactive dashboard
+    icon.svg           Custom Becs icon
+    manifest.webmanifest
+    sw.js
+  tests/test_core.py   Automated backend behavior tests
+  .env.example         Credential template (no real secrets)
+  start_local.py       Local-only development entry point
+  requirements.txt
+```
+
+## Design decisions and limits
+
+- **Personal V1**: one authenticated personal Telegram account; future multi-account support is an architectural extension, **not currently implemented**.
+- All outgoing messages share a single worker. Telegram's per-account/per-destination rate limits are dynamic, so no millisecond-level speed guarantees are made.
+- Telegram Bot API access and personal Telegram account access are **separate**; a bot cannot see arbitrary groups/channels without permission.
+- Native forwards preserve original content/media attribution; text mode sends text only, omitting media. Exact / contract-first dedupe can hide repeat alerts about the same token; configure route cooldown carefully.
+- The Mini App is not yet reachable *inside Telegram* because this version has not been deployed to an HTTPS host. Hosted operation, free-tier server accounts and real Telegram connection require your credentials and later setup approval.
+- No on-chain RPC verification, semantic embedding vector store, native iOS binary, multi-account routing or guaranteed uptime is claimed.
+- Local account logout / disconnect in V1 **retains** the encrypted session. Stop server access and manage the encrypted session file privately to revoke local storage; Telegram active sessions can be revoked through official Telegram account settings.
+- When paused, incoming messages are not added to the queue; queued sends wait until resumed. No backfill or replay is implemented.
+
+## Next stage (only when you approve)
+
+Configure free-tier HTTPS hosting and authorized Telegram connections, then test real forwarding with your own sources/destinations. There is **no automatic deployment** in this project package.

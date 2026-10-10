@@ -1,0 +1,29 @@
+<!doctype html>
+<html lang="en"><head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#090f1b"><meta name="description" content="Becs — personal crypto Telegram forwarding terminal">
+<title>Becs · Crypto Forwarding Terminal</title>
+<link rel="manifest" href="/assets/manifest.webmanifest"><link rel="icon" type="image/svg+xml" href="/assets/icon.svg">
+<link rel="stylesheet" href="/assets/styles.css">
+<script src="https://telegram.org/js/telegram-web-app.js?64"></script>
+</head><body>
+<div class="app-shell" id="app">
+<aside class="sidebar">
+  <div class="brand logo"><span class="mark"><svg viewBox="0 0 24 24"><path d="M4 13L20 4 14 20 11 14 4 13Z" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/></svg></span><span>becs<span class="blue">.</span><small>CRYPTO FORWARDING</small></span></div>
+  <p class="nav-caption">WORKSPACE</p>
+  <div class="side-nav" id="sideNav"></div>
+  <div class="sidebar-bottom"><div class="side-connection"><span class="status-beacon" id="sideDot"></span><span id="sideConnection">Telegram not connected</span></div><p>Personal Edition <span class="blue">·</span> V1.0</p></div>
+</aside>
+<div class="main-column">
+<header class="topbar">
+  <div class="top-left"><span class="mobile-logo">becs<span class="blue">.</span></span><span class="breadcrumb">WORKSPACE <b>/</b> <strong id="crumb">Overview</strong></span></div>
+  <div class="top-right"><span class="mini-label">PERSONAL V1</span><button class="icon-button" id="refreshBtn" aria-label="Refresh dashboard" title="Refresh">⟳</button><button class="account-chip" id="accountButton"><span class="account-avatar">01</span><span>Account</span><span class="chevron">⌄</span></button></div>
+</header>
+<main id="mainView" class="page-content" aria-live="polite"></main>
+<nav id="bottomNav" class="bottom-nav" aria-label="Main navigation"></nav>
+</div>
+</div>
+<div id="toastRegion" class="toast-region" aria-live="polite"></div>
+<div class="modal-backdrop hidden" id="modal" role="dialog" aria-modal="true" aria-labelledby="modalTitle"><div class="modal-sheet"><div class="modal-header"><div><p class="eyebrow">AUTOMATION WORKSPACE</p><h2 id="modalTitle">New route</h2></div><button id="modalClose" class="icon-button" aria-label="Close">×</button></div><div id="modalBody"></div></div></div>
+<script src="/assets/app.js" defer></script>
+</body></html>
