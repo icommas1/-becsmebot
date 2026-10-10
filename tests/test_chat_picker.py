@@ -39,7 +39,6 @@ class ChatPickerTests(unittest.IsolatedAsyncioTestCase):
                                    megagroup=False, access_hash=2, creator=True)
         self.client = FakeClient([Dialog(self.source, "Signals"), Dialog(self.destination, "Dest")])
         self.manager = PersonalTelegram()
-        self.manager._identity_verified = True
         self.manager.ensure_client = AsyncMock(return_value=self.client)
 
     async def test_username_resolves_to_stable_source_id(self):
@@ -82,4 +81,3 @@ class ChatPickerTests(unittest.IsolatedAsyncioTestCase):
 
 if __name__ == "__main__":
     unittest.main()
-

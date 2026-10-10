@@ -2,24 +2,6 @@
 (() => {
 'use strict';
 const tg = window.Telegram?.WebApp;
-let accountId = new URLSearchParams(location.search).get('account') || 'primary';
-// Telegram may omit launch data after an in-app URL redirect. Preserve only this
-// tab's signed launch payload, never an unverified user ID or an owner key.
-const INIT_KEY = 'becs_telegram_signed_launch';
-let telegramInitData = tg?.initData || '';
-if (telegramInitData) {
- try { sessionStorage.setItem(INIT_KEY,telegramInitData); } catch (_) {}
-} else {
- try { telegramInitData = sessionStorage.getItem(INIT_KEY) || ''; } catch (_) {}
-}
-const accountNames = {'primary':'Account 1', 'account-2':'Doc', 'account-3':'Account 3'};
-let accountName = accountNames[accountId] || 'Unknown account';
-let keyName = 'becs_key:' + accountId;
-let authEpoch = 0;
-// Migrate only the legacy primary key; other accounts never reuse it.
-if(accountId==='primary' && !localStorage.getItem(keyName) && sessionStorage.getItem('becs_key')){
- localStorage.setItem(keyName,sessionStorage.getItem('becs_key'));sessionStorage.removeItem('becs_key');
-}
 try { tg?.ready(); tg?.expand(); tg?.setHeaderColor('#0b1320'); tg?.setBackgroundColor('#090f1b'); } catch (_) {}
 if ('serviceWorker' in navigator && location.protocol === 'https:') navigator.serviceWorker.register('/assets/sw.js').catch(()=>{});
 
@@ -63,20 +45,18 @@ const fmt = number => Intl.NumberFormat().format(number||0);
 const age = value => { if (!value) return ''; const seconds=Math.max(0,Math.floor(Date.now()/1000-value)); return seconds<60?'just now':seconds<3600?Math.floor(seconds/60)+'m ago':seconds<86400?Math.floor(seconds/3600)+'h ago':new Date(value*1000).toLocaleDateString(); };
 const navigate = name => { state.page=name; render(); window.scrollTo({top:0,behavior:'smooth'}); };
 const modes = [{id:'express',title:'Express',sub:'Fastest',ico:'bolt',cls:'mode-express',help:'Forward with essential route checks; no AI or optional content filters in the critical path.'},{id:'smart',title:'Smart',sub:'Filtered',ico:'filter',cls:'mode-smart',help:'Use local keyword, address, regex and duplicate rules before queueing.'},{id:'hybrid',title:'Hybrid',sub:'AI Assist',ico:'brain',cls:'mode-hybrid',help:'Local filters decide first; AI can analyze afterward without blocking delivery.'},{id:'ai-gated',title:'AI-Gated',sub:'AI Decision',ico:'shield',cls:'mode-ai-gated',help:'Require AI approval before forwarding. If AI is unavailable, messages are held for review.'}];
-const nav=[['home','Home','home'],['routes','Routes','routes'],['filters','Smart Filters','filter'],['queue','Queue','queue'],['inspector','Inspector','activity'],['more','More','more']];
-const state={page:'home',overview:null,routes:[],jobs:[],reviews:[],chats:[],inspections:[],inspectorKind:'all',jobTab:'all',simResult:null,modeExplain:'smart',busy:false,apiError:'',chatSearch:'',editing:null};
+const nav=[['home','Home','home'],['routes','Routes','routes'],['filters','Filters','filter'],['queue','Queue','queue'],['more','More','more']];
+const state={page:'home',overview:null,routes:[],jobs:[],reviews:[],chats:[],jobTab:'all',simResult:null,modeExplain:'smart',busy:false,apiError:'',chatSearch:'',editing:null};
 const dom = id => document.getElementById(id);
 
 async function request(path,options={}) {
- const requestEpoch=authEpoch;
  const headers={'Accept':'application/json',...(options.body?{'Content-Type':'application/json'}:{}),...(options.headers||{})};
- const auth=localStorage.getItem(keyName); if(auth && !headers['X-Becs-Key'])headers['X-Becs-Key']=auth;
- if(telegramInitData)headers['X-Telegram-Init-Data']=telegramInitData;
+ const auth=sessionStorage.getItem('becs_key'); if(auth)headers['X-Becs-Key']=auth;
+ if(tg?.initData)headers['X-Telegram-Init-Data']=tg.initData;
  let response;
- try { response=await fetch('/api/accounts/'+encodeURIComponent(accountId)+path,{...options,headers,cache:'no-store'}); }
+ try { response=await fetch('/api'+path,{...options,headers,cache:'no-store'}); }
  catch {throw new Error('Becs server is unreachable. Start the FastAPI service and try again.');}
  const payload=await response.json().catch(()=>({detail:response.statusText}));
- if(requestEpoch!==authEpoch)throw new Error('Browser locked. Enter this account’s access key to continue.');
  if(!response.ok){const e=new Error(typeof payload.detail==='string'?payload.detail:JSON.stringify(payload.detail||'Request failed'));e.status=response.status;throw e;}
  return payload;
 }
@@ -84,10 +64,10 @@ function toast(message,isError=false){const el=document.createElement('div');el.
 async function reload(full=true){
  try{
   const calls=[request('/overview'),request('/routes')];
-  if(full)calls.push(request('/jobs?limit=100'),request('/reviews'),request('/inspector?limit=100'));
+  if(full)calls.push(request('/jobs?limit=100'),request('/reviews'));
   const result=await Promise.all(calls);
   state.overview=result[0];state.routes=result[1].routes;
-  if(full){state.jobs=result[2].jobs;state.reviews=result[3].reviews;state.inspections=result[4].items;}
+  if(full){state.jobs=result[2].jobs;state.reviews=result[3].reviews;}
   state.apiError='';render();
  }catch(e){state.apiError=e.message;render();}
 }
@@ -95,11 +75,10 @@ function renderNav(){
  const html=nav.map(([id,label,ico])=>`<button class="nav-item ${state.page===id?'active':''}" data-nav="${id}">${icon(ico)} ${label}</button>`).join('');
  dom('sideNav').innerHTML=html;
  dom('bottomNav').innerHTML=nav.map(([id,label,ico])=>`<button class="bottom-tab ${state.page===id?'active':''}" data-nav="${id}" aria-label="${label}" ${state.page===id?'aria-current="page"':''}>${icon(ico)}<span>${label}</span></button>`).join('');
- dom('crumb').textContent=({home:'Overview',routes:'Routes',filters:'Regex Lab',queue:'Delivery Queue',inspector:'Message Inspector',more:'System Settings'})[state.page];
+ dom('crumb').textContent=({home:'Overview',routes:'Routes',filters:'Regex Lab',queue:'Delivery Queue',more:'System Settings'})[state.page];
  const active=state.overview?.telegram?.authorized;
  dom('sideDot').classList.toggle('online',!!active);
- dom('sideConnection').textContent=accountName+(active?' connected':' not connected');
- dom('accountButton').innerHTML='<span class="account-avatar">'+safe(accountName.slice(-1))+'</span><span>'+safe(accountName)+'</span>'; 
+ dom('sideConnection').textContent=active?'Personal account connected':'Telegram not connected';
 }
 function pageHead(eyebrow,title,desc,action=''){
  return `<div class="page-head"><div><p class="eyebrow">${eyebrow}</p><h1>${title}</h1><p class="subheading">${desc}</p></div>${action?`<div class="head-actions">${action}</div>`:''}</div>`;
@@ -142,26 +121,13 @@ function routesPage(){
  <div class="top-hero"><div class="hero-left"><span class="hero-symbol">${icon('routes')}</span><div><b>One personal Telegram account</b><small>Multiple configurable routes · one outbound send at a time</small></div></div>${pill(`${state.routes.filter(r=>r.enabled).length} active`,'success')}</div>
  ${content?`<div class="route-list">${content}</div>`:empty('routes','No routes configured','Create your first Express, Smart, Hybrid or AI-Gated crypto route.',`<button class="button button-primary" data-action="new-route">${icon('plus')} Build first route</button>`)}`;
 }
-const filterPresets=[
- {id:'solana',label:'Solana CA',network:'solana',contract:true,pattern:''},
- {id:'evm',label:'EVM CA',network:'evm',contract:true,pattern:''},
- {id:'both',label:'Any CA',network:'both',contract:true,pattern:''},
- {id:'launch',label:'Launch / Presale',network:'both',contract:false,pattern:'(launch|presale|liquidity)'},
- {id:'clear',label:'Clear preset',network:'both',contract:false,pattern:''}
-];
-function applyFilterPreset(id,route=false){
- const p=filterPresets.find(x=>x.id===id);if(!p)return;
- const n=dom(route?'routeNetwork':'labNetwork'),c=dom(route?'routeContract':'labContract'),rx=dom(route?'routePattern':'labPattern');
- if(n)n.value=p.network;if(c)c.checked=p.contract;if(rx)rx.value=p.pattern;
- toast(p.label+' preset applied. Review before saving.');
-}
 const currentSimRoute=()=>({name:'Filter Lab',mode:'smart',enabled:false,sources:[],destinations:[],allowed:dom('labAllow')?.value||'',blocked:dom('labBlock')?.value||'',pattern:dom('labPattern')?.value||'',match_mode:dom('labMatch')?.value||'any',network:dom('labNetwork')?.value||'both',require_contract:dom('labContract')?.checked||false,dedup_minutes:60,delivery_style:'native'});
 function filtersPage(){
  const addresses=state.simResult?.addresses||[];const res=state.simResult;
  return `${pageHead('CRYPTO ENGINE / LOCAL TEST','Crypto Filter Lab','Test contract detection, custom regex, keyword rules and blacklists without forwarding anything.')}
  <div class="lab-grid"><section class="panel"><div class="panel-header"><h2>Message and filter rules</h2>${pill('SAFE SIMULATION')}</div>
  <div class="field"><label>Incoming crypto message</label><textarea id="labMessage" rows="6" placeholder="Paste any Telegram crypto message here...">${safe(state.labText??'NEW SOL launch · CA: So11111111111111111111111111111111111111112 · liquidity locked')}</textarea></div>
- <div class="field"><label>Smart Filters V2 — quick rules</label><div style="display:flex;gap:8px;flex-wrap:wrap">${filterPresets.map(p=>`<button type="button" class="button button-small" data-filter-preset="${p.id}">${safe(p.label)}</button>`).join('')}</div><span class="field-help">Presets fill the form. Test filter previews the decision without forwarding.</span></div><div class="form-grid"><div class="field"><label>Blockchain format</label><select id="labNetwork"><option value="both">Solana + EVM</option><option value="solana">Solana only</option><option value="evm">Ethereum / EVM only</option></select></div><div class="field"><label>Keyword logic</label><select id="labMatch"><option value="any">Match ANY keyword</option><option value="all">Match ALL keywords</option></select></div></div>
+ <div class="form-grid"><div class="field"><label>Blockchain format</label><select id="labNetwork"><option value="both">Solana + EVM</option><option value="solana">Solana only</option><option value="evm">Ethereum / EVM only</option></select></div><div class="field"><label>Keyword logic</label><select id="labMatch"><option value="any">Match ANY keyword</option><option value="all">Match ALL keywords</option></select></div></div>
  <div class="field"><label>Allowed keywords (comma-separated)</label><input id="labAllow" value="${safe(state.labAllow??'launch, liquidity, CA')}" placeholder="launch, liquidity, CA"></div>
  <div class="field"><label>Blocked keywords</label><input id="labBlock" value="${safe(state.labBlock??'scam, giveaway')}" placeholder="scam, giveaway"></div>
  <div class="field"><label>Custom regex (optional)</label><input id="labPattern" spellcheck="false" value="${safe(state.labPattern??'')}" placeholder="\\b(launch|presale)\\b"><span class="field-help">Timeout-protected regex. Custom patterns require a match when provided.</span></div>
@@ -169,16 +135,6 @@ function filtersPage(){
  <button class="button button-primary" data-action="run-sim">${icon('flask')} Test filter</button></section>
  <section class="panel"><div class="panel-header"><h2>Decision inspector</h2>${pill('LOCAL ONLY')}</div>${res?`<div class="lab-result"><div style="display:flex;justify-content:space-between;align-items:center"><b>Evaluation result</b>${pill(res.decision.toUpperCase(),res.decision==='forward'?'success':res.decision==='invalid'?'error':'warn')}</div><p class="helper-line">${safe(res.reason)}</p></div><div class="result-detail"><span>Address candidates</span><b>${addresses.length}</b></div><div class="result-detail"><span>Keyword matches</span><b>${safe(res.allowed_hits.join(', ')||'None')}</b></div><div class="result-detail"><span>Blacklist hits</span><b>${safe(res.blocked_hits.join(', ')||'None')}</b></div><div class="result-detail"><span>Custom regex</span><b>${res.regex_match?'Matched':'Not matched / inactive'}</b></div><div class="divider"></div><h3 class="section-title">Extracted addresses</h3>${addresses.length?`<div class="tag-list">${addresses.map(a=>`<span class="chip">${safe(a.network)} · ${safe(a.address)}</span>`).join('')}</div>`:'<p class="helper-line">No valid Solana / EVM address-format candidates found.</p>'}<p class="small-help">Address-format detection does not prove token-mint validity or confirm on-chain contracts. The simulator makes no network requests.</p>`:empty('flask','Ready to test','Set up filter rules and click Test filter to see the exact decision.')}</section></div>`;
 }
-function inspectorPage(){
- const rows=state.inspections.filter(x=>state.inspectorKind==='all'||x.kind===state.inspectorKind);
- const kinds=['all','blocked','duplicate','queued','forwarded','review','error'];
- return `${pageHead('AUDIT / LIVE ROUTING','Live Message Inspector','Actual routing decisions, duplicate suppression and delivery events.')}
- <section class="panel"><div class="panel-header"><h2>Recorded events</h2><button class="button button-small" data-action="refresh-inspector">${icon('refresh')} Refresh</button></div>
- <div class="queue-tabs">${kinds.map(k=>`<button class="tab-button ${state.inspectorKind===k?'active':''}" data-inspector-kind="${k}">${safe(k)}</button>`).join('')}</div>
- ${rows.length?rows.map(x=>`<div class="job-line"><span class="event-icon ${x.kind==='forwarded'?'success':'warn'}">${icon(x.kind==='duplicate'?'copy':x.kind==='forwarded'?'check':'activity')}</span><div class="job-details"><b>${safe(x.kind.toUpperCase())} · ${safe(x.route_name||'Route #'+(x.route_id??'?'))}</b><small>${safe(x.detail)}</small><small>Source ${safe(x.source_id||'—')} → Destination ${safe(x.destination_id||'—')} · ${age(x.created_at)}</small></div></div>`).join(''):empty('activity','No recorded events','New messages processed by enabled routes will appear here.')}</section>
- <p class="small-help">Recorded events only, not samples. Blocked events include filter reasons but do not yet include message IDs. Queued does not mean delivered; check Queue for confirmed sends.</p>`;
-}
-async function refreshInspector(){try{state.inspections=(await request('/inspector?limit=100')).items;render();}catch(e){toast(e.message,true);}}
 function queuePage(){
  const jobs=state.jobs.filter(j=>state.jobTab==='all'||j.status===state.jobTab);
  const tabs=[['all','All'],['queued','Pending'],['sent','Delivered'],['failed','Failed'],['review','Review']];
@@ -190,24 +146,21 @@ function queuePage(){
  <div class="panel"><div class="panel-header"><h2>Delivery & review history</h2>${pill('ACCOUNT SEQUENTIAL')}</div>${tabHtml}${state.jobTab==='review'?(reviews||empty('shield','No pending reviews','AI-Gated messages requiring human review will appear here.')):(jobsHtml||empty('queue','No jobs in this view','Jobs appear after Telegram receives qualifying messages through an enabled route.'))}</div>
  <div class="notice" style="margin-top:15px">${icon('shield')} Messages are delivered one at a time. Telegram-imposed cooldowns are respected. This page contains actual locally stored events, not sample forwards.</div>`;
 }
-function accountPanel(){
- return panel('Account access', `<div class="tag-list">${Object.entries(accountNames).map(([id,name])=>`<a class="button button-small" href="/?account=${id}" ${id===accountId?'aria-current="page"':''}>${safe(name)}</a>`).join('')}</div><p class="small-help">Each login opens only its own account. Switching reloads the page and clears displayed account data.</p><div class="tag-list"><button class="button button-small" data-action="lock-browser">Lock browser</button><button class="button button-small" data-action="reconnect">Reconnect saved Telegram session</button>${accountId==='primary'?'<button class="button button-small" data-action="account-invites">Get additional account access keys</button>':''}</div><div id="accountInvites"></div>`);
-}
 function morePage(){
  const o=state.overview||{}; const t=o.telegram||{};
- return `${pageHead('SYSTEM / '+safe(accountName),'Account & Settings','This account has its own Telegram session, routes, queue, filters and history. Your login stays active until you lock this browser or access is revoked.')}${accountPanel()}
+ return `${pageHead('SYSTEM / PERSONAL EDITION','Account & Settings','Configure your single personal Telegram account, control bot, and optional AI provider.')}
  <div class="dashboard-cols"><div style="display:flex;flex-direction:column;gap:17px"><section class="panel login-card"><div class="panel-header"><h2>Personal Telegram connection</h2>${pill(t.authorized?'Authorized':t.configured?'Not signed in':'Unconfigured',t.authorized?'success':'warn')}</div>
  <div class="notice">${icon('lock')} Login codes and two-step passwords must only be entered here over trusted HTTPS or on your local computer. Never provide them to a Telegram bot chat.</div>
  <div class="divider"></div>
  ${t.authorized?`<div class="notice good">Personal account authorized. Becs can load chats and listen for messages matching enabled routes.</div><p class="helper-line">${safe(t.detail||'Telegram session authorized')}</p><div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:17px"><button class="button" data-action="load-chats">${icon('refresh')} Load chats</button><button class="button button-danger" data-action="disconnect">${icon('logout')} Disconnect</button></div>`:
  `<div class="setup-steps"><span class="step">1</span> Obtain Telegram API ID and hash at my.telegram.org, then place them in your private server .env</div><div class="setup-steps"><span class="step">2</span> Enter your personal phone number and request an official Telegram login challenge.</div><div class="setup-steps"><span class="step">3</span> Enter the code here; complete two-step verification if required.</div><div class="field"><label>Phone number (international format)</label><input id="phone" autocomplete="tel" type="tel" placeholder="+1 555 000 0000"></div><button class="button button-primary" data-action="login-start" ${!t.configured?'disabled title="Server API ID/hash not configured"':''}>Send Telegram code</button><div id="authStage" class="hidden" style="margin-top:14px"><div class="field"><label>Telegram code</label><input id="telegramCode" autocomplete="one-time-code" placeholder="Login code"></div><button class="button" data-action="login-code">Verify code</button><div id="twoFactor" class="field hidden" style="margin-top:15px"><label>Telegram 2-step verification password</label><input id="telegramPassword" type="password" placeholder="Two-step password"><button class="button" data-action="login-password">Verify password</button></div></div>`}
  </section>${panel('Security model',`<div class="health-list"><div class="health-row">${icon('shield')}<div><div class="status-main">Authorized destinations only</div><div class="status-sub">Telegram permissions always apply</div></div></div><div class="health-row">${icon('lock')}<div><div class="status-main">Session stays on server</div><div class="status-sub">Never stored in browser local storage</div></div></div><div class="health-row">${icon('queue')}<div><div class="status-main">Account-aware queue</div><div class="status-sub">Sequential sends and flood-wait handling</div></div></div></div>`)}</div>
- <div style="display:flex;flex-direction:column;gap:17px">${panel('Service configuration',`<div class="health-list"><div class="health-row">${icon('bot')}<div><div class="status-main">Telegram control bot</div><div class="status-sub">Commands /start /status /pause /resume /routes</div></div><span class="right-flex">${pill(o.bot_configured?'Configured':'Needs .env',o.bot_configured?'success':'warn')}</span></div><div class="health-row">${icon('brain')}<div><div class="status-main">Optional Gemini AI gateway</div><div class="status-sub">External API only for selected route modes</div></div><span class="right-flex">${pill(o.ai_configured?'Configured':'Off',o.ai_configured?'success':'')}</span></div><div class="health-row">${icon('server')}<div><div class="status-main">FastAPI + SQLite backend</div><div class="status-sub">Separate data store for this account</div></div><span class="right-flex">${pill('Running','success')}</span></div></div>`)}${panel('Telegram chats',state.chats.length?`<div style="max-height:290px;overflow-y:auto">${state.chats.map(c=>`<div class="route-brief"><span class="route-glyph">${icon(c.kind==='private'?'person':'document')}</span><div class="route-detail"><strong>${safe(c.title)}</strong><small>${safe(c.kind)} · ${safe(c.id)}</small></div><button class="button button-small" data-copy="${safe(c.id)}">Copy ID</button></div>`).join('')}</div>`:empty('person','No chats loaded','Sign in and press Load chats to see available source and destination identifiers.'),`<button class="small-link" data-action="load-chats">Load →</button>`)}</div></div>`;
+ <div style="display:flex;flex-direction:column;gap:17px">${panel('Service configuration',`<div class="health-list"><div class="health-row">${icon('bot')}<div><div class="status-main">Telegram control bot</div><div class="status-sub">Commands /start /status /pause /resume /routes</div></div><span class="right-flex">${pill(o.bot_configured?'Configured':'Needs .env',o.bot_configured?'success':'warn')}</span></div><div class="health-row">${icon('brain')}<div><div class="status-main">Optional Gemini AI gateway</div><div class="status-sub">External API only for selected route modes</div></div><span class="right-flex">${pill(o.ai_configured?'Configured':'Off',o.ai_configured?'success':'')}</span></div><div class="health-row">${icon('server')}<div><div class="status-main">FastAPI + SQLite backend</div><div class="status-sub">Local or self-hosted; no deployment requested</div></div><span class="right-flex">${pill('Running','success')}</span></div></div>`)}${panel('Telegram chats',state.chats.length?`<div style="max-height:290px;overflow-y:auto">${state.chats.map(c=>`<div class="route-brief"><span class="route-glyph">${icon(c.kind==='private'?'person':'document')}</span><div class="route-detail"><strong>${safe(c.title)}</strong><small>${safe(c.kind)} · ${safe(c.id)}</small></div><button class="button button-small" data-copy="${safe(c.id)}">Copy ID</button></div>`).join('')}</div>`:empty('person','No chats loaded','Sign in and press Load chats to see available source and destination identifiers.'),`<button class="small-link" data-action="load-chats">Load →</button>`)}</div></div>`;
 }
 function gatePage(){
- return `<div class="page-head"><div><p class="eyebrow">SECURE ACCESS</p><h1>Becs access required</h1><p class="subheading">Open this inside your authorized Telegram Mini App, or enter your configured server access key.</p></div></div><section class="panel login-card"><div class="notice warn">${icon('lock')} ${safe(state.apiError||'Protected backend')}</div><div class="field" style="margin-top:20px"><label>${safe(accountName)} access key</label><input id="adminKey" type="password" autocomplete="off" placeholder="Enter your server access key"></div><button class="button button-primary" data-action="unlock">Unlock Becs</button><p class="small-help">Access stays signed in on this browser with no automatic timeout. Use Lock browser in Settings to remove access from this device.</p></section>`;
+ return `<div class="page-head"><div><p class="eyebrow">SECURE ACCESS</p><h1>Becs access required</h1><p class="subheading">Open this inside your authorized Telegram Mini App, or enter your configured server access key.</p></div></div><section class="panel login-card"><div class="notice warn">${icon('lock')} ${safe(state.apiError||'Protected backend')}</div><div class="field" style="margin-top:20px"><label>BECS_ADMIN_TOKEN</label><input id="adminKey" type="password" autocomplete="off" placeholder="Enter your server access key"></div><button class="button button-primary" data-action="unlock">Unlock Becs</button><p class="small-help">Your key stays in this browser tab session only. Local development on 127.0.0.1 is permitted without a key.</p></section>`;
 }
-function render(){renderNav();dom('mainView').innerHTML=state.apiError?gatePage():state.page==='home'?overviewPage():state.page==='routes'?routesPage():state.page==='filters'?filtersPage():state.page==='queue'?queuePage():state.page==='inspector'?inspectorPage():morePage();}
+function render(){renderNav();dom('mainView').innerHTML=state.apiError?gatePage():state.page==='home'?overviewPage():state.page==='routes'?routesPage():state.page==='filters'?filtersPage():state.page==='queue'?queuePage():morePage();}
 
 function newRouteDefaults(m='smart'){return {name:'',mode:m,enabled:false,sources:[],destinations:[],allowed:'',blocked:'',pattern:'',match_mode:'any',network:'both',require_contract:false,dedup_minutes:60,delivery_style:'native'};}
 function field(label,id,value='',placeholder='',help='',type='text'){return `<div class="field"><label for="${id}">${label}</label><input id="${id}" type="${type}" value="${safe(value)}" placeholder="${safe(placeholder)}">${help?`<span class="field-help">${help}</span>`:''}</div>`;}
@@ -216,35 +169,26 @@ function routeModal(route=null){
  const r=route||newRouteDefaults();state.editing=route?.id||null;
  dom('modalTitle').textContent=route?`Edit ${r.name}`:'Create forwarding route';
  const chatOptions=`<div class="modal-section"><h3 class="section-title">Select Telegram chats</h3>
- <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:12px"><button type="button" class="button button-small" data-action="refresh-route-chats">Refresh chats</button><span class="field-help" id="routeChatCount">${state.chats.length} chats loaded</span></div>
- <div class="field"><label for="sourceChatSearch">Search sources</label><input id="sourceChatSearch" type="search" placeholder="Search loaded source chats..." autocomplete="off"></div>
- <div id="sourceSelectionSummary" class="field-help" aria-live="polite"></div><div id="sourceChatList" style="max-height:210px;overflow:auto"></div>
-
+ <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:12px"><button type="button" class="button button-small" data-action="refresh-route-chats">Refresh chats</button><span class="field-help">${state.chats.length} chats loaded · nothing is selected automatically</span></div>
+ <div class="field"><label for="sourceChatSearch">Search sources</label><input id="sourceChatSearch" type="search" placeholder="Search source channel, @username, or ID..." autocomplete="off"></div>
+ <div id="sourceChatList" style="max-height:210px;overflow:auto"></div>
+ <div class="field"><label for="sourceReference">Add source @username or chat ID</label><div style="display:flex;gap:8px"><input id="sourceReference" placeholder="@sourcechannel" autocomplete="off"><button type="button" class="button button-small" data-action="resolve-source">Add</button></div></div>
  <div class="field"><label for="destChatSearch">Search destinations</label><input id="destChatSearch" type="search" placeholder="Search destination channel, @username, or ID..." autocomplete="off"></div>
- <div id="destSelectionSummary" class="field-help" aria-live="polite"></div><div id="destChatList" style="max-height:210px;overflow:auto"></div>
+ <div id="destChatList" style="max-height:210px;overflow:auto"></div>
  <div class="field"><label for="destReference">Add destination @username or chat ID</label><div style="display:flex;gap:8px"><input id="destReference" placeholder="@destinationchannel" autocomplete="off"><button type="button" class="button button-small" data-action="resolve-destination">Add</button></div></div>
- <p class="field-help">Select sources using the checkboxes above. Only checked sources will be saved. Existing saved routes remain unchanged until you press Save.</p></div>`;
- dom('modalBody').innerHTML=`<form id="routeForm"><div class="form-grid"><div>${field('Route name','routeName',r.name,'New Contract Scanner')}${selectField('Routing mode','routeMode',r.mode,modes.map(m=>[m.id,m.title]),'Express, Smart, Hybrid AI and AI-Gated are all supported.')}<input type="hidden" id="routeSources" value="${safe(r.sources.join(', '))}">${field('Selected destinations (resolved IDs)','routeDests',r.destinations.join(', '),'-1009876543210')}</div><div>${selectField('Blockchain address format','routeNetwork',r.network,[['both','Solana + EVM'],['solana','Solana only'],['evm','Ethereum / EVM only']])}${selectField('Keyword condition','routeMatch',r.match_mode,[['any','Match ANY'],['all','Match ALL']])}${field('Allowed keywords','routeAllow',r.allowed,'launch, CA, liquidity')}${field('Blocked keywords','routeBlock',r.blocked,'giveaway, scam')}</div></div>
- <div class="modal-section"><h3 class="section-title">Smart filter presets</h3><div style="display:flex;gap:8px;flex-wrap:wrap">${filterPresets.map(p=>`<button type="button" class="button button-small" data-route-preset="${p.id}">${safe(p.label)}</button>`).join('')}</div><p class="field-help">Presets update network, contract requirement and regex. Existing routes are unchanged until Save.</p></div><div class="modal-section"><h3 class="section-title">Advanced crypto filters & delivery</h3><div class="form-grid"><div>${field('Custom regex pattern','routePattern',r.pattern,'\\b(launch|CA)\\b','Timeout-limited regex; blank disables the custom match.')}${field('Duplicate cooldown in minutes','routeCooldown',r.dedup_minutes,'60','','number')}</div><div>${selectField('Delivery method','routeStyle',r.delivery_style,[['native','Telegram native forward (preserves media)'],['text','Send text only (loses media)']])}<label class="checkboxline" style="margin-top:15px"><input id="routeContract" type="checkbox" ${r.require_contract?'checked':''}> Require Solana/EVM address candidate</label><label class="checkboxline"><input id="routeEnabled" type="checkbox" ${r.enabled?'checked':''}> Enable route after saving</label></div></div></div>${chatOptions}
+ <p class="field-help">Selections are stored as resolved chat IDs. To remove a selection, uncheck it or remove its ID from the selected field. Existing saved routes remain unchanged until you press Save.</p></div>`;
+ dom('modalBody').innerHTML=`<form id="routeForm"><div class="form-grid"><div>${field('Route name','routeName',r.name,'New Contract Scanner')}${selectField('Routing mode','routeMode',r.mode,modes.map(m=>[m.id,m.title]),'Express, Smart, Hybrid AI and AI-Gated are all supported.')}${field('Selected sources (resolved IDs)','routeSources',r.sources.join(', '),'-1001234567890')}${field('Selected destinations (resolved IDs)','routeDests',r.destinations.join(', '),'-1009876543210')}</div><div>${selectField('Blockchain address format','routeNetwork',r.network,[['both','Solana + EVM'],['solana','Solana only'],['evm','Ethereum / EVM only']])}${selectField('Keyword condition','routeMatch',r.match_mode,[['any','Match ANY'],['all','Match ALL']])}${field('Allowed keywords','routeAllow',r.allowed,'launch, CA, liquidity')}${field('Blocked keywords','routeBlock',r.blocked,'giveaway, scam')}</div></div>
+ <div class="modal-section"><h3 class="section-title">Advanced crypto filters & delivery</h3><div class="form-grid"><div>${field('Custom regex pattern','routePattern',r.pattern,'\\b(launch|CA)\\b','Timeout-limited regex; blank disables the custom match.')}${field('Duplicate cooldown in minutes','routeCooldown',r.dedup_minutes,'60','','number')}</div><div>${selectField('Delivery method','routeStyle',r.delivery_style,[['native','Telegram native forward (preserves media)'],['text','Send text only (loses media)']])}<label class="checkboxline" style="margin-top:15px"><input id="routeContract" type="checkbox" ${r.require_contract?'checked':''}> Require Solana/EVM address candidate</label><label class="checkboxline"><input id="routeEnabled" type="checkbox" ${r.enabled?'checked':''}> Enable route after saving</label></div></div></div>${chatOptions}
  <div class="notice" style="margin-top:14px">${icon('shield')} Express skips optional content filters for speed; every mode still enforces account permissions, deduplication if enabled, and self-loop prevention. AI-Gated routes hold messages for review if the AI provider is unavailable.</div>
  <div class="modal-actions"><button type="button" class="button" data-action="close-modal">Cancel</button><button type="submit" class="button button-primary">${icon('check')} ${route?'Save route':'Create route'}</button></div></form>`;
- dom('modal').classList.remove('hidden');renderChatPicker();if(!state.chats.length)refreshRouteChats();dom('routeName').focus();
+ dom('modal').classList.remove('hidden');renderChatPicker();dom('routeName').focus();
 }
 
 function renderChatPicker(){
- const count=dom('routeChatCount');
- if(count)count.textContent=state.chats.length+' chats loaded';
- for(const [role,searchId,listId,selectedId,summaryId] of [
-  ['source','sourceChatSearch','sourceChatList','routeSources','sourceSelectionSummary'],
-  ['destination','destChatSearch','destChatList','routeDests','destSelectionSummary']]){
+ for(const [role,searchId,listId,selectedId] of [['source','sourceChatSearch','sourceChatList','routeSources'],['destination','destChatSearch','destChatList','routeDests']]){
   const container=dom(listId);if(!container)continue;
   const q=(dom(searchId)?.value||'').trim().toLowerCase();
   const selected=new Set((dom(selectedId)?.value||'').split(',').map(x=>x.trim()).filter(Boolean));
-  const summary=dom(summaryId);
-  if(summary){
-   const selectedNames=[...selected].map(id=>state.chats.find(c=>String(c.id)===id)?.title||id);
-   summary.textContent='Selected '+(role==='source'?'sources':'destinations')+' ('+selected.size+'): '+(selectedNames.join(', ')||'None');
-  }
   const items=state.chats.filter(chat=>(chat.title+' '+(chat.username||'')+' '+chat.id).toLowerCase().includes(q));
   container.innerHTML=items.length?items.map(chat=>`<label class="route-brief" style="cursor:pointer"><input type="checkbox" data-pickchat="${safe(chat.id)}" data-role="${role}" ${selected.has(String(chat.id))?'checked':''}><span class="route-detail"><strong>${safe(chat.title)}</strong><small>${safe(chat.username||chat.kind)} · ${safe(chat.id)}</small></span></label>`).join(''):'<p class="field-help">No matching chats. Refresh the list or add a public @username.</p>';
  }
@@ -289,23 +233,17 @@ async function reviewItem(id,approve){try{await request('/reviews/'+id,{method:'
 async function retryJob(id){try{await request('/jobs/'+id+'/retry',{method:'POST'});await reload();toast('Job requeued');}catch(e){toast(e.message,true);}}
 const actionMap={
  'new-route':()=>routeModal(), 'open-routes':()=>navigate('routes'),'open-filters':()=>navigate('filters'),'open-queue':()=>navigate('queue'),'open-settings':()=>navigate('more'),
- 'refresh':()=>reload(),'refresh-inspector':refreshInspector, 'pause':()=>updatePause(true), 'resume':()=>updatePause(false),'close-modal':closeModal,
+ 'refresh':()=>reload(), 'pause':()=>updatePause(true), 'resume':()=>updatePause(false),'close-modal':closeModal,
  'run-sim':simulate,'load-chats':loadChats,
  'refresh-route-chats':refreshRouteChats,'resolve-source':()=>addChatReference('source'),'resolve-destination':()=>addChatReference('destination'),
  'disconnect':async()=>{if(!confirm('Disconnect the server from Telegram? The saved session will remain available for reconnect.'))return;try{await request('/telegram/disconnect',{method:'POST'});await reload();toast('Telegram disconnected');}catch(e){toast(e.message,true);}},
  'login-start':(el)=>login('start',{phone:dom('phone').value},el),
  'login-code':(el)=>login('code',{code:dom('telegramCode').value},el),
  'login-password':(el)=>login('password',{password:dom('telegramPassword').value},el),
- 'unlock':async()=>{try{const result=await request('/auth/session',{method:'POST',headers:{'X-Becs-Key':dom('adminKey').value}});localStorage.setItem(keyName,result.token);await reload();}catch(e){toast(e.message,true);}},
- 'lock-browser':()=>{authEpoch++;localStorage.removeItem(keyName);sessionStorage.removeItem('becs_key');state.overview=null;state.routes=[];state.jobs=[];state.reviews=[];state.chats=[];state.inspections=[];state.apiError='Browser locked. Enter this account’s access key to continue.';render();},
- 'reconnect':async()=>{try{await request('/telegram/reconnect',{method:'POST'});await reload();}catch(e){toast(e.message,true);}},
- 'account-invites':async()=>{try{const result=await request('/account-invites');dom('accountInvites').innerHTML=result.accounts.map(a=>`<div class="field"><label>${safe(accountNames[a.id])} access key</label><input readonly type="password" value="${safe(a.access_key)}"><button class="button button-small" data-copy="${safe(a.access_key)}">Copy access key</button><p class="small-help">Login: ${safe(location.origin+a.url)}</p></div>`).join('');}catch(e){toast(e.message,true);}}
+ 'unlock':async()=>{sessionStorage.setItem('becs_key',dom('adminKey').value);await reload();if(state.apiError)toast('Invalid access key or server configuration',true);}
 };
 document.addEventListener('click',async event=>{
- const target=event.target.closest('[data-nav],[data-mode],[data-action],[data-edit],[data-delete],[data-jobtab],[data-retry],[data-approve],[data-reject],[data-copy],[data-usechat],[data-filter-preset],[data-route-preset],[data-inspector-kind]');if(!target)return;
- if(target.dataset.filterPreset){applyFilterPreset(target.dataset.filterPreset);return;}
- if(target.dataset.routePreset){applyFilterPreset(target.dataset.routePreset,true);return;}
- if(target.dataset.inspectorKind){state.inspectorKind=target.dataset.inspectorKind;render();return;}
+ const target=event.target.closest('[data-nav],[data-mode],[data-action],[data-edit],[data-delete],[data-jobtab],[data-retry],[data-approve],[data-reject],[data-copy],[data-usechat]');if(!target)return;
  if(target.dataset.nav){navigate(target.dataset.nav);return;}
  if(target.dataset.mode){state.modeExplain=target.dataset.mode;render();return;}
  if(target.dataset.action){await actionMap[target.dataset.action]?.(target);return;}
@@ -315,7 +253,7 @@ document.addEventListener('click',async event=>{
  if(target.dataset.retry){await retryJob(Number(target.dataset.retry));return;}
  if(target.dataset.approve){await reviewItem(Number(target.dataset.approve),true);return;}
  if(target.dataset.reject){await reviewItem(Number(target.dataset.reject),false);return;}
- if(target.dataset.copy){try{await navigator.clipboard.writeText(target.dataset.copy);toast('Copied');}catch{toast('Clipboard unavailable; copy the ID manually',true);}return;}
+ if(target.dataset.copy){try{await navigator.clipboard.writeText(target.dataset.copy);toast('Chat ID copied');}catch{toast('Clipboard unavailable; copy the ID manually',true);}return;}
  if(target.dataset.usechat){let input=dom(target.dataset.which==='source'?'routeSources':'routeDests');let vals=input.value.split(',').map(x=>x.trim()).filter(Boolean);if(!vals.includes(target.dataset.usechat))vals.push(target.dataset.usechat);input.value=vals.join(', ');toast('Chat added to '+target.dataset.which+'s');}
 });
 document.addEventListener('change',event=>{const t=event.target;if(t.dataset.routeToggle){toggleRoute(Number(t.dataset.routeToggle),t.checked);}if(t.dataset.pickchat){togglePickedChat(t.dataset.pickchat,t.dataset.role,t.checked);}});
@@ -326,38 +264,5 @@ dom('refreshBtn').addEventListener('click',()=>reload());
 dom('modalClose').addEventListener('click',closeModal);
 dom('modal').addEventListener('click',event=>{if(event.target===dom('modal'))closeModal();});
 document.addEventListener('keydown',event=>{if(event.key==='Escape'&&!dom('modal').classList.contains('hidden'))closeModal();});
-async function boot(){
- if(telegramInitData){
-  try{
-   const response=await fetch('/api/telegram/resolve-account',{
-    method:'POST',headers:{'X-Telegram-Init-Data':telegramInitData},
-    cache:'no-store',credentials:'same-origin'
-   });
-   if(!response.ok){
-    if(response.status===403){
-     const details=await response.json().catch(()=>({}));
-     throw new Error((details.detail || 'Telegram account not authorized.')+(details.verified_user_id?' Verified Telegram ID: '+details.verified_user_id:''));
-    }
-    throw new Error('Unable to identify Telegram account. Close and reopen the Mini App.');
-   }
-   const resolved=await response.json();
-   if(!accountNames[resolved.account_id])throw new Error('Unrecognized account');
-   if(resolved.account_id!==accountId){
-    // Switching without a page navigation preserves the signed launch data.
-    authEpoch++;
-    accountId=resolved.account_id;
-    accountName=accountNames[accountId];
-    keyName='becs_key:'+accountId;
-    const url=new URL(location.href);
-    url.searchParams.set('account',accountId);
-    history.replaceState(null,'',url.pathname+url.search+url.hash);
-   }
-  }catch(e){state.apiError=e.message;render();return;}
- }
- if(!accountNames[accountId]){state.apiError='Unknown account. Open one of the three account login URLs.';render();return;}
- try{const session=await request('/auth/session',{method:'POST'});if(session.token)localStorage.setItem(keyName,session.token);}catch(_){}
- await reload();
-}
-boot();
+reload();
 })();
-

@@ -25,137 +25,77 @@ from .db import connection, init_db, as_dict, get_setting, set_setting, event
 from .engine import decide, dedup_fingerprint
 from .service import get_routes, enqueue, delivery_worker
 from .telegram_client import PersonalTelegram, telegram_bot_poll
-from .accounts import (ACCOUNT_IDS, AccountManager, account_scope, current_account,
-                       account_env, access_key, browser_token, accepts_key)
 
 logging.basicConfig(level=os.getenv('BECS_LOG_LEVEL','INFO'))
 ROOT=Path(__file__).resolve().parents[1]
 STATIC=ROOT / 'static'
-managers={account_id:PersonalTelegram(account_id) for account_id in ACCOUNT_IDS}
-manager=AccountManager(managers)
-
-
-def verified_telegram_user_id(raw: str):
-    """Verify Telegram launch HMAC once, then return only the signed numeric ID."""
-    token=os.getenv('TELEGRAM_BOT_TOKEN','')
-    if not raw or not token or len(raw)>8192:return None
-    try:
-        pairs=parse_qsl(raw,keep_blank_values=True,strict_parsing=True)
-        data=dict(pairs)
-        if len(pairs)!=len(data):return None
-        given=data.pop('hash')
-        data.pop('signature',None)
-        timestamp=int(data['auth_date'])
-        if not 0<=time.time()-timestamp<=86400:return None
-        signed='\n'.join(f'{k}={v}' for k,v in sorted(data.items()))
-        secret=hmac.new(b'WebAppData',token.encode(),hashlib.sha256).digest()
-        expected=hmac.new(secret,signed.encode(),hashlib.sha256).hexdigest()
-        if not hmac.compare_digest(given,expected):return None
-        user_id=json.loads(data['user'])['id']
-        if isinstance(user_id,bool) or not str(user_id).isdigit():return None
-        return str(user_id)
-    except (ValueError,KeyError,TypeError,OverflowError):
-        return None
+manager=PersonalTelegram()
 
 
 def is_valid_init_data(raw: str) -> bool:
-    user_id=verified_telegram_user_id(raw)
-    allowed=account_env('BECS_ALLOWED_TELEGRAM_ID')
-    return bool(user_id and allowed and hmac.compare_digest(user_id,allowed))
+    token=os.getenv('TELEGRAM_BOT_TOKEN','')
+    allowed=os.getenv('BECS_ALLOWED_TELEGRAM_ID','')
+    if not raw or not token or not allowed or len(raw)>8192:return False
+    try:
+        data=dict(parse_qsl(raw,keep_blank_values=True,strict_parsing=True))
+        given=data.pop('hash')
+        # Ed25519 signature is not included in Bot API HMAC validation.
+        data.pop('signature',None)
+        timestamp=int(data['auth_date'])
+        if not 0<=time.time()-timestamp<=86400:return False
+        text='\n'.join(f'{k}={v}' for k,v in sorted(data.items()))
+        secret=hmac.new(b'WebAppData',token.encode(),hashlib.sha256).digest()
+        expected=hmac.new(secret,text.encode(),hashlib.sha256).hexdigest()
+        if not hmac.compare_digest(given,expected):return False
+        return str(json.loads(data['user'])['id'])==allowed
+    except (ValueError,KeyError,TypeError,OverflowError):
+        return False
 
 
 def is_authorized(request: Request)->bool:
     host=request.headers.get('host','').lower().split(':')[0]
     client=request.client.host if request.client else ''
     # Local development only. Never run the development listener on 0.0.0.0.
-    if os.getenv('BECS_DEV_AUTH_BYPASS')=='true' and (
-        (host in ('localhost','127.0.0.1','[::1]') and client in ('127.0.0.1','::1'))
-        or (host=='testserver' and client=='testclient')):
+    if (host in ('localhost','127.0.0.1','[::1]') and client in ('127.0.0.1','::1')) or (host=='testserver' and client=='testclient'):
         return True
+    configured=os.getenv('BECS_ADMIN_TOKEN','')
     key=request.headers.get('x-becs-key','')
-    if accepts_key(key):return True
+    if configured and key and hmac.compare_digest(key,configured):return True
     raw=request.headers.get('x-telegram-init-data','')
     return is_valid_init_data(raw)
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
+    init_db()
     stop=asyncio.Event()
-    tasks=[]
-    keys=[access_key(key) for key in ACCOUNT_IDS if access_key(key)]
-    identities=[account_env('BECS_ALLOWED_TELEGRAM_ID',key) for key in ACCOUNT_IDS if account_env('BECS_ALLOWED_TELEGRAM_ID',key)]
-    if len(keys)!=len(set(keys)) or len(identities)!=len(set(identities)):
-        raise RuntimeError('Account access keys and allowed Telegram IDs must be unique')
-    for account_id in ACCOUNT_IDS:
-        with account_scope(account_id):init_db()
-    for account_id, client in managers.items():
-        with account_scope(account_id):
-            try:
-                if os.getenv('TELEGRAM_API_ID') and os.getenv('TELEGRAM_API_HASH'):
-                    await client.ensure_client()
-            except Exception:
-                logging.exception('Telegram %s not connected; use Settings to authorize', account_id)
-            tasks.append(asyncio.create_task(delivery_worker(client,stop)))
-    # A single poller dispatches each command using its verified Telegram sender.
-    tasks.append(asyncio.create_task(telegram_bot_poll(managers,stop)))
     try:
-        yield
-    finally:
-        stop.set()
-        for task in tasks: task.cancel()
-        await asyncio.gather(*tasks,return_exceptions=True)
-        await asyncio.gather(*(client.disconnect() for client in managers.values()),return_exceptions=True)
+        if os.getenv('TELEGRAM_API_ID') and os.getenv('TELEGRAM_API_HASH'):
+            await manager.ensure_client()
+    except Exception:
+        logging.exception('Telegram account not connected; use Settings to authorize')
+    tasks=[asyncio.create_task(delivery_worker(manager,stop)),asyncio.create_task(telegram_bot_poll(manager,stop))]
+    yield
+    stop.set()
+    for task in tasks: task.cancel()
+    await asyncio.gather(*tasks,return_exceptions=True)
+    await manager.disconnect()
 
 
-app=FastAPI(title='Becs Crypto Forwarding',version='2.0.0',lifespan=lifespan,docs_url=None,redoc_url=None)
+app=FastAPI(title='Becs Crypto Forwarding',version='1.0.0',lifespan=lifespan,docs_url=None,redoc_url=None)
 
 @app.middleware('http')
 async def protect_api(request:Request,call_next):
-    path=request.scope['path']
-    account_id='primary'
-    if path.startswith('/api/accounts/'):
-        parts=path.split('/',4)
-        if len(parts)!=5 or parts[3] not in ACCOUNT_IDS or parts[4].startswith('accounts/'):
-            return JSONResponse(status_code=404,content={'detail':'Unknown account endpoint'},headers={'Cache-Control':'no-store'})
-        account_id=parts[3]
-        path='/api/'+parts[4]
-        request.scope['path']=path
-        request.scope['raw_path']=path.encode()
-    with account_scope(account_id):
-        if path.startswith('/api/') and path not in ('/api/health','/api/telegram/resolve-account') and not is_authorized(request):
-            return JSONResponse(status_code=401,content={'detail':'Access denied for this account. Enter its access key or open its authorized Telegram Mini App.'},headers={'Cache-Control':'no-store'})
-        response=await call_next(request)
-    if path.startswith('/api/'):
+    if request.url.path.startswith('/api/') and request.url.path!='/api/health' and not is_authorized(request):
+        return JSONResponse(status_code=401,content={'detail':'Access denied. Open inside your authorized Telegram Mini App or enter your server access key.'})
+    response=await call_next(request)
+    if request.url.path.startswith('/api/'):
         response.headers['Cache-Control']='no-store'
     response.headers['X-Content-Type-Options']='nosniff'
     return response
 
 @app.get('/api/health')
-def health():return {'ok':True,'service':'becs','version':'2.0.0'}
-
-@app.post('/api/telegram/resolve-account')
-async def resolve_telegram_account(request: Request):
-    """Route a verified Telegram user to the one authorized workspace."""
-    user_id=verified_telegram_user_id(request.headers.get('x-telegram-init-data',''))
-    if not user_id:
-        raise HTTPException(403,'Telegram Mini App authentication could not be verified. Reopen through @becsmebot.')
-    matches=[account_id for account_id in ACCOUNT_IDS
-             if account_env('BECS_ALLOWED_TELEGRAM_ID',account_id)==user_id]
-    if len(matches)!=1:
-        return JSONResponse(status_code=403,content={'detail':'This verified Telegram user ID is not assigned to a Becs account.','verified_user_id':user_id},headers={'Cache-Control':'no-store'})
-    return {'account_id':matches[0]}
-
-
-@app.post('/api/auth/session')
-def persistent_login():
-    token=browser_token()
-    if not token:raise HTTPException(503,'Account access is not configured')
-    return {'account_id':current_account.get(),'token':token,'expires_at':None}
-
-@app.get('/api/account-invites')
-def account_invites():
-    if current_account.get()!='primary':raise HTTPException(403,'Only the primary owner can provision account access')
-    return {'accounts':[{'id':key,'url':'/?account='+key,'access_key':access_key(key)} for key in ACCOUNT_IDS[1:]]}
+def health():return {'ok':True,'service':'becs','version':'1.0.0'}
 
 @app.get('/api/overview')
 async def overview():
@@ -179,7 +119,7 @@ async def overview():
             graph.append(db.execute(
                 "SELECT COUNT(*) FROM jobs WHERE status='sent' AND sent_at>=? AND sent_at<?",(start,end)).fetchone()[0])
     cooldown_remaining=max(0,int(float(get_setting('account_cooldown_until','0'))-time.time()))
-    return {'account_id':current_account.get(),'stats':stats,'activity':activity,'graph':graph,'cooldown_seconds':cooldown_remaining,'paused':get_setting('paused','false')=='true',
+    return {'stats':stats,'activity':activity,'graph':graph,'cooldown_seconds':cooldown_remaining,'paused':get_setting('paused','false')=='true',
             'telegram':await manager.status(),'ai_configured':bool(os.getenv('GEMINI_API_KEY')),
             'bot_configured':bool(os.getenv('TELEGRAM_BOT_TOKEN'))}
 
@@ -283,20 +223,6 @@ def simulate(payload:Simulation):
     result['fingerprint']=dedup_fingerprint(payload.text,result)[:16]
     return result
 
-@app.get('/api/inspector')
-def inspector(limit:int=100, kind:str='all'):
-    limit=max(1,min(limit,200))
-    allowed={'all','blocked','duplicate','queued','forwarded','review','error','contract','ai'}
-    if kind not in allowed: raise HTTPException(422,'Unknown event kind')
-    with connection() as db:
-        sql="""SELECT e.*,r.name AS route_name FROM events e
-            LEFT JOIN routes r ON r.id=e.route_id"""
-        if kind=='all':
-            rows=db.execute(sql+" WHERE e.kind IN ('blocked','duplicate','queued','forwarded','review','error','contract','ai') ORDER BY e.id DESC LIMIT ?",(limit,)).fetchall()
-        else:
-            rows=db.execute(sql+" WHERE e.kind=? ORDER BY e.id DESC LIMIT ?",(kind,limit)).fetchall()
-    return {'items':[dict(row) for row in rows], 'source':'recorded_events'}
-
 @app.get('/api/jobs')
 def jobs(status:str='all',limit:int=100):
     limit=max(1,min(limit,200))
@@ -365,12 +291,6 @@ async def disconnect_telegram():
     await manager.disconnect(logout=False)
     return {'connected':False,'detail':'Server connection closed; authorized session retained'}
 
-@app.post('/api/telegram/reconnect')
-async def reconnect_telegram():
-    await manager.ensure_client()
-    return await manager.status()
-
 app.mount('/assets',StaticFiles(directory=str(STATIC)),name='assets')
 @app.get('/')
 async def index():return FileResponse(STATIC/'index.html')
-

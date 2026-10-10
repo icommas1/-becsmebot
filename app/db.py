@@ -1,24 +1,16 @@
-"""Account-isolated SQLite stores; the primary account keeps its legacy path."""
+"""Simple single-process SQLite state for personal V1."""
 import json
 import os
 import sqlite3
 import time
 from pathlib import Path
-from .accounts import current_account
 
 DB_PATH = Path(os.getenv('BECS_DB_PATH', str(Path(__file__).resolve().parents[1] / 'data' / 'becs.sqlite')))
 DB_PATH.parent.mkdir(parents=True, exist_ok=True)
 
 
-def database_path():
-    account_id = current_account.get()
-    return DB_PATH if account_id == 'primary' else DB_PATH.parent / 'accounts' / account_id / DB_PATH.name
-
-
 def connection():
-    path = database_path()
-    path.parent.mkdir(parents=True, exist_ok=True, mode=0o700)
-    db = sqlite3.connect(path, timeout=15)
+    db = sqlite3.connect(DB_PATH, timeout=15)
     db.row_factory = sqlite3.Row
     db.execute('PRAGMA journal_mode=WAL')
     db.execute('PRAGMA busy_timeout=15000')
@@ -66,11 +58,6 @@ def init_db():
         CREATE TABLE IF NOT EXISTS settings (key TEXT PRIMARY KEY, value TEXT NOT NULL);
         ''')
         db.execute("INSERT OR IGNORE INTO settings VALUES ('paused','false')")
-        columns = {row['name'] for row in db.execute('PRAGMA table_info(jobs)')}
-        if 'telegram_message_id' not in columns:
-            db.execute('ALTER TABLE jobs ADD COLUMN telegram_message_id INTEGER')
-        # An interrupted send has an unknown outcome. Never replay it automatically.
-        db.execute("UPDATE jobs SET status='failed', error='Delivery interrupted; verify destination before retry' WHERE status='sending'")
 
 
 def as_dict(row):
@@ -97,4 +84,3 @@ def set_setting(key, value):
 def event(db, kind, detail, route_id=None, source_id=None, destination_id=None):
     db.execute('INSERT INTO events(kind,detail,route_id,source_id,destination_id,created_at) VALUES (?,?,?,?,?,?)',
                (kind,detail[:350],route_id,source_id,destination_id,time.time()))
-
