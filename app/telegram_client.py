@@ -205,14 +205,24 @@ class PersonalTelegram:
                 'role': role, 'validated': True}
 
     async def send(self, job, delivery_style):
+        """Send exactly one extracted contract address, never original content or media."""
+        from .engine import extract_addresses
+        payload=(job.get('message_preview') or '').strip()
+        matches=extract_addresses(payload)
+        if len(matches)!=1 or matches[0]['address']!=payload:
+            raise ValueError('Queued item is not a standalone contract address')
         client=await self.ensure_client()
-        if not await client.is_user_authorized(): raise RuntimeError('Telegram sign-in required')
-        source=self.peer(job['source_id']); destination=self.peer(job['destination_id'])
-        if delivery_style=='text':
-            # Preserve literal text, including underscores and command arguments.
-            await client.send_message(destination, job['message_preview'], link_preview=False, parse_mode=None)
-        else:
-            await client.forward_messages(destination, int(job['message_id']), from_peer=source)
+        if not await client.is_user_authorized():
+            raise RuntimeError('Telegram sign-in required')
+        target=str(job['destination_id'])
+        peer=None
+        async for dialog in client.iter_dialogs(limit=None):
+            if str(dialog.id)==target:
+                peer=await client.get_input_entity(dialog.entity)
+                break
+        if peer is None:
+            raise LookupError('Destination is not available in the connected Telegram chats')
+        await client.send_message(peer,payload,link_preview=False,parse_mode=None)
 
     async def disconnect(self, logout=False):
         if self.client:
