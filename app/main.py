@@ -142,7 +142,7 @@ async def resolve_telegram_account(request: Request):
     matches=[account_id for account_id in ACCOUNT_IDS
              if account_env('BECS_ALLOWED_TELEGRAM_ID',account_id)==user_id]
     if len(matches)!=1:
-        raise HTTPException(403,'This verified Telegram user ID is not assigned to a Becs account.')
+        return JSONResponse(status_code=403,content={'detail':'This verified Telegram user ID is not assigned to a Becs account.','verified_user_id':user_id},headers={'Cache-Control':'no-store'})
     return {'account_id':matches[0]}
 
 
