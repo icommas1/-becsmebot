@@ -70,6 +70,7 @@ def respond(route):
 
 
 
+
 with sync_playwright() as p:
     browser=p.chromium.launch()
     context=browser.new_context(viewport={'width':390,'height':844},is_mobile=True,has_touch=True,service_workers='block')
@@ -80,29 +81,33 @@ with sync_playwright() as p:
     page.locator('button[data-nav="routes"]:visible').first.click()
     page.locator('button[data-action="new-route"]:visible').first.click()
     expect(page.locator('#routeTemplate')).to_be_visible()
-    expect(page.locator('#routeTemplate option')).to_have_count(11)
+    expect(page.locator('.becs-smart-panel')).to_be_visible()
     page.locator('#routeTemplate').select_option('xposts')
-    assert 'twitter' in page.locator('#routePattern').input_value()
+    assert 'twitter' in page.locator('#routeAllow').input_value()
     page.locator('#routeTemplate').select_option('marketcap')
-    assert 'mc' in page.locator('#routePattern').input_value()
+    assert 'mc' in page.locator('#routeAllow').input_value()
     page.locator('#routeTemplate').select_option('emoji')
-    assert '📊' in page.locator('#routePattern').input_value()
-    page.locator('#routeAllow').fill('🧑🏽‍🚀, @stonkpairs')
-    page.locator('#routeBlock').fill('🎁, scam')
+    assert '📊' in page.locator('#routeAllow').input_value()
+    page.locator('#routeAllow').fill('re:📊|📈|🧑🏽‍🚀')
+    page.locator('#routeBlock').fill('scam, giveaway')
+    page.locator('#routeReqLink').check()
+    page.locator('#routeReqNumber').check()
     page.locator('#routeName').fill('Compact filter regression')
     page.locator('[data-action="refresh-route-chats"]').click()
     page.locator('#sourceChatList input[data-pickchat="-1000000000101"]').check()
     page.locator('#destChatList input[data-pickchat="900123"]').check()
+    page.screenshot(path='compact-filters-preview.png',full_page=True)
     page.locator('#routeForm button[type="submit"]').click()
     assert len(saved)==1,saved
-    assert saved[0]['allowed']=='🧑🏽‍🚀, @stonkpairs',saved
-    assert saved[0]['blocked']=='🎁, scam',saved
-    assert saved[0]['pattern'].find('📊')>=0,saved
+    assert saved[0]['allowed']=='re:📊|📈|🧑🏽‍🚀',saved
+    assert saved[0]['blocked']=='scam, giveaway',saved
+    assert 'https?' in saved[0]['pattern'] and 'd)' in saved[0]['pattern'],saved
+    assert saved[0]['delivery_style']=='text',saved
+    assert saved[0]['sources']==[SOURCE['id']] and saved[0]['destinations']==[BOT['id']],saved
     page.locator('[data-edit="1"]').click()
-    expect(page.locator('#routeAllow')).to_have_value('🧑🏽‍🚀, @stonkpairs')
-    expect(page.locator('#routeBlock')).to_have_value('🎁, scam')
-    page.screenshot(path='compact-filters-preview.png',full_page=True)
+    expect(page.locator('#routeAllow')).to_have_value('re:📊|📈|🧑🏽‍🚀')
+    expect(page.locator('#routeBlock')).to_have_value('scam, giveaway')
     assert not unexpected,unexpected
     assert not errors,errors
     browser.close()
-print('PASS: compact iPhone templates, Unicode, route saving and edit persistence; mocked API only')
+print('PASS: compact iPhone filters, presets, Unicode, optional requirements and route persistence; mocked API only')
