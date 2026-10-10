@@ -1,0 +1,31 @@
+name: Becs multi-account release audit
+on:
+  push:
+    branches: [feat/becs-multi-account-20261010]
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  audit:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - run: pip install -r requirements.txt playwright
+      - run: python -m compileall -q app tests
+      - run: python -m unittest discover -s tests -p 'test_*.py' -v
+      - run: node --check static/app.js && node --check static/sw.js
+      - run: python -m playwright install --with-deps chromium
+      - run: python tests/browser_bot_destination.py && python tests/browser_multi_account.py
+      - name: Package tracked source only, never runtime data or secrets
+        run: git archive --format=zip --output=becs-audit-source.zip HEAD
+      - uses: actions/upload-artifact@v4
+        with:
+          name: becs-audit-source
+          path: becs-audit-source.zip
+          retention-days: 3
