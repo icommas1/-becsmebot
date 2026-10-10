@@ -113,7 +113,7 @@ async def protect_api(request:Request,call_next):
         request.scope['path']=path
         request.scope['raw_path']=path.encode()
     with account_scope(account_id):
-        if path.startswith('/api/') and path!='/api/health' and not is_authorized(request):
+        if path.startswith('/api/') and path not in ('/api/health','/api/telegram/resolve-account') and not is_authorized(request):
             return JSONResponse(status_code=401,content={'detail':'Access denied for this account. Enter its access key or open its authorized Telegram Mini App.'},headers={'Cache-Control':'no-store'})
         response=await call_next(request)
     if path.startswith('/api/'):
@@ -123,6 +123,20 @@ async def protect_api(request:Request,call_next):
 
 @app.get('/api/health')
 def health():return {'ok':True,'service':'becs','version':'2.0.0'}
+
+@app.post('/api/telegram/resolve-account')
+async def resolve_telegram_account(request: Request):
+    """Resolve an authenticated Telegram Mini App user to exactly one account."""
+    raw = request.headers.get('x-telegram-init-data', '')
+    matches = []
+    for account_id in ACCOUNT_IDS:
+        with account_scope(account_id):
+            if is_valid_init_data(raw):
+                matches.append(account_id)
+    if len(matches) != 1:
+        raise HTTPException(403, 'Telegram account is not authorized for a Becs workspace')
+    return {'account_id': matches[0]}
+
 
 @app.post('/api/auth/session')
 def persistent_login():
