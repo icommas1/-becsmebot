@@ -126,7 +126,11 @@ class PersonalTelegram:
         result=[]
         async for d in client.iter_dialogs(limit=250):
             if d.is_group or d.is_channel or d.is_user:
-                result.append({'id':str(d.id),'title':d.name,'kind':'channel' if d.is_channel else 'group' if d.is_group else 'private', 'username': '@'+d.entity.username if getattr(d.entity,'username',None) else ''})
+                is_bot = bool(getattr(d.entity, 'bot', False))
+                result.append({'id':str(d.id),'title':d.name,
+                               'kind':'bot' if is_bot else 'channel' if d.is_channel else 'group' if d.is_group else 'private',
+                               'is_bot':is_bot,
+                               'username':'@'+d.entity.username if getattr(d.entity,'username',None) else ''})
         return result
 
 
@@ -158,8 +162,11 @@ class PersonalTelegram:
             if entity is None:
                 raise ValueError('Chat ID not found in your accessible Telegram chats')
         peer_id = str(utils.get_peer_id(entity))
+        is_bot = isinstance(entity, User) and bool(getattr(entity, 'bot', False))
         matching = next((d for d in dialogs if str(d.id) == peer_id), None)
         if matching is None:
+            if is_bot:
+                raise ValueError('Open this bot in your connected Telegram account, press Start, then refresh chats')
             raise ValueError('Join or open this chat in your Telegram account before selecting it')
         if role == 'source':
             # Updates from chats outside the authorized account's dialogs are not monitored.
@@ -178,12 +185,22 @@ class PersonalTelegram:
                     rights = getattr(entity, 'admin_rights', None)
                     if not (getattr(entity, 'creator', False) or rights):
                         raise ValueError('Members cannot send messages to this destination')
-            if isinstance(entity, User) and (getattr(entity, 'deleted', False) or getattr(entity, 'bot', False)):
-                raise ValueError('This private user or bot is not an eligible forwarding destination')
+            if isinstance(entity, User) and getattr(entity, 'deleted', False):
+                raise ValueError('This deleted Telegram account is not an eligible forwarding destination')
+            if is_bot:
+                # This worker sends as the authorized personal account, not the control bot.
+                if await client.is_bot():
+                    raise ValueError('Bot destinations require a connected personal Telegram account, not a bot session')
+                from telethon.tl.functions.users import GetFullUserRequest
+                details = await client(GetFullUserRequest(entity))
+                if getattr(details.full_user, 'blocked', False):
+                    raise ValueError('Unblock this bot in Telegram, press Start, then refresh chats')
+                # Validation is read-only: never auto-start, unblock or send a probe to a bot.
         else:
             raise ValueError('Invalid chat role')
         return {'id': peer_id, 'title': matching.name, 'kind':
-                'channel' if matching.is_channel else 'group' if matching.is_group else 'private',
+                'bot' if is_bot else 'channel' if matching.is_channel else 'group' if matching.is_group else 'private',
+                'is_bot': is_bot,
                 'username': '@' + entity.username if getattr(entity, 'username', None) else '',
                 'role': role, 'validated': True}
 
@@ -192,7 +209,8 @@ class PersonalTelegram:
         if not await client.is_user_authorized(): raise RuntimeError('Telegram sign-in required')
         source=self.peer(job['source_id']); destination=self.peer(job['destination_id'])
         if delivery_style=='text':
-            await client.send_message(destination, job['message_preview'], link_preview=False)
+            # Preserve literal text, including underscores and command arguments.
+            await client.send_message(destination, job['message_preview'], link_preview=False, parse_mode=None)
         else:
             await client.forward_messages(destination, int(job['message_id']), from_peer=source)
 
