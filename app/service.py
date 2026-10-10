@@ -26,50 +26,35 @@ def enqueue(db,route,src,dest,msg_id,text,fp):
             event(db,'duplicate',f"Duplicate contract/text suppressed → {dest}",route['id'],src,dest)
             return False
     db.execute('''INSERT INTO jobs(route_id,source_id,destination_id,message_id,message_preview,fingerprint,status,created_at,next_attempt)
-        VALUES (?,?,?,?,?,?, 'queued',?,0)''',(route['id'],src,dest,msg_id,text[:4000],fp,now))
+        VALUES (?,?,?,?,?,?, 'queued',?,0)''',(route['id'],src,dest,msg_id,text,fp,now))
     event(db,'queued',f"Delivery queued → {dest}",route['id'],src,dest)
     return True
 
 
 async def ingest_message(source_id: str, message_id: int, text: str, service):
-    """Invoked only by connected Telegram event handler. Does not run on demo messages."""
+    """Extract addresses in memory; queue only the contract address, never other text or media."""
     if get_setting('paused','false')=='true': return
-    routes=[r for r in get_routes() if r['enabled'] and source_id in r['sources']]
-    for route in routes:
-        result=decide(text,route)
-        if result['decision']!='forward':
-            with connection() as db:event(db,'blocked',result['reason'],route['id'],source_id)
-            continue
-        # Empty/media-only messages are distinct unless Telegram provides matching text.
-        fingerprint=dedup_fingerprint(text,result) if text.strip() else hashlib.sha256(f'{source_id}:{message_id}'.encode()).hexdigest()
-        if result['addresses']:
-            with connection() as db:
-                now=time.time()
-                for addr in result['addresses']:
-                    network=addr['network'];value=addr['address'].lower() if network=='evm' else addr['address']
-                    db.execute('''INSERT INTO contracts(network,address,first_seen,last_seen,mentions)
-                      VALUES(?,?,?,?,1) ON CONFLICT(network,address) DO UPDATE
-                      SET last_seen=excluded.last_seen, mentions=mentions+1''',(network,value,now,now))
-                event(db,'contract',f"{len(result['addresses'])} address candidate(s) detected",route['id'],source_id)
-        for dest in route['destinations']:
-            if dest==source_id:
-                with connection() as db:event(db,'blocked','Loop prevention: source equals destination',route['id'],source_id,dest)
-                continue
-            if route['mode']=='ai-gated':
-                evaluation=await evaluate_text(text)
-                if evaluation.get('status')=='ok' and evaluation.get('decision')=='allow':
-                    with connection() as db:enqueue(db,route,source_id,dest,message_id,text,fingerprint)
-                else:
-                    reason=evaluation.get('reason','AI requested human review')
-                    with connection() as db:
-                        db.execute('''INSERT INTO reviews(route_id,source_id,destination_id,message_id,text,fingerprint,reason,created_at)
-                          VALUES(?,?,?,?,?,?,?,?)''',(route['id'],source_id,dest,message_id,text[:4000],fingerprint,reason,time.time()))
-                        event(db,'review',f'AI-gated route held for review: {reason}',route['id'],source_id,dest)
-            else:
-                with connection() as db:enqueue(db,route,source_id,dest,message_id,text,fingerprint)
-                if route['mode']=='hybrid':
-                    # Background interpretation is deliberately non-blocking and cannot unsend a message.
-                    asyncio.create_task(background_ai(text,route['id'],source_id,dest))
+    from .engine import extract_addresses
+    addresses=extract_addresses(text)
+    if not addresses: return
+    for route in get_routes():
+        if not route['enabled'] or source_id not in route['sources']:continue
+        # Optional keyword controls affect eligibility, never the forwarded payload.
+        lower=text.lower()
+        from .engine import split_terms
+        blocked=split_terms(route.get('blocked',''))
+        if any(word.lower() in lower for word in blocked):continue
+        allowed=split_terms(route.get('allowed',''))
+        if allowed:
+            matches=[word for word in allowed if word.lower() in lower]
+            if not (len(matches)==len(allowed) if route.get('match_mode')=='all' else bool(matches)):continue
+        for addr in addresses:
+            address=addr['address']
+            if route.get('network','both') not in ('both',addr['network']):continue
+            fingerprint=hashlib.sha256((addr['network']+':'+address.lower()).encode()).hexdigest()
+            for dest in route['destinations']:
+                if dest==source_id:continue
+                with connection() as db:enqueue(db,route,source_id,dest,message_id,address,fingerprint)
 
 
 async def background_ai(text, route_id,src,dest):
@@ -102,9 +87,9 @@ async def delivery_worker(manager, stop: asyncio.Event):
             if not job:
                 await asyncio.sleep(0.25);continue
             try:
-                await manager.send(job,job['delivery_style'])
+                await manager.send(job,'text')
                 with connection() as db:
-                    db.execute("UPDATE jobs SET status='sent',sent_at=?,error='' WHERE id=?",(time.time(),job['id']))
+                    db.execute("UPDATE jobs SET status='sent',sent_at=?,error='',message_preview='' WHERE id=?",(time.time(),job['id']))
                     event(db,'forwarded',f"Delivered → {job['destination_id']}",job['route_id'],job['source_id'],job['destination_id'])
             except Exception as ex:
                 attempts=job['attempts']+1
