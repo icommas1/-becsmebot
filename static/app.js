@@ -122,12 +122,21 @@ function routesPage(){
  ${content?`<div class="route-list">${content}</div>`:empty('routes','No routes configured','Create your first Express, Smart, Hybrid or AI-Gated crypto route.',`<button class="button button-primary" data-action="new-route">${icon('plus')} Build first route</button>`)}`;
 }
 const filterPresets=[
- {id:'solana',label:'Solana CA',network:'solana',contract:true,pattern:''},
- {id:'evm',label:'EVM CA',network:'evm',contract:true,pattern:''},
- {id:'both',label:'Any CA',network:'both',contract:true,pattern:''},
- {id:'launch',label:'Launch / Presale',network:'both',contract:false,pattern:'(launch|presale|liquidity)'},
- {id:'clear',label:'Clear preset',network:'both',contract:false,pattern:''}
+ {id:'solana',label:'Solana contracts',network:'solana',contract:true,pattern:''},
+ {id:'evm',label:'EVM contracts',network:'evm',contract:true,pattern:''},
+ {id:'both',label:'Any token address',network:'both',contract:true,pattern:''},
+ {id:'launch',label:'Launch signals',network:'both',contract:true,pattern:'launch|presale|liquidity|🚀'},
+ {id:'marketcap',label:'Market cap (MC)',network:'both',contract:true,pattern:'\\b(?:mc|market\\s*cap)\\s*[:=$ ]*\\s*\\$?\\d+(?:\\.\\d+)?\\s*[kmb]\\b'},
+ {id:'xposts',label:'X / Twitter posts',network:'both',contract:true,pattern:'https?://(?:www\\.)?(?:x\\.com|twitter\\.com)/[A-Za-z0-9_]+/status/\\d+'},
+ {id:'dex',label:'DEX links',network:'both',contract:true,pattern:'https?://(?:www\\.)?(?:dexscreener\\.com|dextools\\.io|geckoterminal\\.com)/\\S+'},
+ {id:'social',label:'Social mentions',network:'both',contract:true,pattern:'@stonkpairs|https?://(?:www\\.)?(?:x\\.com|twitter\\.com)/\\S+'},
+ {id:'emoji',label:'Emoji signals',network:'both',contract:true,pattern:'📊|📈|🎁|🚀|🔥|💎'},
+ {id:'clear',label:'Clear preset',network:'both',contract:true,pattern:''}
 ];
+function routePresetDropdown(){
+ return '<div class="field becs-template-field"><label for="routeTemplate">Templates</label><select id="routeTemplate" aria-label="Filter templates"><option value="">Choose a template…</option>'+
+ filterPresets.map(p=>'<option value="'+safe(p.id)+'">'+safe(p.label)+'</option>').join('')+'</select><span class="field-help">Optional. Templates prefill rules; they never save or activate a route.</span></div>';
+}
 function applyFilterPreset(id,route=false){
  const p=filterPresets.find(x=>x.id===id);if(!p)return;
  const n=dom(route?'routeNetwork':'labNetwork'),c=dom(route?'routeContract':'labContract'),rx=dom(route?'routePattern':'labPattern');
@@ -201,10 +210,10 @@ function routeModal(route=null){
  <div class="field"><label for="destReference">Add destination @username or chat ID</label><div style="display:flex;gap:8px"><input id="destReference" placeholder="@destinationchannel" autocomplete="off"><button type="button" class="button button-small" data-action="resolve-destination">Add</button></div></div>
  <p class="field-help">Selections are stored as resolved chat IDs. To remove a selection, uncheck it or remove its ID from the selected field. Existing saved routes remain unchanged until you press Save.</p></div>`;
  dom('modalBody').innerHTML=`<form id="routeForm"><div class="form-grid"><div>${field('Route name','routeName',r.name,'New Contract Scanner')}${selectField('Routing mode','routeMode',r.mode,modes.map(m=>[m.id,m.title]),'Express, Smart, Hybrid AI and AI-Gated are all supported.')}${field('Selected sources (resolved IDs)','routeSources',r.sources.join(', '),'-1001234567890')}${field('Selected destinations (resolved IDs)','routeDests',r.destinations.join(', '),'-1009876543210')}</div><div>${selectField('Blockchain address format','routeNetwork',r.network,[['both','Solana + EVM'],['solana','Solana only'],['evm','Ethereum / EVM only']])}${selectField('Keyword condition','routeMatch',r.match_mode,[['any','Match ANY'],['all','Match ALL']])}${field('Allowed keywords','routeAllow',r.allowed,'launch, CA, liquidity')}${field('Blocked keywords','routeBlock',r.blocked,'giveaway, scam')}</div></div>
- <div class="modal-section"><h3 class="section-title">Smart filter presets</h3><div style="display:flex;gap:8px;flex-wrap:wrap">${filterPresets.map(p=>`<button type="button" class="button button-small" data-route-preset="${p.id}">${safe(p.label)}</button>`).join('')}</div><p class="field-help">Presets update network, contract requirement and regex. Existing routes are unchanged until Save.</p></div><div class="modal-section"><h3 class="section-title">Advanced crypto filters & delivery</h3><div class="form-grid"><div>${field('Custom regex pattern','routePattern',r.pattern,'\\b(launch|CA)\\b','Timeout-limited regex; blank disables the custom match.')}${field('Duplicate cooldown in minutes','routeCooldown',r.dedup_minutes,'60','','number')}</div><div>${selectField('Delivery method','routeStyle',r.delivery_style,[['native','Telegram native forward (preserves media)'],['text','Send text only (loses media)']])}<label class="checkboxline" style="margin-top:15px"><input id="routeContract" type="checkbox" ${r.require_contract?'checked':''}> Require Solana/EVM address candidate</label><label class="checkboxline"><input id="routeEnabled" type="checkbox" ${r.enabled?'checked':''}> Enable route after saving</label></div></div></div>${chatOptions}
+ <div class="modal-section becs-smart-compact"><h3 class="section-title">Smart Filters</h3>${routePresetDropdown()}<p class="field-help">Any emoji, keyword, @username, X link or regex. Matching filters only qualify a message; delivery remains contract-address-only.</p></div><div class="modal-section"><h3 class="section-title">Advanced crypto filters & delivery</h3><div class="form-grid"><div>${field('Custom regex pattern','routePattern',r.pattern,'\\b(launch|CA)\\b','Timeout-limited regex; blank disables the custom match.')}${field('Duplicate cooldown in minutes','routeCooldown',r.dedup_minutes,'60','','number')}</div><div>${selectField('Delivery method','routeStyle',r.delivery_style,[['native','Telegram native forward (preserves media)'],['text','Send text only (loses media)']])}<label class="checkboxline" style="margin-top:15px"><input id="routeContract" type="checkbox" ${r.require_contract?'checked':''}> Require Solana/EVM address candidate</label><label class="checkboxline"><input id="routeEnabled" type="checkbox" ${r.enabled?'checked':''}> Enable route after saving</label></div></div></div>${chatOptions}
  <div class="notice" style="margin-top:14px">${icon('shield')} Express skips optional content filters for speed; every mode still enforces account permissions, deduplication if enabled, and self-loop prevention. AI-Gated routes hold messages for review if the AI provider is unavailable.</div>
  <div class="modal-actions"><button type="button" class="button" data-action="close-modal">Cancel</button><button type="submit" class="button button-primary">${icon('check')} ${route?'Save route':'Create route'}</button></div></form>`;
- dom('modal').classList.remove('hidden');renderChatPicker();dom('routeName').focus();
+ dom('modal').classList.remove('hidden');dom('modal').classList.add('becs-compact-route');renderChatPicker();dom('routeName').focus();
 }
 
 function renderChatPicker(){
@@ -240,7 +249,7 @@ async function refreshRouteChats(){
  try{const data=await request('/telegram/chats');state.chats=data.chats;renderChatPicker();toast(state.chats.length+' chats loaded');}
  catch(e){toast(e.message,true);}
 }
-function closeModal(){dom('modal').classList.add('hidden');state.editing=null;}
+function closeModal(){dom('modal').classList.add('hidden');dom('modal').classList.remove('becs-compact-route');state.editing=null;}
 function collectRoute(){
  const terms=id=>dom(id).value.split(',').map(x=>x.trim()).filter(Boolean);
  return {name:dom('routeName').value.trim(),mode:dom('routeMode').value,enabled:dom('routeEnabled').checked,sources:[...new Set(terms('routeSources'))],destinations:[...new Set(terms('routeDests'))],allowed:dom('routeAllow').value,blocked:dom('routeBlock').value,pattern:dom('routePattern').value,match_mode:dom('routeMatch').value,network:dom('routeNetwork').value,require_contract:dom('routeContract').checked,dedup_minutes:Math.max(0,Number(dom('routeCooldown').value)||0),delivery_style:dom('routeStyle').value};
@@ -265,6 +274,9 @@ const actionMap={
  'login-password':(el)=>login('password',{password:dom('telegramPassword').value},el),
  'unlock':async()=>{sessionStorage.setItem('becs_key',dom('adminKey').value);await reload();if(state.apiError)toast('Invalid access key or server configuration',true);}
 };
+document.addEventListener('change',event=>{
+ if(event.target?.id==='routeTemplate' && event.target.value)applyFilterPreset(event.target.value,true);
+});
 document.addEventListener('click',async event=>{
  const target=event.target.closest('[data-nav],[data-mode],[data-action],[data-edit],[data-delete],[data-jobtab],[data-retry],[data-approve],[data-reject],[data-copy],[data-usechat],[data-filter-preset],[data-route-preset],[data-inspector-kind]');if(!target)return;
  if(target.dataset.filterPreset){applyFilterPreset(target.dataset.filterPreset);return;}
