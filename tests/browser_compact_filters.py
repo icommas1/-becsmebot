@@ -90,6 +90,7 @@ with sync_playwright() as p:
     page.locator('#routeAllow').fill('🧑🏽‍🚀, @stonkpairs')
     page.locator('#routeBlock').fill('🎁, scam')
     page.locator('#routeName').fill('Compact filter regression')
+    page.locator('[data-action="refresh-route-chats"]').click()
     page.locator('#sourceChatList input[data-pickchat="-1000000000101"]').check()
     page.locator('#destChatList input[data-pickchat="900123"]').check()
     page.locator('#routeForm button[type="submit"]').click()
