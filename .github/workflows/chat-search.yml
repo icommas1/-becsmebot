@@ -1,0 +1,22 @@
+name: Becs chat selector checks
+on:
+  push:
+    branches:
+      - feature/becs-chat-search-fix
+  workflow_dispatch:
+jobs:
+  checks:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - run: pip install -r requirements.txt
+      - run: python -m compileall -q app
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - run: node --check static/app.js
+      - run: |
+          node -e "const fs=require('fs'); const s=fs.readFileSync('static/app.js','utf8'); for(const id of ['sourceChatSearch','destChatSearch','sourceChatList','destChatList','sourceReference','destReference']) if(!s.includes(id)) process.exit(1); if(!s.includes('r.sources.join')) process.exit(1);"
