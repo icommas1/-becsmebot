@@ -80,7 +80,9 @@ with sync_playwright() as p:
     page.locator('button[data-nav="routes"]:visible').first.click()
     page.locator('button[data-action="new-route"]:visible').first.click()
     page.locator('#routeName').fill('Bot UI regression')
-    page.locator('#routeStyle').select_option('text')
+    # Contract-only delivery is fixed, not a selectable native/text mode.
+    expect(page.locator('#routeStyle')).to_have_attribute('type', 'hidden')
+    expect(page.locator('#routeStyle')).to_have_value('text')
     page.locator('[data-action="refresh-route-chats"]').click()
     page.locator('#sourceChatSearch').fill('Signals')
     page.locator('#sourceChatList input[data-pickchat="-1000000000101"]').check()
