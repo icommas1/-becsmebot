@@ -182,6 +182,7 @@ async function openAdminStatus(){
  const box=dom('ownerStatusPanel');if(!box)return;
  try{
   const info=await request('/admin/status');
+  box.style.display='block';
   const rows=[['API',info.components.api],['Database',info.components.sqlite],['Worker',info.components.worker],['Telegram',info.telegram.authorized?'Connected':'Disconnected'],['Bot API',info.bot_configured?'Configured':'Missing'],['Forwarding',info.paused?'Paused':'Enabled'],['Active routes',info.counts.active_routes],['Queued',info.counts.queued],['Sending',info.counts.sending],['Failed',info.counts.failed],['Cooldown',info.cooldown_seconds+'s'],['Uptime',Math.floor(info.uptime_seconds/60)+' min']];
   dom('ownerStatusRows').innerHTML=rows.map(([k,v])=>`<div class="health-row"><span class="status-main">${safe(k)}</span><strong class="right-flex">${safe(v)}</strong></div>`).join('');
  }catch(e){if(e.status===403){box.remove();return;}dom('ownerStatusRows').textContent='Status unavailable';}
@@ -189,7 +190,7 @@ async function openAdminStatus(){
 function morePage(){
  const o=state.overview||{}; const t=o.telegram||{};
  return `${pageHead('SYSTEM / PERSONAL EDITION','Account & Settings','Configure your single personal Telegram account, control bot, and optional AI provider.')}
- <section class="panel" id="ownerStatusPanel" style="margin-bottom:17px"><div class="panel-header"><h2>Owner · System Status</h2><button class="button button-small" data-action="owner-status">Refresh</button></div><div id="ownerStatusRows" class="health-list">Checking access…</div></section>
+ <section class="panel" id="ownerStatusPanel" style="margin-bottom:17px;display:none"><div class="panel-header"><h2>Owner · System Status</h2><button class="button button-small" data-action="owner-status">Refresh</button></div><div id="ownerStatusRows" class="health-list">Checking access…</div></section>
  <div class="dashboard-cols"><div style="display:flex;flex-direction:column;gap:17px"><section class="panel login-card"><div class="panel-header"><h2>Personal Telegram connection</h2>${pill(t.authorized?'Authorized':t.configured?'Not signed in':'Unconfigured',t.authorized?'success':'warn')}</div>
  <div class="notice">${icon('lock')} Login codes and two-step passwords must only be entered here over trusted HTTPS or on your local computer. Never provide them to a Telegram bot chat.</div>
  <div class="divider"></div>
