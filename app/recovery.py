@@ -68,7 +68,7 @@ async def small_json(request, keys):
 
 @router.get('/recovery', response_class=HTMLResponse)
 def recovery_page():
-    html = (Path(__file__).resolve().parents[1] / 'static' / 'recovery.html').read_text()
+    html = (Path(__file__).resolve().parent / 'recovery_page.html').read_text()
     scripts = re.findall(r'<script(?:\s[^>]*)?>(.*?)</script>', html, re.S)
     hashes = ' '.join("'sha256-" + base64.b64encode(hashlib.sha256(s.encode()).digest()).decode() + "'" for s in scripts)
     return HTMLResponse(html, headers={

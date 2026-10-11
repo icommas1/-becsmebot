@@ -2,7 +2,7 @@
 const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const vm = require('node:vm');
-const html = fs.readFileSync(require('node:path').join(__dirname, '../static/recovery.html'), 'utf8');
+const html = fs.readFileSync(require('node:path').join(__dirname, '../app/recovery_page.html'), 'utf8');
 const app = fs.readFileSync(require('node:path').join(__dirname, '../static/app.js'), 'utf8');
 assert(app.includes("dom('recoveryConsentCopy').textContent="));
 assert(app.includes('<h1>Rollback Recovery</h1>'));

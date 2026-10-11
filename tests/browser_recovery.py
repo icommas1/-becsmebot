@@ -69,7 +69,7 @@ def main():
                 if args.dist and origin==app_origin:
                     file=args.dist/('index.html' if path=='/' else path.lstrip('/'))
                 else:
-                    file = ROOT/'static'/('index.html' if path == '/' else 'recovery.html' if path == '/recovery' else path.removeprefix('/assets/'))
+                    file = ROOT/'app/recovery_page.html' if path == '/recovery' else ROOT/'static'/('index.html' if path == '/' else path.removeprefix('/assets/'))
                 if not file.is_file():route.fulfill(status=404);return
                 route.fulfill(content_type=mimetypes.guess_type(str(file))[0] or 'application/octet-stream', body=file.read_bytes())
             context.route('**/*', route_request)
@@ -127,7 +127,7 @@ def main():
             assert not errors, errors
             context.close()
         # A plain external browser receives no access. Signed hash is scrubbed.
-        context = browser.new_context(service_workers='block');context.route('**/*', lambda route: route.fulfill(content_type='text/html', body=(ROOT/'static/recovery.html').read_text()))
+        context = browser.new_context(service_workers='block');context.route('**/*', lambda route: route.fulfill(content_type='text/html', body=(ROOT/'app/recovery_page.html').read_text()))
         page = context.new_page();page.goto(ORIGIN+'/recovery');expect(page.locator('#begin')).to_be_hidden();expect(page.locator('#reopen')).to_be_visible()
         # A fresh Telegram launch loads a new document; changing only the hash does not rerun scripts.
         page.close();page=context.new_page()

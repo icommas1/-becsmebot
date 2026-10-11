@@ -122,3 +122,7 @@ class RecoveryAPITests(unittest.IsolatedAsyncioTestCase):
         self.assertIn("default-src 'none'",r.headers['content-security-policy'])
         self.assertNotIn('<script src=',r.text)
         self.assertEqual(r.headers['cache-control'],'no-store')
+
+    async def test_raw_recovery_template_not_public_asset(self):
+        response=await self.client.get('/assets/recovery.html')
+        self.assertEqual(response.status_code,404)
