@@ -1,0 +1,83 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover"><meta name="referrer" content="no-referrer"><meta name="color-scheme" content="dark"><title>Becs · Rollback Recovery</title>
+<style>
+*{box-sizing:border-box}body{margin:0;background:#090f1b;color:#edf3fa;font:15px/1.5 system-ui,sans-serif}main{max-width:600px;margin:36px auto;padding:22px}section{background:#101b2b;border:1px solid #26374b;border-radius:16px;padding:24px}h1{font-size:26px;margin:0 0 14px}p{color:#b4c4d7}button{font:inherit;padding:11px 16px;border:1px solid #41618a;border-radius:9px;background:#1b65c7;color:white;cursor:pointer;margin:8px 8px 8px 0}button:disabled{opacity:.45;cursor:default}button.secondary{background:#17263c}input{display:block;width:100%;padding:12px;margin:7px 0 17px;background:#090f1b;border:1px solid #41618a;border-radius:8px;color:#fff;font:inherit}label{display:block}small{color:#aabbd1}#status{white-space:pre-wrap}a{color:#81b5ff}[hidden]{display:none!important}:focus-visible{outline:3px solid #8cbcff;outline-offset:3px}
+</style></head><body><main><section><h1>Rollback Recovery</h1><p>Create an encrypted recovery ZIP for approved accounts that consented. A saved Telegram session carries that account’s permissions, including reading and sending messages.</p><p>Only the owner can continue, using a fresh Telegram launch and an explicit confirmation in @becsmebot. No archive is created automatically.</p><p id="status" role="status" aria-live="polite">Checking secure launch…</p><button id="begin" hidden>Request bot confirmation</button><form id="passwordForm" hidden autocomplete="off"><label for="password">Archive password</label><input id="password" name="archive-password" type="password" autocomplete="new-password" minlength="12" maxlength="1024" required><label for="passwordAgain">Repeat archive password</label><input id="passwordAgain" name="archive-password-repeat" type="password" autocomplete="new-password" minlength="12" maxlength="1024" required><small>Choose a unique password of at least 12 characters yourself. Never send it to the bot or an assistant. Keep it separate from the archive; it cannot be recovered.</small><br><button id="generate" type="submit">Generate encrypted ZIP</button></form><button id="download" hidden>Download encrypted ZIP</button><button id="cancel" class="secondary" hidden>Cancel and clear</button><p><small>The archive is downloaded only when you choose. Save it somewhere private outside Railway. This page does not store the password or archive in browser storage. Becs uses your password briefly on its server to encrypt this archive; it is not saved. A compromised server or device can still expose credentials.</small></p><a id="reopen" href="https://t.me/becsmebot?start=recovery" rel="noopener noreferrer" hidden>Open a fresh recovery launch in Telegram</a></section></main>
+<script>
+(() => {
+'use strict';
+const el=id=>document.getElementById(id);
+// Telegram provides signed launch data in its WebApp hash. No third-party SDK is loaded.
+let initData=new URLSearchParams(location.hash.slice(1)).get('tgWebAppData')||window.Telegram?.WebApp?.initData||'';
+try{history.replaceState(null,'',location.pathname);}catch{}
+let generation=0,controller=null,timer=null,challenge=null,expires=0,fileUrl=null,busy=false,ended=false;
+const status=text=>{el('status').textContent=text;};
+function clear(){
+ generation++;controller?.abort();controller=null;clearTimeout(timer);timer=null;challenge=null;expires=0;busy=false;
+ el('password').value='';el('passwordAgain').value='';
+ if(fileUrl)URL.revokeObjectURL(fileUrl);fileUrl=null;
+ el('passwordForm').hidden=true;el('download').hidden=true;el('cancel').hidden=true;el('generate').disabled=false;
+}
+function fail(message,reauth=false){clear();status(message);el('begin').hidden=reauth||!initData||ended;el('begin').disabled=false;el('reopen').hidden=!reauth;}
+async function api(path,options={}){
+ const response=await fetch('/api/admin/recovery'+path,{...options,signal:controller.signal,cache:'no-store',credentials:'omit',redirect:'error',headers:{'X-Telegram-Init-Data':initData,...(options.body?{'Content-Type':'application/json'}:{})}});
+ if(!response.ok){const error=new Error('Recovery request failed');error.auth=response.status===401||response.status===403;throw error;}return response;
+}
+function expired(){return !expires||Date.now()>=expires;}
+async function check(version){
+ if(version!==generation||ended)return;
+ if(expired()){fail('Confirmation expired. Start again.');return;}
+ try{
+  const data=await (await api('/challenge/'+encodeURIComponent(challenge))).json();
+  if(version!==generation||ended)return;
+  if(data.status==='confirmed'){
+   status('Owner confirmation verified. Choose and repeat your archive password.');el('passwordForm').hidden=false;el('password').focus();
+   timer=setTimeout(()=>{if(version===generation)fail('Confirmation expired. Start again.');},Math.max(0,expires-Date.now()));return;
+  }
+  if(data.status!=='pending'){fail('Confirmation was declined, canceled or expired. No archive was created.');return;}
+  timer=setTimeout(()=>check(version),2000);
+ }catch(error){if(version===generation&&!ended)fail('Unable to verify confirmation. Reopen from Telegram if your launch expired.',error.auth);}
+}
+el('begin').addEventListener('click',async()=>{
+ if(busy||ended||!initData)return;clear();busy=true;el('begin').disabled=true;el('cancel').hidden=false;controller=new AbortController();const version=generation;
+ status('Requesting confirmation in @becsmebot…');
+ try{
+  const data=await (await api('/challenge',{method:'POST'})).json();if(version!==generation||ended)return;
+  if(typeof data.challenge_id!=='string')throw new Error('Invalid challenge');
+  challenge=data.challenge_id;expires=typeof data.expires_at==='number'?data.expires_at*1000:Date.parse(data.expires_at);
+  if(!Number.isFinite(expires)||expired())throw new Error('Expired challenge');
+  el('begin').hidden=true;status('Open @becsmebot and explicitly confirm this recovery request, then return here. Never enter your archive password in the bot.');check(version);
+ }catch(error){if(version===generation&&!ended)fail('Recovery could not start. Only a fresh owner launch can request confirmation.',error.auth);}
+});
+el('passwordForm').addEventListener('submit',async event=>{
+ event.preventDefault();if(ended||el('passwordForm').hidden||el('generate').disabled)return;
+ if(expired()){fail('Confirmation expired. Start again.');return;}
+ if(el('password').value.length<12||el('password').value!==el('passwordAgain').value){status('Enter the same password twice, using at least 12 characters.');return;}
+ el('generate').disabled=true;clearTimeout(timer);timer=null;const version=generation;
+ let body=JSON.stringify({challenge_id:challenge,password:el('password').value});el('password').value='';el('passwordAgain').value='';el('passwordForm').hidden=true;
+ status('Preparing encrypted recovery archive…');
+ try{
+  const pending=api('/export',{method:'POST',body});body=null;const response=await pending;
+  if(version!==generation||ended)return;
+  if(!(response.headers.get('content-type')||'').includes('application/zip'))throw new Error('Invalid archive');
+  const maxBytes=8*1024*1024;
+  if(Number(response.headers.get('content-length'))>maxBytes)throw new Error('Archive too large');
+  const blob=await response.blob();if(version!==generation||ended)return;
+  if(!blob.size||blob.size>maxBytes)throw new Error('Invalid archive size');fileUrl=URL.createObjectURL(blob);el('download').hidden=false;
+  status('Encrypted archive ready. Download within two minutes and save your own copy. Keep its password separate.');
+  timer=setTimeout(()=>{initData='';fail('The prepared download expired and was cleared. Reopen recovery from Telegram.',true);},120000);
+ }catch(error){if(version===generation&&!ended)fail('The archive was not prepared. Request a new confirmation to try again.',error.auth);}
+ finally{body=null;}
+});
+el('download').addEventListener('click',()=>{
+ if(!fileUrl||ended)return;const link=document.createElement('a');link.href=fileUrl;link.download='becs-rollback-recovery-'+new Date().toISOString().replace(/[:.]/g,'-')+'.zip';link.rel='noopener';document.body.append(link);link.click();link.remove();status('Download requested. Check Downloads or Files; a saved copy is not verified by this page.');
+});
+el('cancel').addEventListener('click',()=>{
+ const cancelId=challenge;
+ if(cancelId&&initData)fetch('/api/admin/recovery/challenge/'+encodeURIComponent(cancelId)+'/cancel',{method:'POST',headers:{'X-Telegram-Init-Data':initData},cache:'no-store',credentials:'omit',redirect:'error'}).catch(()=>{});
+ clear();el('begin').hidden=!initData;el('begin').disabled=false;status('Canceled. Password fields and prepared archive cleared.');});
+window.addEventListener('pagehide',()=>{ended=true;clear();initData='';});
+window.addEventListener('pageshow',event=>{if(event.persisted){ended=true;clear();initData='';el('begin').hidden=true;el('reopen').hidden=false;status('Reopen recovery from Telegram to start a fresh authenticated session.');}});
+if(initData){el('begin').hidden=false;status('Ready to request fresh owner verification.');}else{el('reopen').hidden=false;status('Open this secure recovery page from @becsmebot in Telegram. A signed, fresh owner launch is required.');}
+})();
+</script></body></html>

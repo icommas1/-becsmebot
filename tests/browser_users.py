@@ -59,6 +59,8 @@ class Mock:
                     data = {'user': self.me, 'is_admin': self.me['role'] == 'admin', 'capacity': 3}
             elif self.workspace_revoked and path == '/api/routes':
                 status, data = 403, {'detail': 'Workspace access revoked', 'reason': 'access_revoked'}
+            elif path == '/api/recovery/consent':
+                data = {'required':False,'choice':'no','scope_version':'1','administrator':{'user_id':'1001','display_name':'Owner'}}
             elif path == '/api/overview':
                 data = self.overview
             elif path == '/api/routes':

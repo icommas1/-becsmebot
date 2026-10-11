@@ -30,6 +30,8 @@ def respond(route):
     if path.startswith('/api/'):
         if path == '/api/me':
             data = {'user':{'telegram_id':'123456','status':'approved','role':'admin'},'is_admin':True,'capacity':3}
+        elif path == '/api/recovery/consent':
+            data = {'required':False,'choice':'no','scope_version':'1','administrator':{'user_id':'1001','display_name':'Owner'}}
         elif path == '/api/overview':
             data = OVERVIEW
         elif path == '/api/routes' and method == 'GET':

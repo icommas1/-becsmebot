@@ -191,7 +191,7 @@ async def protect_api(request: Request, call_next):
             request.state.identity = identity
             request.state.signed = signed
             request.state.user = user
-            if path == '/api/me':
+            if path in ('/api/me', '/api/recovery/rescind'):
                 response = await call_next(request)
             else:
                 if not user or user['status'] != 'approved':
@@ -557,3 +557,7 @@ async def disconnect_telegram():
 app.mount('/assets',StaticFiles(directory=str(STATIC)),name='assets')
 @app.get('/')
 async def index():return FileResponse(STATIC/'index.html')
+
+# Sensitive recovery has its own first-party page and stricter authenticated routes.
+from .recovery import router as recovery_router
+app.include_router(recovery_router)

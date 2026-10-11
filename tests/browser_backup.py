@@ -44,6 +44,7 @@ def main():
                     calls.append(path);status=200
                     if state['reject']:status=401;data={'detail':'Telegram launch expired'}
                     elif path=='/api/me':data={'user':{**OWNER,**({'telegram_id':'2002','role':'member'} if state['member'] else {})},'is_admin':not state['member'],'capacity':3}
+                    elif path=='/api/recovery/consent':data={'required':False,'choice':'no','scope_version':'1','administrator':{'user_id':'1001','display_name':'Owner'}}
                     elif path=='/api/overview':data=OVERVIEW
                     elif path in ('/api/routes','/api/jobs','/api/reviews','/api/inspector'):data={path.rsplit('/',1)[1] if path!='/api/inspector' else 'items':[]}
                     elif path=='/api/admin/backups/status':data={'configuration_checksum':state['checksum'],'workspace_count':1,'schema_version':1}
