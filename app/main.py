@@ -30,6 +30,7 @@ logging.basicConfig(level=os.getenv('BECS_LOG_LEVEL','INFO'))
 ROOT=Path(__file__).resolve().parents[1]
 STATIC=ROOT / 'static'
 manager=PersonalTelegram()
+STARTED_AT=time.time()
 
 
 def is_valid_init_data(raw: str) -> bool:
@@ -51,6 +52,9 @@ def is_valid_init_data(raw: str) -> bool:
     except (ValueError,KeyError,TypeError,OverflowError):
         return False
 
+
+def is_owner(request: Request)->bool:
+    return is_valid_init_data(request.headers.get('x-telegram-init-data',''))
 
 def is_authorized(request: Request)->bool:
     host=request.headers.get('host','').lower().split(':')[0]
@@ -75,6 +79,7 @@ async def lifespan(app: FastAPI):
     except Exception:
         logging.exception('Telegram account not connected; use Settings to authorize')
     tasks=[asyncio.create_task(delivery_worker(manager,stop)),asyncio.create_task(telegram_bot_poll(manager,stop))]
+    app.state.delivery_worker=tasks[0]
     yield
     stop.set()
     for task in tasks: task.cancel()
@@ -96,6 +101,28 @@ async def protect_api(request:Request,call_next):
 
 @app.get('/api/health')
 def health():return {'ok':True,'service':'becs','version':'1.0.0'}
+
+@app.get('/api/admin/status')
+async def admin_status(request: Request):
+    if not is_owner(request):
+        raise HTTPException(403,'Verified owner Telegram Mini App required')
+    with connection() as db:
+        counts={name:db.execute(sql).fetchone()[0] for name,sql in {
+            'routes':'SELECT COUNT(*) FROM routes',
+            'active_routes':'SELECT COUNT(*) FROM routes WHERE enabled=1',
+            'queued':"SELECT COUNT(*) FROM jobs WHERE status='queued'",
+            'sending':"SELECT COUNT(*) FROM jobs WHERE status='sending'",
+            'failed':"SELECT COUNT(*) FROM jobs WHERE status='failed'"
+        }.items()}
+    session=await manager.status()
+    worker=getattr(request.app.state,'delivery_worker',None)
+    return {'service':'becs','uptime_seconds':int(time.time()-STARTED_AT),
+        'telegram':{'authorized':bool(session.get('authorized')),'configured':bool(session.get('configured'))},
+        'bot_configured':bool(os.getenv('TELEGRAM_BOT_TOKEN')),
+        'cooldown_seconds':max(0,int(float(get_setting('account_cooldown_until','0'))-time.time())),
+        'paused':get_setting('paused','false')=='true','counts':counts,
+        'components':{'api':'running','sqlite':'available','worker':'running' if worker and not worker.done() else 'unavailable'},
+        'checked_at':int(time.time())}
 
 @app.get('/api/overview')
 async def overview():
