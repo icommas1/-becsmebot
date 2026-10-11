@@ -24,15 +24,23 @@ jobs:
           python -m compileall -q app tests
           node --check static/app.js
           node --check static/sw.js
+      - name: Build the exact hosted frontend package
+        run: |
+          python scripts/build_appdeploy_bundle.py --output "$RUNNER_TEMP/becs-appdeploy-update"
+          npm install --prefix "$RUNNER_TEMP/becs-appdeploy-update/project"
+          npm run build --prefix "$RUNNER_TEMP/becs-appdeploy-update/project"
       - run: python -m playwright install --with-deps chromium
       - name: Mocked mobile and desktop browser checks
         run: |
           python tests/browser_bot_destination.py
           python tests/browser_compact_filters.py
           python tests/browser_users.py
+          python tests/browser_appdeploy.py --dist "$RUNNER_TEMP/becs-appdeploy-update/project/dist" --screenshots preview/appdeploy
       - uses: actions/upload-artifact@v4
         if: always()
         with:
           name: private-workspace-ui-previews
-          path: preview/private-invites/*.png
+          path: |
+            preview/private-invites/*.png
+            preview/appdeploy/*.png
           if-no-files-found: ignore
