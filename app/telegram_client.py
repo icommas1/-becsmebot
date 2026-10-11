@@ -458,14 +458,7 @@ async def handle_bot_update(item, registry):
                 or chat.get('type') != 'private' or type(chat.get('id')) is not int
                 or sender['id'] != chat['id'] or not isinstance(value, str) or not value.startswith('rc_')):
             return None
-        from .recovery_access import confirm_export_challenge
-        from .access import AccessError
-        try:
-            confirm_export_challenge(str(sender['id']), value[3:])
-            text = 'Recovery export confirmed. Return to the secure Becs recovery page to prepare your encrypted download.'
-        except (AccessError, ValueError):
-            text = 'This recovery confirmation is unavailable or expired.'
-        return {'chat_id': sender['id'], 'text': text}
+        return {'chat_id': sender['id'], 'text': 'Rollback Recovery is disabled.'}
     parsed = _private_message(item)
     if parsed is None:
         return None
@@ -476,12 +469,7 @@ async def handle_bot_update(item, registry):
     from .access import AccessError, get_user, is_approved, redeem_invite
     from .db import connection, get_setting, set_setting, workspace
     if command == '/start' and len(words) == 2 and words[1] == 'recovery':
-        from .access import owner_id
-        if user_id != owner_id() or not is_approved(user_id):
-            return {'chat_id': int(user_id), 'text': 'Secure recovery is available to the administrator only.'}
-        from .recovery import RECOVERY_URL
-        return {'chat_id': int(user_id), 'text': 'Open secure recovery to prepare an encrypted archive. Enter your recovery password only on that page, never in chat.',
-                'reply_markup': {'inline_keyboard': [[{'text': 'Open secure recovery', 'web_app': {'url': RECOVERY_URL}}]]}}
+        return {'chat_id': int(user_id), 'text': 'Rollback Recovery is disabled.'}
     if command == '/start' and len(words) == 2 and words[1].startswith('invite_'):
         sender = message['from']
         display_name = ' '.join(str(sender.get(key) or '') for key in ('first_name', 'last_name')).strip()[:100]

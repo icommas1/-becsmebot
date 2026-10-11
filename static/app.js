@@ -43,7 +43,7 @@ const icon = (name, cls='') => `<span class="ico ${cls}" aria-hidden="true"><svg
 const safe = text => String(text ?? '').replace(/[&<>"']/g,ch=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[ch]));
 const fmt = number => Intl.NumberFormat().format(number||0);
 const age = value => { if (!value) return ''; const seconds=Math.max(0,Math.floor(Date.now()/1000-value)); return seconds<60?'just now':seconds<3600?Math.floor(seconds/60)+'m ago':seconds<86400?Math.floor(seconds/3600)+'h ago':new Date(value*1000).toLocaleDateString(); };
-const navigate = name => { if(state.access!=='approved'||(['users','backups'].includes(name)&&!state.me?.is_admin))return; if(state.recoveryConsent?.required||state.recoveryError)return; state.page=name; render(); if(name==='users')loadUsers(); if(name==='backups')loadBackupStatus(); window.scrollTo({top:0,behavior:'smooth'}); };
+const navigate = name => { if(state.access!=='approved'||(['users','backups'].includes(name)&&!state.me?.is_admin))return; state.page=name; render(); if(name==='users')loadUsers(); if(name==='backups')loadBackupStatus(); window.scrollTo({top:0,behavior:'smooth'}); };
 const modes = [{id:'express',title:'Express',sub:'Fastest',ico:'bolt',cls:'mode-express',help:'Forward with essential route checks; no AI or optional content filters in the critical path.'},{id:'smart',title:'Smart',sub:'Filtered',ico:'filter',cls:'mode-smart',help:'Use local keyword, address, regex and duplicate rules before queueing.'},{id:'hybrid',title:'Hybrid',sub:'AI Assist',ico:'brain',cls:'mode-hybrid',help:'Local filters decide first; AI can analyze afterward without blocking delivery.'},{id:'ai-gated',title:'AI-Gated',sub:'AI Decision',ico:'shield',cls:'mode-ai-gated',help:'Require AI approval before forwarding. If AI is unavailable, messages are held for review.'}];
 const nav=[['home','Home','home'],['routes','Routes','routes'],['filters','Smart Filters','filter'],['queue','Queue','queue'],['inspector','Inspector','activity'],['more','More','more']];
 const state={page:'home',overview:null,routes:[],jobs:[],reviews:[],chats:[],inspections:[],inspectorKind:'all',jobTab:'all',simResult:null,modeExplain:'smart',busy:false,apiError:'',chatSearch:'',editing:null,me:null,access:'checking',users:[],invites:[],usersLoaded:false,usersLoading:false,usersError:'',userBusy:false,inviteBusy:false,invite:null,userConfirm:null,modalKind:null,loadVersion:0,accessVersion:0};
@@ -65,7 +65,6 @@ async function request(path,options={}) {
 function toast(message,isError=false){const el=document.createElement('div');el.className='toast'+(isError?' error':'');el.textContent=message;dom('toastRegion').append(el);setTimeout(()=>el.remove(),4200);}
 function clearWorkspace(){
  state.backupGeneration=(state.backupGeneration||0)+1;clearPreparedBackup();state.backupStatus=null;state.backupLast=null;state.backupError='';state.backupBusy=false;
- state.recoveryConsent=null;state.recoveryError='';state.recoverySaving=false;
  state.overview=null;state.routes=[];state.jobs=[];state.reviews=[];state.chats=[];state.inspections=[];state.simResult=null;
  state.users=[];state.invites=[];state.usersLoaded=false;state.usersError='';state.invite=null;state.userConfirm=null;
  for(const key of ['labText','labAllow','labBlock','labPattern'])delete state[key];
@@ -75,7 +74,6 @@ function denyAccess(status){
  state.accessVersion++;state.access=status;state.page='home';state.apiError='';clearWorkspace();render();
 }
 async function reload(full=true,options={}){
- if(state.recoverySaving)return;
  const version=++state.loadVersion;const accessVersion=state.accessVersion;
  const preserve=options.preserve;
  try{
@@ -85,16 +83,6 @@ async function reload(full=true,options={}){
   const status=me.user?.status||'not_invited';
   if(status!=='approved'){denyAccess(status);return;}
   state.access='approved';
-  try {
-   const consent=await request('/recovery/consent');
-   if(version!==state.loadVersion||accessVersion!==state.accessVersion)return;
-   if(!consent.administrator?.user_id||!consent.scope_version||typeof consent.required!=='boolean')throw new Error('Recovery consent could not be verified.');
-   state.recoveryConsent=consent;state.recoveryError='';
-  } catch(error) {
-   if(version!==state.loadVersion||accessVersion!==state.accessVersion)return;
-   state.recoveryError='Recovery consent could not be loaded. Check access to try again.';render();return;
-  }
-  if(state.recoveryConsent.required){state.apiError='';render();return;}
   const calls=[request('/overview'),request('/routes')];
   if(full)calls.push(request('/jobs?limit=100'),request('/reviews'),request('/inspector?limit=100'));
   const result=await Promise.all(calls);
@@ -112,7 +100,7 @@ async function reload(full=true,options={}){
  }
 }
 function renderNav(){
- const allowed=state.access==='approved'&&!state.apiError&&!state.recoveryConsent?.required&&!state.recoveryError;dom('sideNav').classList.toggle('hidden',!allowed);dom('bottomNav').classList.toggle('hidden',!allowed);dom('accountButton').disabled=!allowed;
+ const allowed=state.access==='approved'&&!state.apiError;dom('sideNav').classList.toggle('hidden',!allowed);dom('bottomNav').classList.toggle('hidden',!allowed);dom('accountButton').disabled=!allowed;
  const current=['users','backups'].includes(state.page)?'more':state.page;
  const html=nav.map(([id,label,ico])=>`<button class="nav-item ${current===id?'active':''}" data-nav="${id}">${icon(ico)} ${label}</button>`).join('');
  dom('sideNav').innerHTML=html;
@@ -268,7 +256,7 @@ function backupsPage(){
  ${state.backupError?`<p role="alert" class="notice warn">${safe(state.backupError)}</p>`:''}
  <div style="display:flex;gap:10px;flex-wrap:wrap;margin-top:16px"><button class="button button-primary" data-action="backup-prepare" ${state.backupBusy?'disabled':''}>${state.backupBusy?'Preparing…':'Export Backup'}</button>${state.backupFile?'<button class="button" data-action="backup-save">Save / Share ZIP</button>':''}</div>
  <p class="field-help">The file is unencrypted and contains private configuration. Save it to Files, your own private cloud folder or offline storage. Nothing is uploaded automatically. It is outside Railway only after you save your copy.</p>
- <p class="field-help">On iPhone, tap Save / Share ZIP, then Save to Files if offered. If Telegram blocks saving, try Telegram Desktop. Opening an external browser does not carry your Telegram sign-in; do not copy login data or tokens into a URL.</p></div></section><section class="panel" style="margin-top:16px"><div class="panel-header"><h2>Rollback Recovery</h2></div><div style="padding:20px"><p>Separately create an encrypted recovery archive containing eligible, consenting Telegram sessions. A saved session carries the account’s permissions. Keep the archive and its password private.</p><a class="button" href="https://t.me/becsmebot?start=recovery" rel="noopener noreferrer">Open secure recovery in Telegram</a><p class="field-help">A fresh owner launch and explicit confirmation in @becsmebot are required. Choose the archive password yourself on the secure page.</p></div></section></div>`;
+ <p class="field-help">On iPhone, tap Save / Share ZIP, then Save to Files if offered. If Telegram blocks saving, try Telegram Desktop. Opening an external browser does not carry your Telegram sign-in; do not copy login data or tokens into a URL.</p></div></section></div>`;
 }
 async function prepareBackup(){
  if(state.backupBusy||!state.me?.is_admin||state.access!=='approved')return;
@@ -309,26 +297,8 @@ function accessPage(){
  const detail=pending?'Your invitation has been accepted. The owner needs to approve your access before you can connect Telegram.':revoked?'Your access to Becs is no longer active. Contact the owner if you need access again.':status==='checking'?'Verifying your Telegram identity.':'Ask the owner for an invite link, open it in Telegram, and tap Start. No separate signup or password is needed.';
  return `<section class="access-card"><span class="access-symbol ${revoked?'revoked':''}">${icon(pending?'clock':'lock')}</span><p class="eyebrow">BECS / PRIVATE WORKSPACE</p><h1>${title}</h1><p>${detail}</p>${state.me?.user?.display_name?`<div class="access-identity">${icon('person')}<span>${safe(state.me.user.display_name)}</span></div>`:''}${status==='checking'?'':`<button class="button button-primary" data-action="retry-access">${icon('refresh')} Check access</button>`}<div class="access-footer">${pending?'Once approved, you’ll get your own routes, chats and queue.':'Each approved person gets a separate workspace. The administrator can export approved users’ routes and settings for backup; sessions and message history are excluded.'}</div></section>`;
 }
-function recoveryConsentPage(){
- return `<section class="access-card"><span class="access-symbol">${icon('shield')}</span><h1>Rollback Recovery</h1><p id="recoveryConsentCopy"></p><p id="recoveryConsentError" role="alert"></p><div style="display:flex;gap:12px;justify-content:center"><button class="button button-primary" data-action="recovery-yes" ${state.recoverySaving?'disabled':''}>Yes</button><button class="button" data-action="recovery-no" ${state.recoverySaving?'disabled':''}>No</button></div></section>`;
-}
-async function saveRecoveryConsent(choice){
- const consent=state.recoveryConsent,version=state.accessVersion;
- if(!consent?.required||state.recoverySaving)return;
- state.recoverySaving=true;render();
- try{
-  await request('/recovery/consent',{method:'POST',body:JSON.stringify({choice,scope_version:consent.scope_version,administrator_id:consent.administrator.user_id})});
-  if(version!==state.accessVersion||consent!==state.recoveryConsent)return;
-  state.recoveryConsent={...consent,required:false,choice};state.recoverySaving=false;await reload();
- }catch(error){
-  if(version!==state.accessVersion||consent!==state.recoveryConsent)return;
-  state.recoverySaving=false;render();dom('recoveryConsentError').textContent='Your choice was not saved. Please try again.';
- }
-}
 function render(){
  renderNav();
- if(state.access==='approved'&&state.recoveryError){dom('mainView').innerHTML=`<section class="access-card"><h1>Rollback Recovery</h1><p role="alert">${safe(state.recoveryError)}</p><button class="button" data-action="retry-access">Check access</button></section>`;return;}
- if(state.access==='approved'&&state.recoveryConsent?.required){dom('mainView').innerHTML=recoveryConsentPage();dom('recoveryConsentCopy').textContent=`Allow ${state.recoveryConsent.administrator.display_name||('Telegram user '+state.recoveryConsent.administrator.user_id)} to securely back up your Telegram session for @becsmebot updates and recovery? A saved session carries your account’s permissions, including reading and sending messages.`;return;}
  dom('mainView').innerHTML=state.apiError?gatePage():state.access!=='approved'?accessPage():!state.overview?accessPage():state.page==='home'?overviewPage():state.page==='routes'?routesPage():state.page==='filters'?filtersPage():state.page==='queue'?queuePage():state.page==='inspector'?inspectorPage():state.page==='users'&&state.me?.is_admin?usersPage():state.page==='backups'&&state.me?.is_admin?backupsPage():morePage();
  if(!state.apiError&&state.access==='approved'&&state.page==='more'&&state.me?.is_admin)openAdminStatus();
 }
@@ -571,7 +541,6 @@ async function login(method,body,btn){if(btn)btn.disabled=true;try{const result=
 async function reviewItem(id,approve){try{await request('/reviews/'+id,{method:'POST',body:JSON.stringify({approve})});await reload();toast(approve?'Approved for sequential forwarding':'Review rejected');}catch(e){toast(e.message,true);}}
 async function retryJob(id){try{await request('/jobs/'+id+'/retry',{method:'POST'});await reload();toast('Job requeued');}catch(e){toast(e.message,true);}}
 const actionMap={
- 'recovery-yes':()=>saveRecoveryConsent('yes'),'recovery-no':()=>saveRecoveryConsent('no'),
  'open-backups':()=>navigate('backups'),'backup-refresh':loadBackupStatus,'backup-prepare':prepareBackup,'backup-save':saveBackup,'owner-status':openAdminStatus,'open-users':()=>navigate('users'),'users-refresh':()=>loadUsers(),'invite-user':()=>openInvite(),'create-invite':createInvite,'copy-invite':copyInvite,'confirm-user':confirmUserAction,
  'retry-access':async(el)=>{if(el.disabled)return;el.disabled=true;await reload();if(el.isConnected)el.disabled=false;},
  'new-route':()=>routeModal(), 'open-routes':()=>navigate('routes'),'open-filters':()=>navigate('filters'),'open-queue':()=>navigate('queue'),'open-settings':()=>navigate('more'),

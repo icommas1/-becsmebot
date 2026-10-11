@@ -1,128 +1,59 @@
-"""Synthetic-only signed API/bot/export isolation checks; no Telegram networking."""
-import json
-import os
+"""Regression: disabled sensitive recovery cannot read secrets or record consent."""
 import time
 import unittest
-from unittest.mock import AsyncMock, patch
-from app import access, db, recovery, recovery_access as ra
-from app.recovery_crypto import decrypt_recovery_archive
-from app.telegram_client import PersonalTelegram, handle_bot_update
+from unittest.mock import patch
+from app import access, db, recovery_access as ra
+from app.telegram_client import handle_bot_update
 import test_workspace_api as fixtures
-from test_workspace_api import OWNER, MEMBER_A, MEMBER_B, UNKNOWN, signed_init_data
+from test_workspace_api import OWNER,MEMBER_A,UNKNOWN
 
-PASSWORD = 'synthetic recovery passphrase only'
+class RecoveryDisabledTests(unittest.IsolatedAsyncioTestCase):
+    asyncSetUp=fixtures.WorkspaceAPIRegression.asyncSetUp
+    initialize_workspace=fixtures.WorkspaceAPIRegression.initialize_workspace
+    add_user=fixtures.WorkspaceAPIRegression.add_user
+    request=fixtures.WorkspaceAPIRegression.request
+    seed_workspace=fixtures.WorkspaceAPIRegression.seed_workspace
 
-class RecoveryAPITests(unittest.IsolatedAsyncioTestCase):
-    asyncSetUp = fixtures.WorkspaceAPIRegression.asyncSetUp
-    initialize_workspace = fixtures.WorkspaceAPIRegression.initialize_workspace
-    add_user = fixtures.WorkspaceAPIRegression.add_user
-    request = fixtures.WorkspaceAPIRegression.request
-    seed_workspace = fixtures.WorkspaceAPIRegression.seed_workspace
+    async def test_sensitive_routes_disabled_all_identities(self):
+        operations=[('GET','/recovery'),('POST','/api/recovery/consent'),('POST','/api/recovery/rescind'),('POST','/api/admin/recovery/challenge'),('GET','/api/admin/recovery/challenge/old'),('POST','/api/admin/recovery/challenge/old/cancel'),('POST','/api/admin/recovery/export')]
+        with patch('app.recovery.snapshot_payload') as snapshot,patch('app.recovery.send_confirmation') as send:
+            for user in (OWNER,MEMBER_A,UNKNOWN,None):
+                for method,path in operations:
+                    r=await self.request(method,path,user)
+                    self.assertEqual(r.status_code,410,(user,path,r.text))
+                    self.assertEqual(r.json()['reason'],'recovery_disabled')
+                    self.assertEqual(r.headers['cache-control'],'no-store')
+            snapshot.assert_not_called();send.assert_not_called()
 
-    def choice(self, uid, yes=True):
-        return ra.record_consent(uid, yes, expected_scope_version='1', expected_admin_id=OWNER)
+    async def test_cached_ui_can_proceed_no_consent_table_created(self):
+        for uid in (OWNER,MEMBER_A):
+            r=await self.request('GET','/api/recovery/consent',uid)
+            self.assertEqual(r.status_code,200,r.text)
+            self.assertFalse(r.json()['required']);self.assertFalse(r.json()['enabled'])
+            self.assertEqual((await self.request('GET','/api/routes',uid)).status_code,200)
+        with access._registry() as conn:
+            self.assertIsNone(conn.execute("SELECT name FROM sqlite_master WHERE name='recovery_consents'").fetchone())
 
-    async def challenge(self):
-        sent = []
-        async def send(owner, challenge): sent.append(challenge)
-        with patch('app.recovery.send_confirmation', side_effect=send):
-            response = await self.request('POST', '/api/admin/recovery/challenge')
-        self.assertEqual(response.status_code, 200, response.text)
-        self.assertNotIn('token', response.json())
-        self.assertNotIn(sent[0]['token'], response.text)
-        ra.confirm_export_challenge(OWNER, sent[0]['token'])
-        return response.json()['challenge_id']
-
-    async def test_consent_optional_bound_and_rescission_after_revoke(self):
-        r = await self.request('GET', '/api/recovery/consent', MEMBER_A)
-        self.assertTrue(r.json()['required'])
-        body = {'choice':'no','scope_version':'1','administrator_id':OWNER}
-        r = await self.request('POST','/api/recovery/consent',MEMBER_A,json=body)
-        self.assertEqual(r.status_code,200,r.text)
-        self.assertFalse(r.json()['required'])
-        self.assertEqual((await self.request('GET','/api/routes',MEMBER_A)).status_code,200)
-        body['administrator_id']=MEMBER_A
-        self.assertEqual((await self.request('POST','/api/recovery/consent',MEMBER_A,json=body)).status_code,409)
-        self.choice(MEMBER_B)
-        access.revoke_user(OWNER,MEMBER_B)
-        r=await self.request('POST','/api/recovery/rescind',MEMBER_B,json={})
-        self.assertEqual(r.status_code,200,r.text)
-
-    async def test_auth_origin_freshness_and_no_fallback(self):
-        for uid in (MEMBER_A,UNKNOWN,None):
-            r=await self.request('POST','/api/admin/recovery/challenge',uid)
-            self.assertIn(r.status_code,(401,403))
-        r=await self.request('POST','/api/admin/recovery/challenge',None,headers={'X-Telegram-Init-Data':signed_init_data(OWNER,timestamp=int(time.time())-301)})
-        self.assertEqual(r.status_code,401)
-        for origin in ('https://evil.example','https://becs-crypto-forwarding-terminal-59lgyp.v2.appdeploy.ai'):
-            r=await self.request('POST','/api/admin/recovery/challenge',headers={'Origin':origin})
-            self.assertEqual(r.status_code,403)
-        with patch.dict(os.environ,{'BECS_ADMIN_TOKEN':'synthetic-fallback'}):
-            r=await self.request('POST','/api/admin/recovery/challenge',None,headers={'X-Becs-Key':'synthetic-fallback'})
-            self.assertEqual(r.status_code,403)
-
-    async def test_export_encrypted_whitelisted_and_once(self):
-        from telethon.sessions import StringSession
-        from telethon.crypto import AuthKey
-        for uid in (OWNER,MEMBER_A,MEMBER_B):self.seed_workspace(uid)
-        self.choice(OWNER);self.choice(MEMBER_A);self.choice(MEMBER_B,False)
-        with patch.dict(os.environ,{'BECS_SESSION_SECRET':'synthetic-root-key-only-'*3,'TELEGRAM_API_ID':'1234','TELEGRAM_API_HASH':'a'*32,'UNRELATED_SECRET':'NEVER_EXPORT_ME'}):
-            expected={}
-            for index,uid in enumerate((OWNER,MEMBER_A,MEMBER_B)):
-                session=StringSession();session.set_dc(2,'149.154.167.50',443);session.auth_key=AuthKey(bytes([index+1])*256)
-                expected[uid]=session.save()
-                path,cipher=PersonalTelegram(uid).session_storage();path.parent.mkdir(parents=True,exist_ok=True);path.write_bytes(cipher.encrypt(expected[uid].encode()))
-            cid=await self.challenge()
-            r=await self.request('GET','/api/admin/recovery/challenge/'+cid)
-            self.assertEqual(r.json()['status'],'confirmed')
-            r=await self.request('POST','/api/admin/recovery/export',json={'challenge_id':cid,'password':PASSWORD})
-            self.assertEqual(r.status_code,200,r.text if r.status_code!=200 else '')
-            self.assertEqual(r.headers['cache-control'],'no-store')
-            self.assertEqual(r.headers['content-type'],'application/zip')
-            payload=decrypt_recovery_archive(r.content,PASSWORD)
-            self.assertEqual({s['user_id'] for s in payload['sessions']},{OWNER,MEMBER_A})
-            self.assertEqual(payload['sessions'][0]['telegram_session'],expected[OWNER])
-            self.assertEqual(len(payload['configuration']['workspaces']),3)
-            self.assertNotIn('NEVER_EXPORT_ME',json.dumps(payload));self.assertNotIn('synthetic-root',json.dumps(payload))
-            for config in payload['configuration']['workspaces']:
-                self.assertTrue(config['paused']);self.assertFalse(config['routes'][0]['enabled'])
-            for secret in expected.values(): self.assertNotIn(secret.encode(),r.content)
-            r=await self.request('POST','/api/admin/recovery/export',json={'challenge_id':cid,'password':PASSWORD})
-            self.assertIn(r.status_code,(400,409))
-
-    async def test_changed_consent_fails_before_session_read(self):
-        self.choice(OWNER);self.choice(MEMBER_A)
-        cid=await self.challenge();ra.rescind_consent(MEMBER_A)
-        with patch('app.recovery.snapshot_payload') as snapshot:
-            r=await self.request('POST','/api/admin/recovery/export',json={'challenge_id':cid,'password':PASSWORD})
-            self.assertEqual(r.status_code,409);snapshot.assert_not_called()
-
-    async def test_errors_never_echo_password_and_bounded_body(self):
-        for body in ({'challenge_id':'bad','password':PASSWORD,'extra':PASSWORD},{'challenge_id':'bad','password':{'secret':PASSWORD}}):
-            r=await self.request('POST','/api/admin/recovery/export',json=body)
-            self.assertEqual(r.status_code,400);self.assertNotIn(PASSWORD,r.text)
-        r=await self.request('POST','/api/admin/recovery/export',json={'challenge_id':'bad','password':'x'*5000})
-        self.assertEqual(r.status_code,413)
-
-    async def test_bot_confirmation_owner_private_and_replay(self):
+    async def test_stored_consent_and_challenge_preserved_but_unusable(self):
+        ra.record_consent(OWNER,True,expected_scope_version='1',expected_admin_id=OWNER)
         c=ra.create_export_challenge(OWNER,authenticated_at=time.time())
-        def update(uid,chat_type='private'):
-            return {'callback_query':{'from':{'id':int(uid)},'message':{'chat':{'id':int(uid),'type':chat_type}},'data':'rc_'+c['token']}}
-        for item in (update(MEMBER_A),update(OWNER,'group')):
-            await handle_bot_update(item,self.runtime)
-            self.assertFalse(ra.export_challenge_status(OWNER,c['challenge_id'])['confirmed'])
-        r=await handle_bot_update(update(OWNER),self.runtime)
-        self.assertIn('confirmed',r['text'])
-        r=await handle_bot_update(update(OWNER),self.runtime)
-        self.assertIn('unavailable',r['text'])
+        with access._registry() as conn:before=[tuple(r) for r in conn.execute('SELECT * FROM recovery_consents')]
+        for item in ({'message':{'from':{'id':int(OWNER)},'chat':{'id':int(OWNER),'type':'private'},'text':'/start recovery'}},{'callback_query':{'from':{'id':int(OWNER)},'message':{'chat':{'id':int(OWNER),'type':'private'}},'data':'rc_'+c['token']}}):
+            response=await handle_bot_update(item,self.runtime)
+            self.assertEqual(response['text'],'Rollback Recovery is disabled.')
+            self.assertNotIn('reply_markup',response)
+        self.assertFalse(ra.export_challenge_status(OWNER,c['challenge_id'])['confirmed'])
+        with access._registry() as conn:self.assertEqual(before,[tuple(r) for r in conn.execute('SELECT * FROM recovery_consents')])
+        r=await self.request('POST','/api/admin/recovery/export',json={'challenge_id':c['challenge_id'],'password':'synthetic only password'})
+        self.assertEqual(r.status_code,410)
 
-    async def test_secure_page_has_no_external_script_and_csp(self):
-        r=await self.client.get('/recovery')
-        self.assertEqual(r.status_code,200)
-        self.assertIn("default-src 'none'",r.headers['content-security-policy'])
-        self.assertNotIn('<script src=',r.text)
-        self.assertEqual(r.headers['cache-control'],'no-store')
-
-    async def test_raw_recovery_template_not_public_asset(self):
-        response=await self.client.get('/assets/recovery.html')
-        self.assertEqual(response.status_code,404)
+    async def test_configuration_backup_still_available_and_ui_removed(self):
+        from pathlib import Path
+        r=await self.request('GET','/api/admin/backups/export')
+        self.assertEqual(r.status_code,200,r.text)
+        script=(Path(__file__).resolve().parents[1]/'static/app.js').read_text()
+        self.assertNotIn('/recovery/consent',script)
+        self.assertNotIn('start=recovery',script)
+        self.assertNotIn('Rollback Recovery',script)
+        self.assertIn('Export Backup',script)
+        self.assertEqual((await self.client.get('/assets/recovery.html')).status_code,404)

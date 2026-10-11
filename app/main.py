@@ -165,6 +165,9 @@ async def access_error_handler(request, exc):
 @app.middleware('http')
 async def protect_api(request: Request, call_next):
     path = request.url.path
+    # Explicitly disabled: deny every sensitive operation, including cached clients.
+    if path == '/recovery' or path.startswith('/api/admin/recovery') or (path.startswith('/api/recovery') and not (path == '/api/recovery/consent' and request.method == 'GET')):
+        return denial(410, 'Rollback Recovery is disabled.', 'recovery_disabled')
     if request.method == 'OPTIONS':
         return await call_next(request)
     if path.startswith('/api/') and path != '/api/health':
@@ -558,6 +561,9 @@ app.mount('/assets',StaticFiles(directory=str(STATIC)),name='assets')
 @app.get('/')
 async def index():return FileResponse(STATIC/'index.html')
 
-# Sensitive recovery has its own first-party page and stricter authenticated routes.
-from .recovery import router as recovery_router
-app.include_router(recovery_router)
+# Compatibility response lets an older cached Mini App proceed without prompting.
+# No consent storage or sensitive recovery router is loaded.
+@app.get('/api/recovery/consent')
+def disabled_recovery_consent(request: Request):
+    return {'required': False, 'choice': 'no', 'enabled': False, 'scope_version': '1',
+            'administrator': {'user_id': access.owner_id(), 'display_name': 'Administrator'}}

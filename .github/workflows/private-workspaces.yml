@@ -1,7 +1,7 @@
 name: Private workspace security and UI checks
 on:
   push:
-    branches: [feature/private-invites-workspaces, feature/recovery-consent-encrypted-v1]
+    branches: [feature/private-invites-workspaces, feature/recovery-consent-encrypted-v1, feature/disable-sensitive-recovery]
   workflow_dispatch:
 permissions:
   contents: read
@@ -25,7 +25,6 @@ jobs:
           python -m compileall -q app tests
           node --check static/app.js
           node --check static/sw.js
-          node tests/recovery_ui_logic.cjs
       - name: Build the exact hosted frontend package
         run: |
           python scripts/build_appdeploy_bundle.py --output "$RUNNER_TEMP/becs-appdeploy-update"
@@ -38,8 +37,6 @@ jobs:
           python tests/browser_compact_filters.py
           python tests/browser_users.py
           python tests/browser_backup.py
-          python tests/browser_recovery.py
-          python tests/browser_recovery.py --dist "$RUNNER_TEMP/becs-appdeploy-update/project/dist"
           python tests/browser_backup.py --dist "$RUNNER_TEMP/becs-appdeploy-update/project/dist"
           python tests/browser_appdeploy.py --dist "$RUNNER_TEMP/becs-appdeploy-update/project/dist" --screenshots preview/appdeploy
       - uses: actions/upload-artifact@v4
