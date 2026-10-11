@@ -178,9 +178,18 @@ function queuePage(){
  <div class="panel"><div class="panel-header"><h2>Delivery & review history</h2>${pill('ACCOUNT SEQUENTIAL')}</div>${tabHtml}${state.jobTab==='review'?(reviews||empty('shield','No pending reviews','AI-Gated messages requiring human review will appear here.')):(jobsHtml||empty('queue','No jobs in this view','Jobs appear after Telegram receives qualifying messages through an enabled route.'))}</div>
  <div class="notice" style="margin-top:15px">${icon('shield')} Messages are delivered one at a time. Telegram-imposed cooldowns are respected. This page contains actual locally stored events, not sample forwards.</div>`;
 }
+async function openAdminStatus(){
+ const box=dom('ownerStatusPanel');if(!box)return;
+ try{
+  const info=await request('/admin/status');
+  const rows=[['API',info.components.api],['Database',info.components.sqlite],['Worker',info.components.worker],['Telegram',info.telegram.authorized?'Connected':'Disconnected'],['Bot API',info.bot_configured?'Configured':'Missing'],['Forwarding',info.paused?'Paused':'Enabled'],['Active routes',info.counts.active_routes],['Queued',info.counts.queued],['Sending',info.counts.sending],['Failed',info.counts.failed],['Cooldown',info.cooldown_seconds+'s'],['Uptime',Math.floor(info.uptime_seconds/60)+' min']];
+  dom('ownerStatusRows').innerHTML=rows.map(([k,v])=>`<div class="health-row"><span class="status-main">${safe(k)}</span><strong class="right-flex">${safe(v)}</strong></div>`).join('');
+ }catch(e){if(e.status===403){box.remove();return;}dom('ownerStatusRows').textContent='Status unavailable';}
+}
 function morePage(){
  const o=state.overview||{}; const t=o.telegram||{};
  return `${pageHead('SYSTEM / PERSONAL EDITION','Account & Settings','Configure your single personal Telegram account, control bot, and optional AI provider.')}
+ <section class="panel" id="ownerStatusPanel" style="margin-bottom:17px"><div class="panel-header"><h2>Owner · System Status</h2><button class="button button-small" data-action="owner-status">Refresh</button></div><div id="ownerStatusRows" class="health-list">Checking access…</div></section>
  <div class="dashboard-cols"><div style="display:flex;flex-direction:column;gap:17px"><section class="panel login-card"><div class="panel-header"><h2>Personal Telegram connection</h2>${pill(t.authorized?'Authorized':t.configured?'Not signed in':'Unconfigured',t.authorized?'success':'warn')}</div>
  <div class="notice">${icon('lock')} Login codes and two-step passwords must only be entered here over trusted HTTPS or on your local computer. Never provide them to a Telegram bot chat.</div>
  <div class="divider"></div>
@@ -192,7 +201,7 @@ function morePage(){
 function gatePage(){
  return `<div class="page-head"><div><p class="eyebrow">SECURE ACCESS</p><h1>Becs access required</h1><p class="subheading">Open this inside your authorized Telegram Mini App, or enter your configured server access key.</p></div></div><section class="panel login-card"><div class="notice warn">${icon('lock')} ${safe(state.apiError||'Protected backend')}</div><div class="field" style="margin-top:20px"><label>BECS_ADMIN_TOKEN</label><input id="adminKey" type="password" autocomplete="off" placeholder="Enter your server access key"></div><button class="button button-primary" data-action="unlock">Unlock Becs</button><p class="small-help">Your key stays in this browser tab session only. Local development on 127.0.0.1 is permitted without a key.</p></section>`;
 }
-function render(){renderNav();dom('mainView').innerHTML=state.apiError?gatePage():state.page==='home'?overviewPage():state.page==='routes'?routesPage():state.page==='filters'?filtersPage():state.page==='queue'?queuePage():state.page==='inspector'?inspectorPage():morePage();}
+function render(){renderNav();dom('mainView').innerHTML=state.apiError?gatePage():state.page==='home'?overviewPage():state.page==='routes'?routesPage():state.page==='filters'?filtersPage():state.page==='queue'?queuePage():state.page==='inspector'?inspectorPage():morePage();if(!state.apiError&&state.page==='more')openAdminStatus();}
 
 function newRouteDefaults(m='smart'){return {name:'',mode:m,enabled:false,sources:[],destinations:[],allowed:'',blocked:'',pattern:'',match_mode:'any',network:'both',require_contract:false,dedup_minutes:60,delivery_style:'native'};}
 function field(label,id,value='',placeholder='',help='',type='text'){return `<div class="field"><label for="${id}">${label}</label><input id="${id}" type="${type}" value="${safe(value)}" placeholder="${safe(placeholder)}">${help?`<span class="field-help">${help}</span>`:''}</div>`;}
@@ -308,6 +317,7 @@ async function login(method,body,btn){if(btn)btn.disabled=true;try{const result=
 async function reviewItem(id,approve){try{await request('/reviews/'+id,{method:'POST',body:JSON.stringify({approve})});await reload();toast(approve?'Approved for sequential forwarding':'Review rejected');}catch(e){toast(e.message,true);}}
 async function retryJob(id){try{await request('/jobs/'+id+'/retry',{method:'POST'});await reload();toast('Job requeued');}catch(e){toast(e.message,true);}}
 const actionMap={
+ 'owner-status':openAdminStatus,
  'new-route':()=>routeModal(), 'open-routes':()=>navigate('routes'),'open-filters':()=>navigate('filters'),'open-queue':()=>navigate('queue'),'open-settings':()=>navigate('more'),
  'refresh':()=>reload(),'refresh-inspector':refreshInspector, 'pause':()=>updatePause(true), 'resume':()=>updatePause(false),'close-modal':closeModal,
  'run-sim':simulate,'load-chats':loadChats,
