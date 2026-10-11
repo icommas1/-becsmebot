@@ -92,8 +92,9 @@ with sync_playwright() as p:
     expect(page.locator('#routeDests')).to_have_value('900123')
     destination.uncheck()
     expect(page.locator('#routeDests')).to_have_value('')
-    page.locator('#destReference').fill('@example_test_bot')
-    page.locator('[data-action="resolve-destination"]').click()
+    # Current compact picker selects existing chats; manual reference inputs were removed.
+    page.locator('#destChatSearch').fill('@example_test_bot')
+    destination.check()
     expect(page.locator('#routeDests')).to_have_value('900123')
     expect(destination).to_be_checked()
     page.locator('#routeForm button[type="submit"]').click()
@@ -114,4 +115,4 @@ with sync_playwright() as p:
     assert not unexpected, unexpected
     assert not errors, errors
     browser.close()
-print('PASS: mobile search, bot selection, deselection, username resolution, create and edit; mocked API only')
+print('PASS: mobile search, bot selection, deselection, username search, create and edit; mocked API only')
