@@ -205,7 +205,9 @@ def run(dist: Path, screenshots: Path | None = None):
             page.locator('[data-action="copy-invite"]').click()
             assert page.evaluate('window.copiedInvite').endswith(TOKEN)
             assert TOKEN not in page.evaluate('JSON.stringify([sessionStorage, localStorage])')
-            page.locator('#refreshBtn').click()
+            # Simulate a background refresh while the intentional modal backdrop
+            # prevents a real pointer from clicking the underlying toolbar.
+            page.evaluate("document.getElementById('refreshBtn').click()")
             expect(page.locator('#privateInviteLink')).to_be_visible()
             page.locator('[data-action="close-modal"]').click()
             expect(page.locator('#modal')).to_be_hidden()
@@ -306,7 +308,9 @@ def run(dist: Path, screenshots: Path | None = None):
         page.locator('[data-action="create-invite"]').click()
         expect(page.locator('#privateInviteLink')).to_be_visible()
         mock.reject_signed = True
-        page.locator('#refreshBtn').click()
+        # The invite remains open; trigger background refresh, not a pointer
+        # through the modal's intentionally blocking backdrop.
+        page.evaluate("document.getElementById('refreshBtn').click()")
         expect(page.locator('h1')).to_have_text('Open Becs in Telegram')
         expect(page.locator('#mainView')).to_contain_text('expired')
         expect(page.locator('#modal')).to_be_hidden()

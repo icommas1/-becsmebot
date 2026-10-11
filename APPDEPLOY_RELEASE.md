@@ -73,6 +73,19 @@ identical `deployment_payload.json` files. Only the full-snapshot local project
 also carries the unchanged old `becs-v2.js`, `becs-v2.css` and dormant `sw.js` files.
 The portable project contains all files needed for the actual Vite build.
 
+Snapshot text normalization: the saved snapshot adds one final LF to three remote
+files that originally had none: `index.html`, `public/assets/becs-v2.css`, and
+`public/assets/becs-v2.js`. The manifest's `base_sha256` values describe that saved
+snapshot. When comparing a fresh raw AppDeploy read, add that one LF to these
+three files first. All seven build scaffold files, `public/assets/sw.js`, and
+`tests/tests.json` were re-read and verified byte-for-byte against remote v3.
+The new payload and asset hashes need no normalization. Raw remote SHA-256 values
+for the three normalized baseline files are:
+
+- `index.html`: `485da7161af90fd955f102518b41adbf6531be7e7a5e297be79b07a68e1f5341`
+- `public/assets/becs-v2.css`: `c9e4abad662df7a028e5eab65ab75ae0e7fd71d70eeb893463b3b85472cd8b54`
+- `public/assets/becs-v2.js`: `715d9d03726f2e76c9fdc53ada87aef23a78e8c6cc74f6ce5d873f50e76565c3`
+
 Output:
 
 - `deployment_payload.json`: complete tool arguments for a future authorized update;
@@ -169,7 +182,8 @@ that exact candidate's successful CI result before release.
    versions and source snapshot. Confirm the exact app/account/name. The release
    is prepared against v3 `1791693928637`; if the applied source version changed,
    stop and reconcile the new snapshot. Do not apply this partial update blindly.
-3. Compare the live source file hashes to `base_sha256` in the release manifest.
+3. Compare the live source file hashes to `base_sha256` in the release manifest,
+   accounting for the three explicitly documented terminal-LF normalizations.
    Verify package/build config remains unchanged and review any new live changes.
 4. Require all backend regressions, packaging tests, the actual Vite production
    build, generated JS syntax, and built-dist offline browser tests to pass for
