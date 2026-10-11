@@ -283,6 +283,21 @@ def run(dist: Path, screenshots: Path | None = None):
                 page.screenshot(path=str(screenshots / 'appdeploy-telegram-gate.png'), full_page=True)
             mock.check()
 
+        # Losing launch data after approval clears private UI before any API call.
+        mock = HostedMock(dist)
+        page = mock.start(browser)
+        show_users(page)
+        page.locator('[data-action="invite-user"]').click()
+        call_count = len(mock.calls)
+        page.evaluate("window.Telegram.WebApp.initData = ''")
+        page.locator('[data-action="create-invite"]').click()
+        expect(page.locator('h1')).to_have_text('Open Becs in Telegram')
+        expect(page.locator('#modal')).to_be_hidden()
+        expect(page.locator('#modalBody')).to_be_empty()
+        assert len(mock.calls) == call_count
+        assert mock.mutations() == []
+        mock.check()
+
         # Expiration after approved access clears private data and an open invite.
         mock = HostedMock(dist)
         page = mock.start(browser)

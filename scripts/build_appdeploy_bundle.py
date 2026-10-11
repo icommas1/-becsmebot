@@ -82,6 +82,12 @@ def hosted_script(source: str) -> str:
     const error = new Error('Open Becs from @becsmebot in Telegram, then launch the Mini App again.');
     error.status = 401;
     error.reason = 'missing_telegram_launch';
+    state.me = null;
+    state.access = 'unknown';
+    state.accessVersion++;
+    clearWorkspace();
+    state.apiError = error.message;
+    render();
     throw error;
   }
   const requestAccessVersion = state.accessVersion;
