@@ -96,8 +96,8 @@ app.add_middleware(
     CORSMiddleware,
     allow_origins=['https://becs-crypto-forwarding-terminal-59lgyp.v2.appdeploy.ai'],
     allow_credentials=False,
-    allow_methods=['GET'],
-    allow_headers=['X-Telegram-Init-Data','Accept'],
+    allow_methods=['GET','POST','PUT','DELETE'],
+    allow_headers=['X-Telegram-Init-Data','Accept','Content-Type'],
     max_age=600,
 )
 
