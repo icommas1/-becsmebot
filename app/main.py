@@ -34,24 +34,38 @@ manager=PersonalTelegram()
 STARTED_AT=time.time()
 
 
-def is_valid_init_data(raw: str) -> bool:
-    token=os.getenv('TELEGRAM_BOT_TOKEN','')
-    allowed=os.getenv('BECS_ALLOWED_TELEGRAM_ID','')
-    if not raw or not token or not allowed or len(raw)>8192:return False
+def init_data_status(raw: str) -> str:
+    """Validate Telegram Mini App signature without exposing user or token values."""
+    token=os.getenv('TELEGRAM_BOT_TOKEN','').strip()
+    allowed=os.getenv('BECS_ALLOWED_TELEGRAM_ID','').strip()
+    if not token or not allowed:
+        return 'server_configuration'
+    if not raw:
+        return 'missing_init_data'
+    if len(raw)>8192:
+        return 'invalid_init_data'
     try:
         data=dict(parse_qsl(raw,keep_blank_values=True,strict_parsing=True))
         given=data.pop('hash')
-        # Ed25519 signature is not included in Bot API HMAC validation.
         data.pop('signature',None)
         timestamp=int(data['auth_date'])
-        if not 0<=time.time()-timestamp<=86400:return False
-        text='\n'.join(f'{k}={v}' for k,v in sorted(data.items()))
+        text='\\n'.join(f'{k}={v}' for k,v in sorted(data.items()))
         secret=hmac.new(b'WebAppData',token.encode(),hashlib.sha256).digest()
         expected=hmac.new(secret,text.encode(),hashlib.sha256).hexdigest()
-        if not hmac.compare_digest(given,expected):return False
-        return str(json.loads(data['user'])['id'])==allowed
+        if not hmac.compare_digest(given,expected):
+            return 'invalid_signature'
+        if not 0<=time.time()-timestamp<=86400:
+            return 'expired_init_data'
+        user_id=str(json.loads(data['user'])['id'])
+        if not hmac.compare_digest(user_id,allowed):
+            return 'unauthorized_user'
+        return 'ok'
     except (ValueError,KeyError,TypeError,OverflowError):
-        return False
+        return 'invalid_init_data'
+
+
+def is_valid_init_data(raw: str) -> bool:
+    return init_data_status(raw)=='ok'
 
 
 def is_owner(request: Request)->bool:
@@ -107,7 +121,9 @@ async def protect_api(request:Request,call_next):
     if request.method=='OPTIONS':
         return await call_next(request)
     if request.url.path.startswith('/api/') and request.url.path!='/api/health' and not is_authorized(request):
-        return JSONResponse(status_code=401,content={'detail':'Access denied. Open inside your authorized Telegram Mini App or enter your server access key.'})
+        reason=init_data_status(request.headers.get('x-telegram-init-data',''))
+        # Reason codes contain no credentials, user IDs, or raw Telegram payload.
+        return JSONResponse(status_code=401,content={'detail':'Telegram Mini App authentication failed','reason':reason})
     response=await call_next(request)
     if request.url.path.startswith('/api/'):
         response.headers['Cache-Control']='no-store'
