@@ -232,7 +232,7 @@ app.add_middleware(
 )
 
 @app.get('/api/health')
-def health():return {'ok':True,'service':'becs','version':'1.0.0'}
+def health():return {'ok':True,'service':'becs','version':'1.1.0'}
 
 
 @app.get('/api/me')

@@ -296,6 +296,7 @@ function usersPage(){
 }
 function usersDialog(title,kind){
  if(state.userBusy||state.inviteBusy||!state.me?.is_admin)return false;
+ dom('toastRegion').replaceChildren();
  state.modalOpener=document.activeElement;state.modalKind=kind;
  dom('modal').classList.remove('becs-compact-route');dom('modal').classList.add('users-modal');
  dom('modal').querySelector('.eyebrow').textContent='PRIVATE ACCESS / OWNER';dom('modalTitle').textContent=title;
@@ -333,8 +334,8 @@ async function createInvite(){
 async function copyInvite(){
  const invite=state.invite;if(!invite?.url)return;
  if(expiryTime(invite.expires_at)<=Date.now()){invite.url='';renderInvite();return;}
- try{await navigator.clipboard.writeText(invite.url);toast('Invite link copied. Share it privately with one person.');}
- catch{dom('privateInviteLink')?.select();toast('Select and copy the invite link above.',true);}
+ try{await navigator.clipboard.writeText(invite.url);if(state.invite===invite&&state.modalKind==='invite')toast('Invite link copied. Share it privately with one person.');}
+ catch{if(state.invite===invite&&state.modalKind==='invite'){dom('privateInviteLink')?.select();toast('Select and copy the invite link above.',true);}}
 }
 function openUserAction(id,action){
  const user=state.users.find(item=>userId(item)===String(id));

@@ -147,17 +147,25 @@ with sync_playwright() as p:
         expect(page.locator('[data-user-row="1001"] button')).to_have_count(0)
         expect(page.locator('[data-user-row="3003"]')).to_contain_text('Pending approval')
         no_overflow(page)
+        if width == 390:
+            tabs = page.locator('#bottomNav .bottom-tab:visible')
+            assert tabs.count() == 6
+            tops = tabs.evaluate_all('(tabs) => tabs.map(tab => tab.getBoundingClientRect().top)')
+            assert max(tops) - min(tops) < 1, tops
         page.screenshot(path=str(PREVIEW / f'users-{label}.png'), full_page=True)
         # Visiting either Users or its create dialog never creates an invitation.
         assert not mutations(mock)
         page.locator('[data-action="invite-user"]').click()
         expect(page.locator('#modalTitle')).to_have_text('Invite User')
+        no_overflow(page)
+        page.screenshot(path=str(PREVIEW / f'invite-{label}.png'), full_page=False)
         assert not mutations(mock)
         page.locator('[data-action="create-invite"]').evaluate('(button) => {button.click(); button.click();}')
         expect(page.locator('#privateInviteLink')).to_have_value(f'https://t.me/preview_bot?start=invite_{TOKEN}')
         assert mutations(mock) == [('POST', '/api/admin/invites')], mutations(mock)
         page.locator('[data-action="copy-invite"]').click()
         assert page.evaluate('window.copiedInvite').endswith(TOKEN)
+        expect(page.locator('#toastRegion')).to_contain_text('Invite link copied')
         assert TOKEN not in page.evaluate('JSON.stringify([localStorage,sessionStorage])')
         # Refresh must not replace the one-time link or current dialog.
         page.evaluate("document.getElementById('refreshBtn').click()")
@@ -169,13 +177,15 @@ with sync_playwright() as p:
         # A reopened dialog cannot recover the link and still does not auto-create.
         page.locator('[data-action="invite-user"]').click()
         expect(page.locator('#privateInviteLink')).to_have_count(0)
+        expect(page.locator('#toastRegion')).to_be_empty()
         assert len(mutations(mock)) == 1
         page.locator('[data-action="close-modal"]').click()
         # Revoke confirmation is for an exact person and cancel performs no mutation.
         page.locator('[data-user-id="2002"][data-user-action="revoke"]').click()
         expect(page.locator('.confirm-person')).to_contain_text('Morgan')
         expect(page.locator('.confirm-person')).to_contain_text('2002')
-        page.screenshot(path=str(PREVIEW / f'revoke-{label}.png'), full_page=True)
+        expect(page.locator('#toastRegion')).to_be_empty()
+        page.screenshot(path=str(PREVIEW / f'revoke-{label}.png'), full_page=False)
         page.evaluate("document.getElementById('refreshBtn').click()")
         expect(page.locator('.confirm-person')).to_contain_text('2002')
         page.keyboard.press('Escape')
