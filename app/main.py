@@ -28,6 +28,8 @@ from .service import get_routes, enqueue, delivery_worker
 from .telegram_client import PersonalTelegram, telegram_bot_poll
 
 logging.basicConfig(level=os.getenv('BECS_LOG_LEVEL','INFO'))
+# HTTP client request logs can contain Telegram bot tokens in URL paths.
+logging.getLogger('httpx').setLevel(logging.WARNING)
 ROOT=Path(__file__).resolve().parents[1]
 STATIC=ROOT / 'static'
 manager=PersonalTelegram()
