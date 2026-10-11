@@ -49,7 +49,7 @@ def init_data_status(raw: str) -> str:
         given=data.pop('hash')
         data.pop('signature',None)
         timestamp=int(data['auth_date'])
-        text='\\n'.join(f'{k}={v}' for k,v in sorted(data.items()))
+        text=chr(10).join(f'{k}={v}' for k,v in sorted(data.items()))
         secret=hmac.new(b'WebAppData',token.encode(),hashlib.sha256).digest()
         expected=hmac.new(secret,text.encode(),hashlib.sha256).hexdigest()
         if not hmac.compare_digest(given,expected):
