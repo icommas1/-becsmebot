@@ -19,11 +19,11 @@ def get_routes():
 def enqueue(db,route,src,dest,msg_id,text,fp):
     now=time.time()
     window=route['dedup_minutes']*60
-    if window:
+    if window and fp:
         existing=db.execute('''SELECT id FROM jobs WHERE destination_id=? AND fingerprint=? AND
             status IN ('queued','sending','sent') AND created_at>=? LIMIT 1''',(dest,fp,now-window)).fetchone()
         if existing:
-            event(db,'duplicate',f"Duplicate contract/text suppressed → {dest}",route['id'],src,dest)
+            event(db,'duplicate',f"Duplicate contract address suppressed → {dest}",route['id'],src,dest)
             return False
     db.execute('''INSERT INTO jobs(route_id,source_id,destination_id,message_id,message_preview,fingerprint,status,created_at,next_attempt)
         VALUES (?,?,?,?,?,?, 'queued',?,0)''',(route['id'],src,dest,msg_id,text,fp,now))
