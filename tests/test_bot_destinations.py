@@ -16,6 +16,9 @@ from app.models import RouteInput
 from app.telegram_client import PersonalTelegram
 
 
+SOL = 'So11111111111111111111111111111111111111112'
+
+
 class Dialog:
     def __init__(self, entity, name):
         self.entity = entity
@@ -46,6 +49,9 @@ class FakeClient:
     async def iter_dialogs(self, limit=None):
         for dialog in self.dialogs:
             yield dialog
+
+    async def get_input_entity(self, entity):
+        return utils.get_peer_id(entity)
 
     async def get_entity(self, reference):
         entities = [d.entity for d in self.dialogs]
@@ -172,27 +178,35 @@ class BotDestinationTests(unittest.IsolatedAsyncioTestCase):
         with self.assertRaisesRegex(ValueError, 'posting permission'):
             await self.manager.resolve_chat('@signalfeed', 'destination')
 
-    async def test_text_delivery_preserves_literal_text_and_uses_personal_client(self):
+    async def test_contract_delivery_uses_personal_client(self):
         job = {'source_id':str(utils.get_peer_id(self.source)), 'destination_id':'900123',
-               'message_id':17, 'message_preview':'literal __text__ with_under_scores'}
+               'message_id':17, 'message_preview':SOL}
         await self.manager.send(job, 'text')
         self.client.send_message.assert_awaited_once_with(
             900123, job['message_preview'], link_preview=False, parse_mode=None)
         self.client.forward_messages.assert_not_awaited()
 
-    async def test_native_forward_is_not_silently_replaced(self):
+    async def test_native_setting_still_sends_only_contract_address(self):
+        # Contract-only V1 supersedes the legacy native-forward behavior.
         job = {'source_id':str(utils.get_peer_id(self.source)), 'destination_id':'900123',
-               'message_id':17, 'message_preview':'Mock message only'}
+               'message_id':17, 'message_preview':SOL}
         await self.manager.send(job, 'native')
-        self.client.forward_messages.assert_awaited_once_with(
-            900123, 17, from_peer=utils.get_peer_id(self.source))
+        self.client.send_message.assert_awaited_once_with(
+            900123, SOL, link_preview=False, parse_mode=None)
+        self.client.forward_messages.assert_not_awaited()
+
+    async def test_original_text_is_rejected_without_sending(self):
+        with self.assertRaisesRegex(ValueError, 'standalone contract address'):
+            await self.manager.send({'destination_id':'900123',
+                                     'message_preview':'Buy now ' + SOL}, 'native')
         self.client.send_message.assert_not_awaited()
+        self.client.forward_messages.assert_not_awaited()
 
     async def test_unauthorized_account_cannot_send(self):
         self.client.authorized = False
         with self.assertRaisesRegex(RuntimeError, 'sign-in required'):
             await self.manager.send({'source_id':'-1000000000101', 'destination_id':'900123',
-                                     'message_id':17, 'message_preview':'Mock message only'}, 'text')
+                                     'message_id':17, 'message_preview':SOL}, 'text')
         self.client.send_message.assert_not_awaited()
 
     async def test_api_create_and_update_bot_route_without_sending(self):

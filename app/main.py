@@ -49,7 +49,7 @@ def init_data_status(raw: str) -> str:
     try:
         data=dict(parse_qsl(raw,keep_blank_values=True,strict_parsing=True))
         given=data.pop('hash')
-        data.pop('signature',None)
+        # Bot-token HMAC includes signature when present; only hash is excluded.
         timestamp=int(data['auth_date'])
         text=chr(10).join(f'{k}={v}' for k,v in sorted(data.items()))
         secret=hmac.new(b'WebAppData',token.encode(),hashlib.sha256).digest()
@@ -106,17 +106,6 @@ async def lifespan(app: FastAPI):
 
 app=FastAPI(title='Becs Crypto Forwarding',version='1.0.0',lifespan=lifespan,docs_url=None,redoc_url=None)
 
-# Only the official Becs Mini App origin may read the owner diagnostics.
-# Authorization still requires Telegram's signed initData on every request.
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=['https://becs-crypto-forwarding-terminal-59lgyp.v2.appdeploy.ai'],
-    allow_credentials=False,
-    allow_methods=['GET','POST','PUT','DELETE'],
-    allow_headers=['X-Telegram-Init-Data','Accept','Content-Type'],
-    max_age=600,
-)
-
 @app.middleware('http')
 async def protect_api(request:Request,call_next):
     # Browser CORS preflight carries no Telegram credentials. Let CORSMiddleware validate it.
@@ -131,6 +120,18 @@ async def protect_api(request:Request,call_next):
         response.headers['Cache-Control']='no-store'
     response.headers['X-Content-Type-Options']='nosniff'
     return response
+
+# Register CORS last so it wraps authentication, including early 401 responses.
+# Only the official Becs Mini App origin may read the owner diagnostics.
+# Authorization still requires Telegram's signed initData on every request.
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=['https://becs-crypto-forwarding-terminal-59lgyp.v2.appdeploy.ai'],
+    allow_credentials=False,
+    allow_methods=['GET','POST','PUT','DELETE'],
+    allow_headers=['X-Telegram-Init-Data','Accept','Content-Type'],
+    max_age=600,
+)
 
 @app.get('/api/health')
 def health():return {'ok':True,'service':'becs','version':'1.0.0'}
