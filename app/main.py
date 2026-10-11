@@ -4,6 +4,7 @@ import hashlib
 import hmac
 import json
 import logging
+import sqlite3
 import os
 import time
 from contextlib import asynccontextmanager, nullcontext
@@ -241,6 +242,24 @@ def me(request: Request):
     user = request.state.user or {'telegram_id': identity['user_id'], 'user_id': identity['user_id'],
                                   'display_name': identity['display_name'], 'status': 'not_invited', 'role': 'member'}
     return {'user': user, 'is_admin': request.state.signed and is_owner(request), 'capacity': 3}
+
+
+@app.get('/api/admin/backups/status')
+def backup_status():
+    from .backup import backup_status as status
+    try:
+        return status()
+    except (ValueError, sqlite3.Error) as exc:
+        raise HTTPException(409, 'Backup unavailable. Workspace data may be missing, changed, or over the export limit.')
+
+
+@app.get('/api/admin/backups/export')
+def backup_export():
+    from .backup import export_backup
+    try:
+        return JSONResponse(export_backup(), headers={'Cache-Control': 'no-store'})
+    except (ValueError, sqlite3.Error) as exc:
+        raise HTTPException(409, 'Backup unavailable. Workspace data may be missing, changed, or over the export limit.')
 
 
 @app.get('/api/admin/users')

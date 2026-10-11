@@ -100,3 +100,7 @@ becs/
 ## Next stage (only when you approve)
 
 Configure free-tier HTTPS hosting and authorized Telegram connections, then test real forwarding with your own sources/destinations. There is **no automatic deployment** in this project package.
+
+## Portable backups
+
+The owner can prepare a private, dated ZIP of the currently approved workspaces in More → Backups, then manually save/share it. See [backup scope, privacy, device saving and offline recovery](BACKUPS.md). No sessions, secrets, messages or queued sends are exported.

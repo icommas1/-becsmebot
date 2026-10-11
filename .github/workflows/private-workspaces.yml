@@ -35,6 +35,8 @@ jobs:
           python tests/browser_bot_destination.py
           python tests/browser_compact_filters.py
           python tests/browser_users.py
+          python tests/browser_backup.py
+          python tests/browser_backup.py --dist "$RUNNER_TEMP/becs-appdeploy-update/project/dist"
           python tests/browser_appdeploy.py --dist "$RUNNER_TEMP/becs-appdeploy-update/project/dist" --screenshots preview/appdeploy
       - uses: actions/upload-artifact@v4
         if: always()
@@ -43,4 +45,5 @@ jobs:
           path: |
             preview/private-invites/*.png
             preview/appdeploy/*.png
+            preview/backups/*.png
           if-no-files-found: ignore

@@ -43,7 +43,7 @@ const icon = (name, cls='') => `<span class="ico ${cls}" aria-hidden="true"><svg
 const safe = text => String(text ?? '').replace(/[&<>"']/g,ch=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[ch]));
 const fmt = number => Intl.NumberFormat().format(number||0);
 const age = value => { if (!value) return ''; const seconds=Math.max(0,Math.floor(Date.now()/1000-value)); return seconds<60?'just now':seconds<3600?Math.floor(seconds/60)+'m ago':seconds<86400?Math.floor(seconds/3600)+'h ago':new Date(value*1000).toLocaleDateString(); };
-const navigate = name => { if(state.access!=='approved'||(name==='users'&&!state.me?.is_admin))return; state.page=name; render(); if(name==='users')loadUsers(); window.scrollTo({top:0,behavior:'smooth'}); };
+const navigate = name => { if(state.access!=='approved'||(['users','backups'].includes(name)&&!state.me?.is_admin))return; state.page=name; render(); if(name==='users')loadUsers(); if(name==='backups')loadBackupStatus(); window.scrollTo({top:0,behavior:'smooth'}); };
 const modes = [{id:'express',title:'Express',sub:'Fastest',ico:'bolt',cls:'mode-express',help:'Forward with essential route checks; no AI or optional content filters in the critical path.'},{id:'smart',title:'Smart',sub:'Filtered',ico:'filter',cls:'mode-smart',help:'Use local keyword, address, regex and duplicate rules before queueing.'},{id:'hybrid',title:'Hybrid',sub:'AI Assist',ico:'brain',cls:'mode-hybrid',help:'Local filters decide first; AI can analyze afterward without blocking delivery.'},{id:'ai-gated',title:'AI-Gated',sub:'AI Decision',ico:'shield',cls:'mode-ai-gated',help:'Require AI approval before forwarding. If AI is unavailable, messages are held for review.'}];
 const nav=[['home','Home','home'],['routes','Routes','routes'],['filters','Smart Filters','filter'],['queue','Queue','queue'],['inspector','Inspector','activity'],['more','More','more']];
 const state={page:'home',overview:null,routes:[],jobs:[],reviews:[],chats:[],inspections:[],inspectorKind:'all',jobTab:'all',simResult:null,modeExplain:'smart',busy:false,apiError:'',chatSearch:'',editing:null,me:null,access:'checking',users:[],invites:[],usersLoaded:false,usersLoading:false,usersError:'',userBusy:false,inviteBusy:false,invite:null,userConfirm:null,modalKind:null,loadVersion:0,accessVersion:0};
@@ -64,6 +64,7 @@ async function request(path,options={}) {
 }
 function toast(message,isError=false){const el=document.createElement('div');el.className='toast'+(isError?' error':'');el.textContent=message;dom('toastRegion').append(el);setTimeout(()=>el.remove(),4200);}
 function clearWorkspace(){
+ state.backupGeneration=(state.backupGeneration||0)+1;clearPreparedBackup();state.backupStatus=null;state.backupLast=null;state.backupError='';state.backupBusy=false;
  state.overview=null;state.routes=[];state.jobs=[];state.reviews=[];state.chats=[];state.inspections=[];state.simResult=null;
  state.users=[];state.invites=[];state.usersLoaded=false;state.usersError='';state.invite=null;state.userConfirm=null;
  for(const key of ['labText','labAllow','labBlock','labPattern'])delete state[key];
@@ -78,7 +79,7 @@ async function reload(full=true,options={}){
  try{
   const me=await request('/me');if(version!==state.loadVersion||accessVersion!==state.accessVersion)return;
   const oldId=state.me?.user?.telegram_id;const changed=oldId!==undefined&&String(oldId)!==String(me.user?.telegram_id);
-  if(changed)clearWorkspace();state.me=me;
+  if(changed){state.accessVersion++;clearWorkspace();state.me=me;return reload(full,options);}state.me=me;
   const status=me.user?.status||'not_invited';
   if(status!=='approved'){denyAccess(status);return;}
   state.access='approved';
@@ -100,11 +101,11 @@ async function reload(full=true,options={}){
 }
 function renderNav(){
  const allowed=state.access==='approved'&&!state.apiError;dom('sideNav').classList.toggle('hidden',!allowed);dom('bottomNav').classList.toggle('hidden',!allowed);dom('accountButton').disabled=!allowed;
- const current=state.page==='users'?'more':state.page;
+ const current=['users','backups'].includes(state.page)?'more':state.page;
  const html=nav.map(([id,label,ico])=>`<button class="nav-item ${current===id?'active':''}" data-nav="${id}">${icon(ico)} ${label}</button>`).join('');
  dom('sideNav').innerHTML=html;
  dom('bottomNav').innerHTML=nav.map(([id,label,ico])=>`<button class="bottom-tab ${current===id?'active':''}" data-nav="${id}" aria-label="${label}" ${current===id?'aria-current="page"':''}>${icon(ico)}<span>${label}</span></button>`).join('');
- dom('crumb').textContent=({home:'Overview',routes:'Routes',filters:'Regex Lab',queue:'Delivery Queue',inspector:'Message Inspector',more:'System Settings',users:'Users'})[state.page];
+ dom('crumb').textContent=({home:'Overview',routes:'Routes',filters:'Regex Lab',queue:'Delivery Queue',inspector:'Message Inspector',more:'System Settings',users:'Users',backups:'Backups'})[state.page];
  const active=state.overview?.telegram?.authorized;
  dom('sideDot').classList.toggle('online',!!active);
  dom('sideConnection').textContent=!allowed?'Private workspace':active?'Personal account connected':'Telegram not connected';
@@ -221,6 +222,8 @@ function morePage(){
  const o=state.overview||{}; const t=o.telegram||{};
  return `${pageHead('SYSTEM / PERSONAL EDITION','Account & Settings','Your private workspace and your own Telegram connection.')}
  ${state.me?.is_admin?`<button class="users-settings-link" data-action="open-users"><span class="route-glyph">${icon('person')}</span><span><strong>Users</strong><small>Manage invitations and access · owner + 2 users</small></span>${icon('chevron')}</button>`:''}
+ ${state.me?.is_admin?`<button class="users-settings-link" data-action="open-backups"><span class="route-glyph">${icon('document')}</span><span><strong>Backups</strong><small>Export all approved workspaces · save your own copy</small></span>${icon('chevron')}</button>`:''}
+ <div class="notice" style="margin-bottom:17px">${icon('lock')} The administrator can export approved users’ routes, chat identifiers, filters and pause setting for recovery. Sessions, secrets and message history are excluded.</div>
  ${state.me?.is_admin?`<section class="panel" id="ownerStatusPanel" style="margin-bottom:17px;display:none"><div class="panel-header"><h2>Owner · System Status</h2><button class="button button-small" data-action="owner-status">Refresh</button></div><div id="ownerStatusRows" class="health-list">Checking access…</div></section>`:''}
  <div class="dashboard-cols"><div style="display:flex;flex-direction:column;gap:17px"><section class="panel login-card"><div class="panel-header"><h2>Personal Telegram connection</h2>${pill(t.authorized?'Authorized':t.configured?'Not signed in':'Unconfigured',t.authorized?'success':'warn')}</div>
  <div class="notice">${icon('lock')} Login codes and two-step passwords must only be entered here over trusted HTTPS or on your local computer. Never provide them to a Telegram bot chat.</div>
@@ -230,6 +233,61 @@ function morePage(){
  </section>${panel('Security model',`<div class="health-list"><div class="health-row">${icon('shield')}<div><div class="status-main">Authorized destinations only</div><div class="status-sub">Telegram permissions always apply</div></div></div><div class="health-row">${icon('lock')}<div><div class="status-main">Session stays on server</div><div class="status-sub">Never stored in browser local storage</div></div></div><div class="health-row">${icon('queue')}<div><div class="status-main">Account-aware queue</div><div class="status-sub">Sequential sends and flood-wait handling</div></div></div></div>`)}</div>
  <div style="display:flex;flex-direction:column;gap:17px">${panel('Service configuration',`<div class="health-list"><div class="health-row">${icon('bot')}<div><div class="status-main">Telegram control bot</div><div class="status-sub">Commands /start /status /pause /resume /routes</div></div><span class="right-flex">${pill(o.bot_configured?'Configured':'Needs .env',o.bot_configured?'success':'warn')}</span></div><div class="health-row">${icon('brain')}<div><div class="status-main">Optional Gemini AI gateway</div><div class="status-sub">External API only for selected route modes</div></div><span class="right-flex">${pill(o.ai_configured?'Configured':'Off',o.ai_configured?'success':'')}</span></div><div class="health-row">${icon('server')}<div><div class="status-main">FastAPI + SQLite backend</div><div class="status-sub">Local or self-hosted; no deployment requested</div></div><span class="right-flex">${pill('Running','success')}</span></div></div>`)}${panel('Telegram chats',state.chats.length?`<div style="max-height:290px;overflow-y:auto">${state.chats.map(c=>`<div class="route-brief"><span class="route-glyph">${icon(c.kind==='private'?'person':'document')}</span><div class="route-detail"><strong>${safe(c.title)}</strong><small>${safe(c.kind)} · ${safe(c.id)}</small></div><button class="button button-small" data-copy="${safe(c.id)}">Copy ID</button></div>`).join('')}</div>`:empty('person','No chats loaded','Sign in and press Load chats to see available source and destination identifiers.'),`<button class="small-link" data-action="load-chats">Load →</button>`)}</div></div>`;
 }
+function clearPreparedBackup(){
+ if(state.backupUrl)URL.revokeObjectURL(state.backupUrl);
+ state.backupUrl=null;state.backupFile=null;
+}
+function backupVersion(){return state.accessVersion+':'+(state.backupGeneration||0);}
+function backupAllowed(version){return version===backupVersion()&&state.access==='approved'&&state.me?.is_admin;}
+async function loadBackupStatus(){
+ if(!state.me?.is_admin||state.access!=='approved')return;
+ const version=backupVersion();
+ try{const data=await request('/admin/backups/status');if(!backupAllowed(version))return;state.backupStatus=data;state.backupError='';}
+ catch(e){if(!backupAllowed(version))return;state.backupError=e.message;if(e.status===401||e.status===403){state.backupGeneration=(state.backupGeneration||0)+1;state.backupBusy=false;clearPreparedBackup();}}
+ if(state.page==='backups')render();
+}
+function backupsPage(){
+ const last=state.backupLast,current=state.backupStatus;
+ const changed=last&&current&&last.checksum!==current.configuration_checksum;
+ const old=last&&(Date.now()-last.time>7*86400000||(current&&last.schema!==current.schema_version));
+ const advice=changed?'Configuration changed since the last preparation. Export a fresh copy.':old?'A fresh backup is recommended: the last preparation is over a week old or the format changed.':!last?'No backup prepared in this app session. Export and save a copy before data-affecting updates, migrations or server moves.':'Prepared in this app session. Save it yourself, and export again after important changes or before data-affecting updates.';
+ return `<div class="users-page"><button class="users-back" data-action="open-settings">${icon('chevron')} More</button>${pageHead('PRIVATE RECOVERY / OWNER','Backups','One organized ZIP. You choose where to save it.')}
+ <section class="panel"><div class="panel-header"><h2>Portable configuration backup</h2><button class="button button-small" data-action="backup-refresh">Refresh</button></div><div style="padding:20px"><p>${current?`${safe(current.workspace_count)} approved workspaces`:'Approved workspaces'}: separate routes, filters, chat IDs and pause settings, with a manifest, checksums and recovery guide.</p><p class="field-help">Pending and revoked workspaces, login sessions, secrets, invitations, messages and queued sends are excluded. Restoring requires reconnecting Telegram and approving members again.</p><div class="notice warn">${safe(advice)}</div><p class="field-help">${last?'Last prepared: '+safe(new Date(last.time).toLocaleString())+' · this session only.':'Preparation history is kept only in memory.'} This does not confirm a saved copy.</p>
+ ${state.backupError?`<p role="alert" class="notice warn">${safe(state.backupError)}</p>`:''}
+ <div style="display:flex;gap:10px;flex-wrap:wrap;margin-top:16px"><button class="button button-primary" data-action="backup-prepare" ${state.backupBusy?'disabled':''}>${state.backupBusy?'Preparing…':'Export Backup'}</button>${state.backupFile?'<button class="button" data-action="backup-save">Save / Share ZIP</button>':''}</div>
+ <p class="field-help">The file is unencrypted and contains private configuration. Save it to Files, your own private cloud folder or offline storage. Nothing is uploaded automatically. It is outside Railway only after you save your copy.</p>
+ <p class="field-help">On iPhone, tap Save / Share ZIP, then Save to Files if offered. If Telegram blocks saving, try Telegram Desktop. Opening an external browser does not carry your Telegram sign-in; do not copy login data or tokens into a URL.</p></div></section></div>`;
+}
+async function prepareBackup(){
+ if(state.backupBusy||!state.me?.is_admin||state.access!=='approved')return;
+ const version=backupVersion();state.backupBusy=true;state.backupError='';clearPreparedBackup();render();
+ try{
+  const data=await request('/admin/backups/export');if(!backupAllowed(version))return;
+  if(!Number.isFinite(Date.parse(data.created_at))||data.schema_version!==1||!/^[a-f0-9]{64}$/.test(data.configuration_checksum)||typeof data.content_base64!=='string'||data.content_base64.length>8388608||!/^becs-backup-\d{4}-\d{2}-\d{2}-\d{6}-UTC\.zip$/.test(data.filename))throw new Error('Invalid backup response.');
+  const decoded=atob(data.content_base64);if(decoded.length>6291456||decoded.slice(0,2)!=='PK')throw new Error('Invalid backup archive.');
+  const bytes=Uint8Array.from(decoded,c=>c.charCodeAt(0));
+  state.backupFile=new File([bytes],data.filename,{type:'application/zip'});
+  state.backupLast={time:Date.parse(data.created_at),checksum:data.configuration_checksum,schema:data.schema_version};
+  state.backupStatus=null;
+  toast('Backup prepared. Tap Save / Share ZIP to save your copy.');
+ }catch(e){if(backupAllowed(version)){state.backupError=e.message;clearPreparedBackup();}}
+ finally{if(backupAllowed(version)){state.backupBusy=false;if(state.page==='backups')render();}}
+}
+async function saveBackup(){
+ if(!state.backupFile||!state.me?.is_admin||state.access!=='approved')return;
+ const file=state.backupFile,version=backupVersion();
+ try{
+  if(navigator.canShare?.({files:[file]})&&navigator.share){
+   await navigator.share({files:[file],title:'Becs configuration backup'});
+   if(backupAllowed(version))toast('Share sheet finished. Check that your copy was saved.');
+  }else{
+   if(state.backupUrl)URL.revokeObjectURL(state.backupUrl);
+   state.backupUrl=URL.createObjectURL(file);
+   const a=document.createElement('a');a.href=state.backupUrl;a.download=file.name;a.rel='noopener';document.body.append(a);a.click();a.remove();
+   toast('Download requested. Check Downloads or Files for your ZIP.');
+  }
+ }catch(e){if(backupAllowed(version)&&e.name!=='AbortError'){state.backupError='Saving was not completed. Try again or use Telegram Desktop.';render();}}
+}
 function gatePage(){
  return `<div class="page-head"><div><p class="eyebrow">SECURE ACCESS</p><h1>Becs access required</h1><p class="subheading">Open this inside your authorized Telegram Mini App, or enter your configured server access key.</p></div></div><section class="panel login-card"><div class="notice warn">${icon('lock')} ${safe(state.apiError||'Protected backend')}</div><div class="field" style="margin-top:20px"><label>BECS_ADMIN_TOKEN</label><input id="adminKey" type="password" autocomplete="off" placeholder="Enter your server access key"></div><button class="button button-primary" data-action="unlock">Unlock Becs</button><p class="small-help">Your key stays in this browser tab session only. Local development on 127.0.0.1 is permitted without a key.</p></section>`;
 }
@@ -237,11 +295,11 @@ function accessPage(){
  const status=state.access;const pending=status==='pending';const revoked=status==='revoked'||status==='rejected';
  const title=pending?'Approval pending':revoked?'Access revoked':status==='checking'?'Checking your access…':'Private access only';
  const detail=pending?'Your invitation has been accepted. The owner needs to approve your access before you can connect Telegram.':revoked?'Your access to Becs is no longer active. Contact the owner if you need access again.':status==='checking'?'Verifying your Telegram identity.':'Ask the owner for an invite link, open it in Telegram, and tap Start. No separate signup or password is needed.';
- return `<section class="access-card"><span class="access-symbol ${revoked?'revoked':''}">${icon(pending?'clock':'lock')}</span><p class="eyebrow">BECS / PRIVATE WORKSPACE</p><h1>${title}</h1><p>${detail}</p>${state.me?.user?.display_name?`<div class="access-identity">${icon('person')}<span>${safe(state.me.user.display_name)}</span></div>`:''}${status==='checking'?'':`<button class="button button-primary" data-action="retry-access">${icon('refresh')} Check access</button>`}<div class="access-footer">${pending?'Once approved, you’ll get your own routes, chats and queue.':'Each approved person gets a separate workspace.'}</div></section>`;
+ return `<section class="access-card"><span class="access-symbol ${revoked?'revoked':''}">${icon(pending?'clock':'lock')}</span><p class="eyebrow">BECS / PRIVATE WORKSPACE</p><h1>${title}</h1><p>${detail}</p>${state.me?.user?.display_name?`<div class="access-identity">${icon('person')}<span>${safe(state.me.user.display_name)}</span></div>`:''}${status==='checking'?'':`<button class="button button-primary" data-action="retry-access">${icon('refresh')} Check access</button>`}<div class="access-footer">${pending?'Once approved, you’ll get your own routes, chats and queue.':'Each approved person gets a separate workspace. The administrator can export approved users’ routes and settings for backup; sessions and message history are excluded.'}</div></section>`;
 }
 function render(){
  renderNav();
- dom('mainView').innerHTML=state.apiError?gatePage():state.access!=='approved'?accessPage():!state.overview?accessPage():state.page==='home'?overviewPage():state.page==='routes'?routesPage():state.page==='filters'?filtersPage():state.page==='queue'?queuePage():state.page==='inspector'?inspectorPage():state.page==='users'&&state.me?.is_admin?usersPage():morePage();
+ dom('mainView').innerHTML=state.apiError?gatePage():state.access!=='approved'?accessPage():!state.overview?accessPage():state.page==='home'?overviewPage():state.page==='routes'?routesPage():state.page==='filters'?filtersPage():state.page==='queue'?queuePage():state.page==='inspector'?inspectorPage():state.page==='users'&&state.me?.is_admin?usersPage():state.page==='backups'&&state.me?.is_admin?backupsPage():morePage();
  if(!state.apiError&&state.access==='approved'&&state.page==='more'&&state.me?.is_admin)openAdminStatus();
 }
 
@@ -483,7 +541,7 @@ async function login(method,body,btn){if(btn)btn.disabled=true;try{const result=
 async function reviewItem(id,approve){try{await request('/reviews/'+id,{method:'POST',body:JSON.stringify({approve})});await reload();toast(approve?'Approved for sequential forwarding':'Review rejected');}catch(e){toast(e.message,true);}}
 async function retryJob(id){try{await request('/jobs/'+id+'/retry',{method:'POST'});await reload();toast('Job requeued');}catch(e){toast(e.message,true);}}
 const actionMap={
- 'owner-status':openAdminStatus,'open-users':()=>navigate('users'),'users-refresh':()=>loadUsers(),'invite-user':()=>openInvite(),'create-invite':createInvite,'copy-invite':copyInvite,'confirm-user':confirmUserAction,
+ 'open-backups':()=>navigate('backups'),'backup-refresh':loadBackupStatus,'backup-prepare':prepareBackup,'backup-save':saveBackup,'owner-status':openAdminStatus,'open-users':()=>navigate('users'),'users-refresh':()=>loadUsers(),'invite-user':()=>openInvite(),'create-invite':createInvite,'copy-invite':copyInvite,'confirm-user':confirmUserAction,
  'retry-access':async(el)=>{if(el.disabled)return;el.disabled=true;await reload();if(el.isConnected)el.disabled=false;},
  'new-route':()=>routeModal(), 'open-routes':()=>navigate('routes'),'open-filters':()=>navigate('filters'),'open-queue':()=>navigate('queue'),'open-settings':()=>navigate('more'),
  'refresh':()=>reload(true,{preserve:true}),'refresh-inspector':refreshInspector, 'pause':()=>updatePause(true), 'resume':()=>updatePause(false),'close-modal':()=>closeModal(),
