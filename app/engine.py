@@ -69,5 +69,7 @@ def decide(message: str, route: dict) -> dict:
 
 def dedup_fingerprint(message: str, result: dict) -> str:
     contracts = sorted(f"{a['network']}:{a['address'].lower()}" for a in result['addresses'])
-    key = '|'.join(contracts) if contracts else normalized_text(message)
+    if not contracts:
+        return ''  # Never deduplicate ordinary message text.
+    key = '|'.join(contracts)
     return hashlib.sha256(key.encode()).hexdigest()
