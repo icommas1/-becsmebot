@@ -17,6 +17,7 @@ import regex as safe_regex
 from fastapi import FastAPI, Request, HTTPException
 from fastapi.responses import FileResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
+from fastapi.middleware.cors import CORSMiddleware
 
 from .models import RouteInput, Simulation, PhoneInput, CodeInput, PasswordInput, ReviewAction
 from pydantic import BaseModel, Field
@@ -88,6 +89,17 @@ async def lifespan(app: FastAPI):
 
 
 app=FastAPI(title='Becs Crypto Forwarding',version='1.0.0',lifespan=lifespan,docs_url=None,redoc_url=None)
+
+# Only the official Becs Mini App origin may read the owner diagnostics.
+# Authorization still requires Telegram's signed initData on every request.
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=['https://becs-crypto-forwarding-terminal-59lgyp.v2.appdeploy.ai'],
+    allow_credentials=False,
+    allow_methods=['GET'],
+    allow_headers=['X-Telegram-Init-Data','Accept'],
+    max_age=600,
+)
 
 @app.middleware('http')
 async def protect_api(request:Request,call_next):
