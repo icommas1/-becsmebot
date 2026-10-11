@@ -103,6 +103,9 @@ app.add_middleware(
 
 @app.middleware('http')
 async def protect_api(request:Request,call_next):
+    # Browser CORS preflight carries no Telegram credentials. Let CORSMiddleware validate it.
+    if request.method=='OPTIONS':
+        return await call_next(request)
     if request.url.path.startswith('/api/') and request.url.path!='/api/health' and not is_authorized(request):
         return JSONResponse(status_code=401,content={'detail':'Access denied. Open inside your authorized Telegram Mini App or enter your server access key.'})
     response=await call_next(request)
