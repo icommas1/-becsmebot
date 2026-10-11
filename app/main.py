@@ -6,7 +6,8 @@ import json
 import logging
 import os
 import time
-from contextlib import asynccontextmanager
+from contextlib import asynccontextmanager, nullcontext
+from collections import defaultdict, deque
 from pathlib import Path
 from urllib.parse import parse_qsl
 
@@ -22,7 +23,9 @@ from fastapi.middleware.cors import CORSMiddleware
 from .models import RouteInput, Simulation, PhoneInput, CodeInput, PasswordInput, ReviewAction
 from pydantic import BaseModel, Field
 from typing import Literal
-from .db import connection, init_db, as_dict, get_setting, set_setting, event
+from .db import connection, init_db, as_dict, get_setting, set_setting, event, workspace, current_workspace
+from . import access
+from .runtime import RuntimeRegistry
 from .engine import decide, dedup_fingerprint
 from .service import get_routes, enqueue, delivery_worker
 from .telegram_client import PersonalTelegram, telegram_bot_poll
@@ -32,38 +35,80 @@ logging.basicConfig(level=os.getenv('BECS_LOG_LEVEL','INFO'))
 logging.getLogger('httpx').setLevel(logging.WARNING)
 ROOT=Path(__file__).resolve().parents[1]
 STATIC=ROOT / 'static'
-manager=PersonalTelegram()
+runtime = RuntimeRegistry()
+
+
+class WorkspaceManager:
+    """Resolve the account only from the server-authenticated workspace context."""
+    def __getattr__(self, name):
+        return getattr(runtime.get(current_workspace.get() or access.owner_id()), name)
+
+
+manager = WorkspaceManager()
+_request_locks = {}
+_login_attempts = defaultdict(deque)
+
+
+def request_lock(user_id):
+    # Only approved users have workspace requests: at most three active locks.
+    if user_id not in _request_locks:
+        _request_locks[user_id] = asyncio.Lock()
+    return _request_locks[user_id]
+
+
+@asynccontextmanager
+async def request_scope(user_id, administration=False):
+    # Registry transactions and target lifecycle locks protect admin mutations.
+    # Do not let a slow approval/reconnect block a different revoke request.
+    if administration:
+        yield
+    else:
+        async with request_lock(user_id):
+            yield
+
 STARTED_AT=time.time()
 
 
-def init_data_status(raw: str) -> str:
-    """Validate Telegram Mini App signature without exposing user or token values."""
-    token=os.getenv('TELEGRAM_BOT_TOKEN','').strip()
-    allowed=os.getenv('BECS_ALLOWED_TELEGRAM_ID','').strip()
+def telegram_identity(raw: str):
+    """Verify bot-token HMAC before trusting any Telegram user field."""
+    token = os.getenv('TELEGRAM_BOT_TOKEN', '').strip()
+    allowed = os.getenv('BECS_ALLOWED_TELEGRAM_ID', '').strip()
     if not token or not allowed:
-        return 'server_configuration'
+        return 'server_configuration', None
     if not raw:
-        return 'missing_init_data'
-    if len(raw)>8192:
-        return 'invalid_init_data'
+        return 'missing_init_data', None
+    if len(raw) > 8192:
+        return 'invalid_init_data', None
     try:
-        data=dict(parse_qsl(raw,keep_blank_values=True,strict_parsing=True))
-        given=data.pop('hash')
-        # Bot-token HMAC includes signature when present; only hash is excluded.
-        timestamp=int(data['auth_date'])
-        text=chr(10).join(f'{k}={v}' for k,v in sorted(data.items()))
-        secret=hmac.new(b'WebAppData',token.encode(),hashlib.sha256).digest()
-        expected=hmac.new(secret,text.encode(),hashlib.sha256).hexdigest()
-        if not hmac.compare_digest(given,expected):
-            return 'invalid_signature'
-        if not 0<=time.time()-timestamp<=86400:
-            return 'expired_init_data'
-        user_id=str(json.loads(data['user'])['id'])
-        if not hmac.compare_digest(user_id,allowed):
-            return 'unauthorized_user'
-        return 'ok'
-    except (ValueError,KeyError,TypeError,OverflowError):
-        return 'invalid_init_data'
+        pairs = parse_qsl(raw, keep_blank_values=True, strict_parsing=True)
+        data = dict(pairs)
+        if len(data) != len(pairs):
+            return 'invalid_init_data', None
+        given = data.pop('hash')
+        # Telegram bot-token HMAC includes signature, excluding only hash.
+        timestamp = int(data['auth_date'])
+        text = chr(10).join(f'{k}={v}' for k, v in sorted(data.items()))
+        secret = hmac.new(b'WebAppData', token.encode(), hashlib.sha256).digest()
+        expected = hmac.new(secret, text.encode(), hashlib.sha256).hexdigest()
+        if not hmac.compare_digest(given, expected):
+            return 'invalid_signature', None
+        if not 0 <= time.time() - timestamp <= 86400:
+            return 'expired_init_data', None
+        user = json.loads(data['user'])
+        user_id = user['id']
+        if type(user_id) is not int or not 0 < user_id < 2**63 or user.get('is_bot'):
+            return 'invalid_init_data', None
+        return 'ok', {'user_id': str(user_id), 'display_name': str(user.get('first_name', ''))[:80]}
+    except (ValueError, KeyError, TypeError, OverflowError):
+        return 'invalid_init_data', None
+
+
+def init_data_status(raw: str) -> str:
+    """Compatibility helper for owner-only diagnostics; membership is separate."""
+    reason, identity = telegram_identity(raw)
+    if reason == 'ok' and identity['user_id'] != os.getenv('BECS_ALLOWED_TELEGRAM_ID', '').strip():
+        return 'unauthorized_user'
+    return reason
 
 
 def is_valid_init_data(raw: str) -> bool:
@@ -73,52 +118,105 @@ def is_valid_init_data(raw: str) -> bool:
 def is_owner(request: Request)->bool:
     return is_valid_init_data(request.headers.get('x-telegram-init-data',''))
 
-def is_authorized(request: Request)->bool:
-    host=request.headers.get('host','').lower().split(':')[0]
-    client=request.client.host if request.client else ''
-    # Local development only. Never run the development listener on 0.0.0.0.
-    if (host in ('localhost','127.0.0.1','[::1]') and client in ('127.0.0.1','::1')) or (host=='testserver' and client=='testclient'):
-        return True
-    configured=os.getenv('BECS_ADMIN_TOKEN','')
-    key=request.headers.get('x-becs-key','')
-    if configured and key and hmac.compare_digest(key,configured):return True
-    raw=request.headers.get('x-telegram-init-data','')
-    return is_valid_init_data(raw)
+def is_development_request(request):
+    host = request.url.hostname
+    client = request.client.host if request.client else ''
+    return (os.getenv('BECS_DEV_MODE') == '1' and host in ('localhost', '127.0.0.1', '::1')
+            and client in ('127.0.0.1', '::1'))
+
+
+def is_authorized(request: Request) -> bool:
+    reason, identity = telegram_identity(request.headers.get('x-telegram-init-data', ''))
+    if reason == 'ok':
+        return access.is_approved(identity['user_id'])
+    configured = os.getenv('BECS_ADMIN_TOKEN', '')
+    key = request.headers.get('x-becs-key', '')
+    return is_development_request(request) or bool(configured and key and hmac.compare_digest(key, configured))
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    init_db()
-    stop=asyncio.Event()
+    access.init_access()
+    with workspace(access.owner_id()):
+        init_db()
+    stop = asyncio.Event()
+    await runtime.start(stop)
     try:
-        if os.getenv('TELEGRAM_API_ID') and os.getenv('TELEGRAM_API_HASH'):
-            await manager.ensure_client()
-    except Exception:
-        logging.exception('Telegram account not connected; use Settings to authorize')
-    tasks=[asyncio.create_task(delivery_worker(manager,stop)),asyncio.create_task(telegram_bot_poll(manager,stop))]
-    app.state.delivery_worker=tasks[0]
-    yield
-    stop.set()
-    for task in tasks: task.cancel()
-    await asyncio.gather(*tasks,return_exceptions=True)
-    await manager.disconnect()
+        yield
+    finally:
+        stop.set()
+        await runtime.shutdown()
 
 
-app=FastAPI(title='Becs Crypto Forwarding',version='1.0.0',lifespan=lifespan,docs_url=None,redoc_url=None)
+app=FastAPI(title='Becs Crypto Forwarding',version='1.1.0',lifespan=lifespan,docs_url=None,redoc_url=None)
+
+
+def denial(status, detail, reason):
+    return JSONResponse(status_code=status, content={'detail': detail, 'reason': reason},
+                        headers={'Cache-Control': 'no-store', 'X-Content-Type-Options': 'nosniff'})
+
+
+@app.exception_handler(access.AccessError)
+async def access_error_handler(request, exc):
+    return denial(exc.status_code, exc.detail, getattr(exc, 'reason', 'access_denied'))
+
 
 @app.middleware('http')
-async def protect_api(request:Request,call_next):
-    # Browser CORS preflight carries no Telegram credentials. Let CORSMiddleware validate it.
-    if request.method=='OPTIONS':
+async def protect_api(request: Request, call_next):
+    path = request.url.path
+    if request.method == 'OPTIONS':
         return await call_next(request)
-    if request.url.path.startswith('/api/') and request.url.path!='/api/health' and not is_authorized(request):
-        reason=init_data_status(request.headers.get('x-telegram-init-data',''))
-        # Reason codes contain no credentials, user IDs, or raw Telegram payload.
-        return JSONResponse(status_code=401,content={'detail':'Telegram Mini App authentication failed','reason':reason})
-    response=await call_next(request)
-    if request.url.path.startswith('/api/'):
-        response.headers['Cache-Control']='no-store'
-    response.headers['X-Content-Type-Options']='nosniff'
+    if path.startswith('/api/') and path != '/api/health':
+        reason, identity = telegram_identity(request.headers.get('x-telegram-init-data', ''))
+        signed = reason == 'ok'
+        if not signed:
+            configured = os.getenv('BECS_ADMIN_TOKEN', '')
+            key = request.headers.get('x-becs-key', '')
+            fallback = is_development_request(request) or bool(configured and key and hmac.compare_digest(key, configured))
+            # An explicitly supplied invalid signature can never fall back to another identity.
+            if not fallback or request.headers.get('x-telegram-init-data'):
+                return denial(401, 'Telegram Mini App authentication failed', reason)
+            owner = os.getenv('BECS_ALLOWED_TELEGRAM_ID', '').strip()
+            # Unconfigured offline tests retain the legacy owner sandbox; not production.
+            identity = {'user_id': owner or '1', 'display_name': 'Owner'}
+        if path.startswith('/api/admin/') and not is_owner(request):
+            return denial(403, 'Verified owner Telegram Mini App required', 'owner_required')
+        try:
+            if os.getenv('BECS_ALLOWED_TELEGRAM_ID', '').strip():
+                access.init_access()
+                user = access.get_user(identity['user_id'])
+            else:
+                user = {'user_id': identity['user_id'], 'telegram_id': identity['user_id'], 'status': 'approved', 'role': 'admin'}
+            request.state.identity = identity
+            request.state.signed = signed
+            request.state.user = user
+            if path == '/api/me':
+                response = await call_next(request)
+            else:
+                if not user or user['status'] != 'approved':
+                    status = user['status'] if user else 'not_invited'
+                    return denial(403, 'Workspace access requires administrator approval', 'access_' + status)
+                async with request_scope(identity['user_id'], path.startswith('/api/admin/')):
+                    # Revocation can occur while a request waits for its workspace lock.
+                    if os.getenv('BECS_ALLOWED_TELEGRAM_ID', '').strip() and not access.is_approved(identity['user_id']):
+                        return denial(403, 'Workspace access has been revoked', 'access_revoked')
+                    if path in ('/api/telegram/start', '/api/telegram/code', '/api/telegram/password'):
+                        attempts = _login_attempts[identity['user_id']]
+                        now = time.monotonic()
+                        while attempts and attempts[0] < now - 900:
+                            attempts.popleft()
+                        if len(attempts) >= 12:
+                            return denial(429, 'Too many sign-in attempts. Try again in 15 minutes.', 'rate_limited')
+                        attempts.append(now)
+                    with workspace(identity['user_id']) if os.getenv('BECS_ALLOWED_TELEGRAM_ID', '').strip() else nullcontext():
+                        response = await call_next(request)
+        except access.AccessError as exc:
+            return denial(exc.status_code, exc.detail, getattr(exc, 'reason', 'access_denied'))
+    else:
+        response = await call_next(request)
+    if path.startswith('/api/'):
+        response.headers['Cache-Control'] = 'no-store'
+    response.headers['X-Content-Type-Options'] = 'nosniff'
     return response
 
 # Register CORS last so it wraps authentication, including early 401 responses.
@@ -136,6 +234,77 @@ app.add_middleware(
 @app.get('/api/health')
 def health():return {'ok':True,'service':'becs','version':'1.0.0'}
 
+
+@app.get('/api/me')
+def me(request: Request):
+    identity = request.state.identity
+    user = request.state.user or {'telegram_id': identity['user_id'], 'user_id': identity['user_id'],
+                                  'display_name': identity['display_name'], 'status': 'not_invited', 'role': 'member'}
+    return {'user': user, 'is_admin': request.state.signed and is_owner(request), 'capacity': 3}
+
+
+@app.get('/api/admin/users')
+def users(request: Request):
+    return {'users': access.list_users(request.state.identity['user_id']), 'capacity': 3}
+
+
+def invite_response(invite):
+    # The bearer token is returned once; never put it in logs or persisted frontend state.
+    return {'id': invite['id'], 'url': 'https://t.me/becsmebot?start=invite_' + invite['token'],
+            'expires_at': invite['expires_at']}
+
+
+@app.post('/api/admin/invites', status_code=201)
+def invite_user(request: Request):
+    return invite_response(access.create_invite(request.state.identity['user_id']))
+
+
+@app.get('/api/admin/invites')
+def invites(request: Request):
+    return {'invites': access.list_invites(request.state.identity['user_id'])}
+
+
+@app.delete('/api/admin/invites/{invite_id}')
+def revoke_invite(invite_id: str, request: Request):
+    access.revoke_invite(request.state.identity['user_id'], invite_id)
+    return {'revoked': True}
+
+
+@app.post('/api/admin/users/{user_id}/approve')
+async def approve_user(user_id: str, request: Request):
+    user = access.approve_user(request.state.identity['user_id'], user_id)
+    try:
+        await runtime.activate(user_id)
+    except (PermissionError, asyncio.CancelledError):
+        raise HTTPException(409, 'Approval was interrupted. Refresh Users to check current access.') from None
+    return {'user': user}
+
+
+@app.post('/api/admin/users/{user_id}/revoke')
+async def revoke_user(user_id: str, request: Request):
+    if user_id == access.owner_id():
+        raise HTTPException(409, 'The administrator cannot be removed')
+    # Close the persistent gate before any wait: a slow member request must not
+    # delay revocation or permit its queue to keep delivering in the meantime.
+    user = access.revoke_user(request.state.identity['user_id'], user_id)
+    await runtime.revoke(user_id)
+    # Drain any non-Telegram request that was already admitted. Telegram work is
+    # tracked and cancelled by runtime.revoke; queued requests recheck access.
+    async with request_lock(user_id):
+        pass
+    _login_attempts.pop(user_id, None)
+    return {'user': user}
+
+
+@app.post('/api/admin/users/{user_id}/reject')
+def reject_user(user_id: str, request: Request):
+    return {'user': access.reject_user(request.state.identity['user_id'], user_id)}
+
+
+@app.post('/api/admin/users/{user_id}/reinvite', status_code=201)
+def reinvite_user(user_id: str, request: Request):
+    return invite_response(access.reinvite_user(request.state.identity['user_id'], user_id))
+
 @app.get('/api/admin/status')
 async def admin_status(request: Request):
     if not is_owner(request):
@@ -149,7 +318,7 @@ async def admin_status(request: Request):
             'failed':"SELECT COUNT(*) FROM jobs WHERE status='failed'"
         }.items()}
     session=await manager.status()
-    worker=getattr(request.app.state,'delivery_worker',None)
+    worker=runtime.worker_for(access.owner_id())
     return {'service':'becs','uptime_seconds':int(time.time()-STARTED_AT),
         'telegram':{'authorized':bool(session.get('authorized')),'configured':bool(session.get('configured'))},
         'bot_configured':bool(os.getenv('TELEGRAM_BOT_TOKEN')),

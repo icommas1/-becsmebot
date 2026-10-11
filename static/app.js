@@ -43,13 +43,14 @@ const icon = (name, cls='') => `<span class="ico ${cls}" aria-hidden="true"><svg
 const safe = text => String(text ?? '').replace(/[&<>"']/g,ch=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[ch]));
 const fmt = number => Intl.NumberFormat().format(number||0);
 const age = value => { if (!value) return ''; const seconds=Math.max(0,Math.floor(Date.now()/1000-value)); return seconds<60?'just now':seconds<3600?Math.floor(seconds/60)+'m ago':seconds<86400?Math.floor(seconds/3600)+'h ago':new Date(value*1000).toLocaleDateString(); };
-const navigate = name => { state.page=name; render(); window.scrollTo({top:0,behavior:'smooth'}); };
+const navigate = name => { if(state.access!=='approved'||(name==='users'&&!state.me?.is_admin))return; state.page=name; render(); if(name==='users')loadUsers(); window.scrollTo({top:0,behavior:'smooth'}); };
 const modes = [{id:'express',title:'Express',sub:'Fastest',ico:'bolt',cls:'mode-express',help:'Forward with essential route checks; no AI or optional content filters in the critical path.'},{id:'smart',title:'Smart',sub:'Filtered',ico:'filter',cls:'mode-smart',help:'Use local keyword, address, regex and duplicate rules before queueing.'},{id:'hybrid',title:'Hybrid',sub:'AI Assist',ico:'brain',cls:'mode-hybrid',help:'Local filters decide first; AI can analyze afterward without blocking delivery.'},{id:'ai-gated',title:'AI-Gated',sub:'AI Decision',ico:'shield',cls:'mode-ai-gated',help:'Require AI approval before forwarding. If AI is unavailable, messages are held for review.'}];
 const nav=[['home','Home','home'],['routes','Routes','routes'],['filters','Smart Filters','filter'],['queue','Queue','queue'],['inspector','Inspector','activity'],['more','More','more']];
-const state={page:'home',overview:null,routes:[],jobs:[],reviews:[],chats:[],inspections:[],inspectorKind:'all',jobTab:'all',simResult:null,modeExplain:'smart',busy:false,apiError:'',chatSearch:'',editing:null};
+const state={page:'home',overview:null,routes:[],jobs:[],reviews:[],chats:[],inspections:[],inspectorKind:'all',jobTab:'all',simResult:null,modeExplain:'smart',busy:false,apiError:'',chatSearch:'',editing:null,me:null,access:'checking',users:[],invites:[],usersLoaded:false,usersLoading:false,usersError:'',userBusy:false,inviteBusy:false,invite:null,userConfirm:null,modalKind:null,loadVersion:0,accessVersion:0};
 const dom = id => document.getElementById(id);
 
 async function request(path,options={}) {
+ const requestAccessVersion=state.accessVersion;
  const headers={'Accept':'application/json',...(options.body?{'Content-Type':'application/json'}:{}),...(options.headers||{})};
  const auth=sessionStorage.getItem('becs_key'); if(auth)headers['X-Becs-Key']=auth;
  if(tg?.initData)headers['X-Telegram-Init-Data']=tg.initData;
@@ -57,28 +58,57 @@ async function request(path,options={}) {
  try { response=await fetch('/api'+path,{...options,headers,cache:'no-store'}); }
  catch {throw new Error('Becs server is unreachable. Start the FastAPI service and try again.');}
  const payload=await response.json().catch(()=>({detail:response.statusText}));
- if(!response.ok){const e=new Error(typeof payload.detail==='string'?payload.detail:JSON.stringify(payload.detail||'Request failed'));e.status=response.status;throw e;}
+ if(!response.ok){const detail=payload.detail;const e=new Error(typeof detail==='string'?detail:detail?.message||'Request failed');e.status=response.status;e.reason=payload.reason||detail?.reason||'';if(e.status===403&&['access_pending','access_revoked','access_rejected','not_invited','access_not_invited'].includes(e.reason))denyAccess(e.reason.replace(/^access_/,''));throw e;}
+ if(requestAccessVersion!==state.accessVersion)throw new Error('Your access changed. Check access again.');
  return payload;
 }
 function toast(message,isError=false){const el=document.createElement('div');el.className='toast'+(isError?' error':'');el.textContent=message;dom('toastRegion').append(el);setTimeout(()=>el.remove(),4200);}
-async function reload(full=true){
+function clearWorkspace(){
+ state.overview=null;state.routes=[];state.jobs=[];state.reviews=[];state.chats=[];state.inspections=[];state.simResult=null;
+ state.users=[];state.invites=[];state.usersLoaded=false;state.usersError='';state.invite=null;state.userConfirm=null;
+ for(const key of ['labText','labAllow','labBlock','labPattern'])delete state[key];
+ closeModal(true);dom('toastRegion').replaceChildren();
+}
+function denyAccess(status){
+ state.accessVersion++;state.access=status;state.page='home';state.apiError='';clearWorkspace();render();
+}
+async function reload(full=true,options={}){
+ const version=++state.loadVersion;const accessVersion=state.accessVersion;
+ const preserve=options.preserve;
  try{
+  const me=await request('/me');if(version!==state.loadVersion||accessVersion!==state.accessVersion)return;
+  const oldId=state.me?.user?.telegram_id;const changed=oldId!==undefined&&String(oldId)!==String(me.user?.telegram_id);
+  if(changed)clearWorkspace();state.me=me;
+  const status=me.user?.status||'not_invited';
+  if(status!=='approved'){denyAccess(status);return;}
+  state.access='approved';
   const calls=[request('/overview'),request('/routes')];
   if(full)calls.push(request('/jobs?limit=100'),request('/reviews'),request('/inspector?limit=100'));
   const result=await Promise.all(calls);
+  if(version!==state.loadVersion||accessVersion!==state.accessVersion||state.access!=='approved')return;
   state.overview=result[0];state.routes=result[1].routes;
   if(full){state.jobs=result[2].jobs;state.reviews=result[3].reviews;state.inspections=result[4].items;}
-  state.apiError='';render();
- }catch(e){state.apiError=e.message;render();}
+  state.apiError='';
+  if(preserve&&!changed&&(['more','filters'].includes(state.page)||!dom('modal').classList.contains('hidden'))){renderNav();}else render();
+  if(state.page==='users'&&state.me.is_admin)await loadUsers();
+ }catch(e){
+  if(version!==state.loadVersion||accessVersion!==state.accessVersion)return;
+  if(['pending','revoked','rejected','not_invited'].includes(state.access)){toast(e.message,true);return;}
+  if(e.status===401||e.status===403){state.me=null;state.access='unknown';clearWorkspace();}
+  state.apiError=e.message;render();
+ }
 }
 function renderNav(){
- const html=nav.map(([id,label,ico])=>`<button class="nav-item ${state.page===id?'active':''}" data-nav="${id}">${icon(ico)} ${label}</button>`).join('');
+ const allowed=state.access==='approved'&&!state.apiError;dom('sideNav').classList.toggle('hidden',!allowed);dom('bottomNav').classList.toggle('hidden',!allowed);dom('accountButton').disabled=!allowed;
+ const current=state.page==='users'?'more':state.page;
+ const html=nav.map(([id,label,ico])=>`<button class="nav-item ${current===id?'active':''}" data-nav="${id}">${icon(ico)} ${label}</button>`).join('');
  dom('sideNav').innerHTML=html;
- dom('bottomNav').innerHTML=nav.map(([id,label,ico])=>`<button class="bottom-tab ${state.page===id?'active':''}" data-nav="${id}" aria-label="${label}" ${state.page===id?'aria-current="page"':''}>${icon(ico)}<span>${label}</span></button>`).join('');
- dom('crumb').textContent=({home:'Overview',routes:'Routes',filters:'Regex Lab',queue:'Delivery Queue',inspector:'Message Inspector',more:'System Settings'})[state.page];
+ dom('bottomNav').innerHTML=nav.map(([id,label,ico])=>`<button class="bottom-tab ${current===id?'active':''}" data-nav="${id}" aria-label="${label}" ${current===id?'aria-current="page"':''}>${icon(ico)}<span>${label}</span></button>`).join('');
+ dom('crumb').textContent=({home:'Overview',routes:'Routes',filters:'Regex Lab',queue:'Delivery Queue',inspector:'Message Inspector',more:'System Settings',users:'Users'})[state.page];
  const active=state.overview?.telegram?.authorized;
  dom('sideDot').classList.toggle('online',!!active);
- dom('sideConnection').textContent=active?'Personal account connected':'Telegram not connected';
+ dom('sideConnection').textContent=!allowed?'Private workspace':active?'Personal account connected':'Telegram not connected';
+ dom('accountButton').setAttribute('aria-label',state.me?.user?.display_name?`${state.me.user.display_name} · My account`:'My account');
 }
 function pageHead(eyebrow,title,desc,action=''){
  return `<div class="page-head"><div><p class="eyebrow">${eyebrow}</p><h1>${title}</h1><p class="subheading">${desc}</p></div>${action?`<div class="head-actions">${action}</div>`:''}</div>`;
@@ -179,36 +209,170 @@ function queuePage(){
  <div class="notice" style="margin-top:15px">${icon('shield')} Messages are delivered one at a time. Telegram-imposed cooldowns are respected. This page contains actual locally stored events, not sample forwards.</div>`;
 }
 async function openAdminStatus(){
- const box=dom('ownerStatusPanel');if(!box)return;
+ const box=dom('ownerStatusPanel');if(!box||!state.me?.is_admin)return;
  try{
   const info=await request('/admin/status');
-  box.style.display='block';
+  if(!box.isConnected||state.access!=='approved'||!state.me?.is_admin)return;box.style.display='block';
   const rows=[['API',info.components.api],['Database',info.components.sqlite],['Worker',info.components.worker],['Telegram',info.telegram.authorized?'Connected':'Disconnected'],['Bot API',info.bot_configured?'Configured':'Missing'],['Forwarding',info.paused?'Paused':'Enabled'],['Active routes',info.counts.active_routes],['Queued',info.counts.queued],['Sending',info.counts.sending],['Failed',info.counts.failed],['Cooldown',info.cooldown_seconds+'s'],['Uptime',Math.floor(info.uptime_seconds/60)+' min']];
   dom('ownerStatusRows').innerHTML=rows.map(([k,v])=>`<div class="health-row"><span class="status-main">${safe(k)}</span><strong class="right-flex">${safe(v)}</strong></div>`).join('');
- }catch(e){if(e.status===403){box.remove();return;}dom('ownerStatusRows').textContent='Status unavailable';}
+ }catch(e){if(!box.isConnected)return;if(e.status===403){box.remove();return;}const rows=box.querySelector('#ownerStatusRows');if(rows)rows.textContent='Status unavailable';}
 }
 function morePage(){
  const o=state.overview||{}; const t=o.telegram||{};
- return `${pageHead('SYSTEM / PERSONAL EDITION','Account & Settings','Configure your single personal Telegram account, control bot, and optional AI provider.')}
- <section class="panel" id="ownerStatusPanel" style="margin-bottom:17px;display:none"><div class="panel-header"><h2>Owner · System Status</h2><button class="button button-small" data-action="owner-status">Refresh</button></div><div id="ownerStatusRows" class="health-list">Checking access…</div></section>
+ return `${pageHead('SYSTEM / PERSONAL EDITION','Account & Settings','Your private workspace and your own Telegram connection.')}
+ ${state.me?.is_admin?`<button class="users-settings-link" data-action="open-users"><span class="route-glyph">${icon('person')}</span><span><strong>Users</strong><small>Manage invitations and access · owner + 2 users</small></span>${icon('chevron')}</button>`:''}
+ ${state.me?.is_admin?`<section class="panel" id="ownerStatusPanel" style="margin-bottom:17px;display:none"><div class="panel-header"><h2>Owner · System Status</h2><button class="button button-small" data-action="owner-status">Refresh</button></div><div id="ownerStatusRows" class="health-list">Checking access…</div></section>`:''}
  <div class="dashboard-cols"><div style="display:flex;flex-direction:column;gap:17px"><section class="panel login-card"><div class="panel-header"><h2>Personal Telegram connection</h2>${pill(t.authorized?'Authorized':t.configured?'Not signed in':'Unconfigured',t.authorized?'success':'warn')}</div>
  <div class="notice">${icon('lock')} Login codes and two-step passwords must only be entered here over trusted HTTPS or on your local computer. Never provide them to a Telegram bot chat.</div>
  <div class="divider"></div>
  ${t.authorized?`<div class="notice good">Personal account authorized. Becs can load chats and listen for messages matching enabled routes.</div><p class="helper-line">${safe(t.detail||'Telegram session authorized')}</p><div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:17px"><button class="button" data-action="load-chats">${icon('refresh')} Load chats</button><button class="button button-danger" data-action="disconnect">${icon('logout')} Disconnect</button></div>`:
- `<div class="setup-steps"><span class="step">1</span> Obtain Telegram API ID and hash at my.telegram.org, then place them in your private server .env</div><div class="setup-steps"><span class="step">2</span> Enter your personal phone number and request an official Telegram login challenge.</div><div class="setup-steps"><span class="step">3</span> Enter the code here; complete two-step verification if required.</div><div class="field"><label>Phone number (international format)</label><input id="phone" autocomplete="tel" type="tel" placeholder="+1 555 000 0000"></div><button class="button button-primary" data-action="login-start" ${!t.configured?'disabled title="Server API ID/hash not configured"':''}>Send Telegram code</button><div id="authStage" class="hidden" style="margin-top:14px"><div class="field"><label>Telegram code</label><input id="telegramCode" autocomplete="one-time-code" placeholder="Login code"></div><button class="button" data-action="login-code">Verify code</button><div id="twoFactor" class="field hidden" style="margin-top:15px"><label>Telegram 2-step verification password</label><input id="telegramPassword" type="password" placeholder="Two-step password"><button class="button" data-action="login-password">Verify password</button></div></div>`}
+ `<div class="setup-steps"><span class="step">1</span> ${state.me?.is_admin?'Configure the server Telegram API ID and hash if needed.':'Your access is approved. Connect your own Telegram account below.'}</div><div class="setup-steps"><span class="step">2</span> Enter your personal phone number and request an official Telegram login challenge.</div><div class="setup-steps"><span class="step">3</span> Enter the code here; complete two-step verification if required.</div><div class="field"><label>Phone number (international format)</label><input id="phone" autocomplete="tel" type="tel" placeholder="+1 555 000 0000"></div><button class="button button-primary" data-action="login-start" ${!t.configured?'disabled title="Server API ID/hash not configured"':''}>Send Telegram code</button><div id="authStage" class="hidden" style="margin-top:14px"><div class="field"><label>Telegram code</label><input id="telegramCode" autocomplete="one-time-code" placeholder="Login code"></div><button class="button" data-action="login-code">Verify code</button><div id="twoFactor" class="field hidden" style="margin-top:15px"><label>Telegram 2-step verification password</label><input id="telegramPassword" type="password" placeholder="Two-step password"><button class="button" data-action="login-password">Verify password</button></div></div>`}
  </section>${panel('Security model',`<div class="health-list"><div class="health-row">${icon('shield')}<div><div class="status-main">Authorized destinations only</div><div class="status-sub">Telegram permissions always apply</div></div></div><div class="health-row">${icon('lock')}<div><div class="status-main">Session stays on server</div><div class="status-sub">Never stored in browser local storage</div></div></div><div class="health-row">${icon('queue')}<div><div class="status-main">Account-aware queue</div><div class="status-sub">Sequential sends and flood-wait handling</div></div></div></div>`)}</div>
  <div style="display:flex;flex-direction:column;gap:17px">${panel('Service configuration',`<div class="health-list"><div class="health-row">${icon('bot')}<div><div class="status-main">Telegram control bot</div><div class="status-sub">Commands /start /status /pause /resume /routes</div></div><span class="right-flex">${pill(o.bot_configured?'Configured':'Needs .env',o.bot_configured?'success':'warn')}</span></div><div class="health-row">${icon('brain')}<div><div class="status-main">Optional Gemini AI gateway</div><div class="status-sub">External API only for selected route modes</div></div><span class="right-flex">${pill(o.ai_configured?'Configured':'Off',o.ai_configured?'success':'')}</span></div><div class="health-row">${icon('server')}<div><div class="status-main">FastAPI + SQLite backend</div><div class="status-sub">Local or self-hosted; no deployment requested</div></div><span class="right-flex">${pill('Running','success')}</span></div></div>`)}${panel('Telegram chats',state.chats.length?`<div style="max-height:290px;overflow-y:auto">${state.chats.map(c=>`<div class="route-brief"><span class="route-glyph">${icon(c.kind==='private'?'person':'document')}</span><div class="route-detail"><strong>${safe(c.title)}</strong><small>${safe(c.kind)} · ${safe(c.id)}</small></div><button class="button button-small" data-copy="${safe(c.id)}">Copy ID</button></div>`).join('')}</div>`:empty('person','No chats loaded','Sign in and press Load chats to see available source and destination identifiers.'),`<button class="small-link" data-action="load-chats">Load →</button>`)}</div></div>`;
 }
 function gatePage(){
  return `<div class="page-head"><div><p class="eyebrow">SECURE ACCESS</p><h1>Becs access required</h1><p class="subheading">Open this inside your authorized Telegram Mini App, or enter your configured server access key.</p></div></div><section class="panel login-card"><div class="notice warn">${icon('lock')} ${safe(state.apiError||'Protected backend')}</div><div class="field" style="margin-top:20px"><label>BECS_ADMIN_TOKEN</label><input id="adminKey" type="password" autocomplete="off" placeholder="Enter your server access key"></div><button class="button button-primary" data-action="unlock">Unlock Becs</button><p class="small-help">Your key stays in this browser tab session only. Local development on 127.0.0.1 is permitted without a key.</p></section>`;
 }
-function render(){renderNav();dom('mainView').innerHTML=state.apiError?gatePage():state.page==='home'?overviewPage():state.page==='routes'?routesPage():state.page==='filters'?filtersPage():state.page==='queue'?queuePage():state.page==='inspector'?inspectorPage():morePage();if(!state.apiError&&state.page==='more')openAdminStatus();}
+function accessPage(){
+ const status=state.access;const pending=status==='pending';const revoked=status==='revoked'||status==='rejected';
+ const title=pending?'Approval pending':revoked?'Access revoked':status==='checking'?'Checking your access…':'Private access only';
+ const detail=pending?'Your invitation has been accepted. The owner needs to approve your access before you can connect Telegram.':revoked?'Your access to Becs is no longer active. Contact the owner if you need access again.':status==='checking'?'Verifying your Telegram identity.':'Ask the owner for an invite link, open it in Telegram, and tap Start. No separate signup or password is needed.';
+ return `<section class="access-card"><span class="access-symbol ${revoked?'revoked':''}">${icon(pending?'clock':'lock')}</span><p class="eyebrow">BECS / PRIVATE WORKSPACE</p><h1>${title}</h1><p>${detail}</p>${state.me?.user?.display_name?`<div class="access-identity">${icon('person')}<span>${safe(state.me.user.display_name)}</span></div>`:''}${status==='checking'?'':`<button class="button button-primary" data-action="retry-access">${icon('refresh')} Check access</button>`}<div class="access-footer">${pending?'Once approved, you’ll get your own routes, chats and queue.':'Each approved person gets a separate workspace.'}</div></section>`;
+}
+function render(){
+ renderNav();
+ dom('mainView').innerHTML=state.apiError?gatePage():state.access!=='approved'?accessPage():!state.overview?accessPage():state.page==='home'?overviewPage():state.page==='routes'?routesPage():state.page==='filters'?filtersPage():state.page==='queue'?queuePage():state.page==='inspector'?inspectorPage():state.page==='users'&&state.me?.is_admin?usersPage():morePage();
+ if(!state.apiError&&state.access==='approved'&&state.page==='more'&&state.me?.is_admin)openAdminStatus();
+}
+
+const userId = user => String(user.telegram_id??user.user_id??'');
+const ownerUser = user => user.is_owner||user.role==='admin'||user.role==='owner';
+const userName = user => user.display_name||'Telegram user';
+const activeUserCount = () => state.users.filter(user=>user.status==='approved').length;
+const capacity = () => Number(state.me?.capacity)||3;
+const atCapacity = () => state.usersLoaded&&activeUserCount()>=capacity();
+const expiryTime = value => typeof value==='number'?value*1000:Date.parse(value);
+const expiryLabel = value => {const date=new Date(expiryTime(value));return Number.isFinite(date.getTime())?date.toLocaleString([], {month:'short',day:'numeric',hour:'numeric',minute:'2-digit'}):'soon';};
+function accessError(error){
+ const reason=error.reason||error.message;
+ if(/capacity|three-account limit|workspaces? (?:are )?full|capacity_full/i.test(reason))return 'All 3 workspaces are in use. Revoke an approved user’s access before approving someone else.';
+ if(/expired/i.test(reason))return 'This invitation has expired. Create a new invite link.';
+ if(/used|consumed/i.test(reason))return 'This invitation has already been used. Refresh Users to check the person’s status.';
+ if(/revoked/i.test(reason))return 'This invitation or access was revoked. Refresh Users before trying again.';
+ if(error.status===403)return 'Owner access is required. Refresh to check your access.';
+ return error.message||'Could not update access. Try again.';
+}
+async function loadUsers(){
+ if(!state.me?.is_admin||state.access!=='approved'||state.usersLoading)return;
+ const version=state.accessVersion;state.usersLoading=true;state.usersError='';
+ if(state.page==='users'&&!state.usersLoaded)render();
+ try{
+  const data=await request('/admin/users');
+  if(version!==state.accessVersion||!state.me?.is_admin)return;
+  state.users=Array.isArray(data.users)?data.users:[];state.usersLoaded=true;
+  if(data.capacity)state.me.capacity=data.capacity;
+  try{const data=await request('/admin/invites');if(version===state.accessVersion)state.invites=Array.isArray(data.invites)?data.invites:[];}
+  catch(error){if(version===state.accessVersion)state.usersError='Users loaded. Invitation status is unavailable; refresh to try again.';}
+ }catch(error){if(version===state.accessVersion)state.usersError=accessError(error);}
+ finally{state.usersLoading=false;if(version===state.accessVersion&&state.page==='users')render();}
+}
+function usersPage(){
+ const active=activeUserCount();const pending=state.users.filter(user=>user.status==='pending').length;
+ const userRows=[...state.users].sort((a,b)=>Number(ownerUser(b))-Number(ownerUser(a))).map(user=>{
+  const owner=ownerUser(user),status=user.status,uid=userId(user);
+  const label=owner?'Owner':status==='approved'?'Approved':status==='pending'?'Pending approval':status==='revoked'?'Revoked':status==='rejected'?'Rejected':'Not active';
+  const tone=status==='approved'?'success':status==='pending'?'warn':'';
+  const controls=owner?`<span class="owner-locked">${icon('lock')} Owner access</span>`:status==='pending'?`<button class="button button-small button-primary" data-user-action="approve" data-user-id="${safe(uid)}" ${atCapacity()?'disabled title="All workspaces are in use"':''}>Approve</button><button class="button button-small button-subtle" data-user-action="reject" data-user-id="${safe(uid)}">Reject</button>`:status==='approved'?`<button class="button button-small button-subtle user-revoke" data-user-action="revoke" data-user-id="${safe(uid)}">Revoke</button>`:status==='revoked'?`<button class="button button-small button-subtle" data-user-action="reinvite" data-user-id="${safe(uid)}" ${atCapacity()?'disabled':''}>Reinvite</button>`:'';
+  return `<article class="user-row" data-user-row="${safe(uid)}"><div class="user-avatar ${owner?'owner-avatar':''}">${icon(owner?'shield':'person')}</div><div class="user-info"><strong>${safe(userName(user))}${owner?'<span class="user-you">you</span>':''}</strong><small>Telegram ID ${safe(uid)}</small><div class="user-status">${pill(label,tone)}</div></div><div class="user-actions">${controls}</div></article>`;
+ }).join('');
+ const liveInvites=state.invites.filter(invite=>!invite.used_at&&!invite.redeemed_at&&!invite.revoked_at&&(!invite.status||['active','expired'].includes(invite.status)));
+ const inviteRows=liveInvites.map(invite=>{const expired=expiryTime(invite.expires_at)<=Date.now();return `<div class="invite-row"><span class="invite-glyph">${icon(expired?'clock':'send')}</span><div><strong>${expired?'Expired invitation':'Unused invitation'}</strong><small>#${safe(String(invite.id).slice(0,8))} · ${expired?'Expired':'Expires'} ${safe(expiryLabel(invite.expires_at))}</small></div>${expired?'':`<button class="button button-small button-subtle" data-invite-revoke="${safe(invite.id)}">Revoke</button>`}</div>`;}).join('');
+ return `<div class="users-page"><button class="users-back" data-action="open-settings">${icon('chevron')} More</button>${pageHead('PRIVATE ACCESS / OWNER','Users','Invite people you trust. Approve each person before their workspace opens.',`<button class="button button-primary" data-action="invite-user" ${!state.usersLoaded||atCapacity()?'disabled':''}>${icon('plus')} Invite User</button>`)}
+ <section class="users-capacity"><span class="users-capacity-icon">${icon('shield')}</span><div><strong>${active} of ${capacity()} workspaces in use</strong><small>Owner + 2 users · each workspace is separate</small></div><span class="seat-dots" aria-hidden="true">${Array.from({length:capacity()},(_,i)=>`<i class="${i<active?'used':''}"></i>`).join('')}</span></section>
+ ${state.usersError?`<div class="notice warn users-notice" role="alert">${safe(state.usersError)}</div>`:''}${atCapacity()?'<div class="notice users-notice">All workspaces are in use. Revoke an approved user’s access to make room.</div>':''}
+ <section class="panel users-panel"><div class="panel-header"><h2>People ${pending?`<span class="pending-count">${pending} pending</span>`:''}</h2><button class="button button-small button-subtle" data-action="users-refresh" aria-label="Refresh users" ${state.usersLoading?'disabled':''}>${icon('refresh')}</button></div>${userRows||`<div class="users-empty">${state.usersLoading?'Loading people…':'Could not load people. Refresh to try again.'}</div>`}</section>
+ ${inviteRows?`<section class="panel users-panel invites-panel"><div class="panel-header"><h2>Invitations</h2><span class="field-help">Single-use links</span></div>${inviteRows}</section>`:''}
+ <div class="users-how"><span>${icon('lock')}</span><p>Invite → Telegram Start → owner approval<br><small>Then each person connects their own Telegram account. Routes, chats, queues and sessions stay separate.</small></p></div></div>`;
+}
+function usersDialog(title,kind){
+ if(state.userBusy||state.inviteBusy||!state.me?.is_admin)return false;
+ state.modalOpener=document.activeElement;state.modalKind=kind;
+ dom('modal').classList.remove('becs-compact-route');dom('modal').classList.add('users-modal');
+ dom('modal').querySelector('.eyebrow').textContent='PRIVATE ACCESS / OWNER';dom('modalTitle').textContent=title;
+ dom('modal').classList.remove('hidden');return true;
+}
+function openInvite(target=null){
+ if(!state.usersLoaded||atCapacity()||!usersDialog('Invite User','invite'))return;
+ state.invite={url:'',id:null,expires_at:null,error:'',target};renderInvite();
+ dom('modalBody').querySelector('button')?.focus();
+}
+function renderInvite(){
+ const invite=state.invite;if(!invite||state.modalKind!=='invite')return;
+ const expired=invite.expires_at&&expiryTime(invite.expires_at)<=Date.now();if(expired)invite.url='';
+ dom('modalBody').innerHTML=`<p class="users-dialog-description">${invite.target?`Reinvite ${safe(invite.target.name)} (Telegram ID ${safe(invite.target.id)}). This link works only for that account. They’ll open it in Telegram`:'Share a private, single-use link with one person. They’ll open it in Telegram'} and tap Start, then wait for your approval.</p><div class="invite-steps"><span>1 <b>Send invite</b></span><span>2 <b>They tap Start</b></span><span>3 <b>You approve</b></span></div>
+ ${invite.error?`<div class="notice warn" role="alert">${safe(invite.error)}</div>`:''}
+ ${invite.url?`<div class="field invite-link-field"><label for="privateInviteLink">Private invite link</label><input id="privateInviteLink" type="text" value="${safe(invite.url)}" readonly autocomplete="off" spellcheck="false"><span class="field-help">Expires ${safe(expiryLabel(invite.expires_at))}. Copy now; this link won’t be shown again after you close this window.</span></div><button class="button button-primary" data-action="copy-invite">${icon('copy')} Copy invite link</button>`:expired?'<div class="notice warn">This invitation has expired. Close this window and create a new invite.</div>':`<p class="helper-line">Creating a link does not grant access or reserve a workspace.</p>`}
+ <div class="modal-actions"><button class="button" data-action="close-modal" ${state.inviteBusy?'disabled':''}>${invite.id?'Done':'Cancel'}</button>${!invite.id?`<button class="button button-primary" data-action="create-invite" ${state.inviteBusy?'disabled':''}>${icon('plus')} ${state.inviteBusy?'Creating…':'Create invite link'}</button>`:''}</div>`;
+ dom('modalClose').disabled=state.inviteBusy;
+}
+async function createInvite(){
+ if(state.inviteBusy||!state.invite||state.invite.id||!state.me?.is_admin)return;
+ const invite=state.invite;state.inviteBusy=true;invite.error='';renderInvite();
+ try{
+  const result=await request(invite.target?`/admin/users/${encodeURIComponent(invite.target.id)}/reinvite`:'/admin/invites',{method:'POST'});
+  if(state.invite!==invite||state.access!=='approved')return;
+  const url=new URL(result.url);if(url.protocol!=='https:'||url.hostname!=='t.me')throw Error('The server returned an invalid invitation link. Refresh Users to revoke it.');
+  Object.assign(invite,{id:result.id,url:result.url,expires_at:result.expires_at});
+  if(!Number.isFinite(expiryTime(invite.expires_at)))throw Error('Invitation expiry is unavailable. Refresh Users to revoke this link.');
+  const delay=expiryTime(invite.expires_at)-Date.now();
+  state.inviteTimer=setTimeout(()=>{if(state.invite===invite){invite.url='';renderInvite();}},Math.max(0,Math.min(delay,2147483647)));
+  void loadUsers();
+ }catch(error){if(state.invite===invite){invite.url='';invite.error=accessError(error);}}
+ finally{state.inviteBusy=false;if(state.invite===invite)renderInvite();else dom('modalClose').disabled=false;}
+}
+async function copyInvite(){
+ const invite=state.invite;if(!invite?.url)return;
+ if(expiryTime(invite.expires_at)<=Date.now()){invite.url='';renderInvite();return;}
+ try{await navigator.clipboard.writeText(invite.url);toast('Invite link copied. Share it privately with one person.');}
+ catch{dom('privateInviteLink')?.select();toast('Select and copy the invite link above.',true);}
+}
+function openUserAction(id,action){
+ const user=state.users.find(item=>userId(item)===String(id));
+ if(!user||ownerUser(user)||!['approve','reject','revoke','reinvite'].includes(action)||state.userBusy)return;
+ if(action==='reinvite'){if(user.status==='revoked')openInvite(Object.freeze({id:userId(user),name:userName(user)}));return;}
+ if(action==='approve'&&(user.status!=='pending'||atCapacity()))return;
+ if(action==='revoke'&&user.status!=='approved')return;
+ if(action==='reject'&&user.status!=='pending')return;
+ const title={approve:'Approve access?',reject:'Reject this request?',revoke:'Revoke access?'}[action];
+ if(!usersDialog(title,'user-action'))return;
+ state.userConfirm=Object.freeze({id:userId(user),name:userName(user),action});
+ const detail={approve:'This person will get a private workspace and can connect their own Telegram account.',reject:'This person won’t be able to open a workspace. They’ll need a new invitation to request access again.',revoke:'This person will lose workspace access and their forwarding will stop. Your workspace and other users are unaffected.'}[action];
+ dom('modalBody').innerHTML=`<div class="confirm-person">${icon('person')}<div><strong>${safe(userName(user))}</strong><small>Telegram ID ${safe(userId(user))}</small></div></div><p class="users-dialog-description">${detail}</p><div id="userActionError" role="alert"></div><div class="modal-actions"><button class="button" data-action="close-modal">Cancel</button><button class="button ${action==='approve'?'button-primary':'button-danger'}" data-action="confirm-user">${action==='approve'?'Approve access':action==='revoke'?'Revoke access':'Reject request'}</button></div>`;
+ dom('modalBody').querySelector('[data-action="close-modal"]').focus();
+}
+function openInviteRevocation(id){
+ const invite=state.invites.find(item=>String(item.id)===String(id));if(!invite||invite.used_at||invite.redeemed_at||invite.revoked_at||(invite.status&&invite.status!=='active')||expiryTime(invite.expires_at)<=Date.now()||!usersDialog('Revoke invitation?','user-action'))return;
+ state.userConfirm=Object.freeze({id:String(invite.id),action:'revoke-invite'});
+ dom('modalBody').innerHTML=`<p class="users-dialog-description">Invitation #${safe(String(invite.id).slice(0,8))}, expiring ${safe(expiryLabel(invite.expires_at))}, will stop working. This won’t change anyone’s approved access.</p><div id="userActionError" role="alert"></div><div class="modal-actions"><button class="button" data-action="close-modal">Cancel</button><button class="button button-danger" data-action="confirm-user">Revoke invitation</button></div>`;
+ dom('modalBody').querySelector('[data-action="close-modal"]').focus();
+}
+async function confirmUserAction(){
+ const target=state.userConfirm;if(!target||state.userBusy||!state.me?.is_admin)return;
+ state.userBusy=true;dom('modal').querySelectorAll('button').forEach(button=>button.disabled=true);
+ try{
+  await request(target.action==='revoke-invite'?`/admin/invites/${encodeURIComponent(target.id)}`:`/admin/users/${encodeURIComponent(target.id)}/${target.action}`,{method:target.action==='revoke-invite'?'DELETE':'POST'});
+  if(state.userConfirm!==target)return;
+  closeModal(true);toast(target.action==='approve'?'Access approved':target.action==='reject'?'Request rejected':target.action==='revoke-invite'?'Invitation revoked':'Access revoked');
+  await loadUsers();
+ }catch(error){if(state.userConfirm===target){const box=dom('userActionError');box.className='notice warn';box.textContent=accessError(error);}}
+ finally{state.userBusy=false;if(state.userConfirm===target)dom('modal').querySelectorAll('button').forEach(button=>button.disabled=false);}
+}
 
 function newRouteDefaults(m='smart'){return {name:'',mode:m,enabled:false,sources:[],destinations:[],allowed:'',blocked:'',pattern:'',match_mode:'any',network:'both',require_contract:false,dedup_minutes:60,delivery_style:'native'};}
 function field(label,id,value='',placeholder='',help='',type='text'){return `<div class="field"><label for="${id}">${label}</label><input id="${id}" type="${type}" value="${safe(value)}" placeholder="${safe(placeholder)}">${help?`<span class="field-help">${help}</span>`:''}</div>`;}
 function selectField(label,id,value,opts,help=''){return `<div class="field"><label for="${id}">${label}</label><select id="${id}">${opts.map(([v,t])=>`<option value="${safe(v)}" ${value===v?'selected':''}>${safe(t)}</option>`).join('')}</select>${help?`<span class="field-help">${help}</span>`:''}</div>`;}
 function routeModal(route=null){
- const r=route||newRouteDefaults();state.editing=route?.id||null;
+ state.modalKind='route';state.modalOpener=document.activeElement;const r=route||newRouteDefaults();state.editing=route?.id||null;
  dom('modalTitle').textContent=route?'Edit '+r.name:'Create forwarding route';
  const chatOptions=`<div class="modal-section"><h3 class="section-title">Select Telegram chats</h3>
  <button type="button" class="button button-small" data-action="refresh-route-chats">Refresh chats</button> <span id="routeChatCount" class="field-help">${state.chats.length} chats loaded</span>
@@ -285,7 +449,7 @@ async function refreshRouteChats(){
  try{const data=await request('/telegram/chats');state.chats=data.chats;renderChatPicker();toast(state.chats.length+' chats loaded');}
  catch(e){toast(e.message,true);}
 }
-function closeModal(){dom('modal').classList.add('hidden');dom('modal').classList.remove('becs-compact-route');state.editing=null;}
+function closeModal(force=false){if(!force&&(state.userBusy||state.inviteBusy))return;dom('modal').classList.add('hidden');dom('modal').classList.remove('becs-compact-route','users-modal');dom('modalBody').replaceChildren();dom('modalTitle').textContent='Becs';dom('modalClose').disabled=false;state.editing=null;state.invite=null;state.userConfirm=null;state.modalKind=null;clearTimeout(state.inviteTimer);dom('modal').querySelector('.eyebrow').textContent='AUTOMATION WORKSPACE';if(state.modalOpener?.isConnected)state.modalOpener.focus();}
 function collectRoute(){
  const terms=id=>(dom(id)?.value||'').split(',').map(x=>x.trim()).filter(Boolean);
  const sol=dom('routeSolana').checked,evm=dom('routeEvm').checked;
@@ -318,9 +482,10 @@ async function login(method,body,btn){if(btn)btn.disabled=true;try{const result=
 async function reviewItem(id,approve){try{await request('/reviews/'+id,{method:'POST',body:JSON.stringify({approve})});await reload();toast(approve?'Approved for sequential forwarding':'Review rejected');}catch(e){toast(e.message,true);}}
 async function retryJob(id){try{await request('/jobs/'+id+'/retry',{method:'POST'});await reload();toast('Job requeued');}catch(e){toast(e.message,true);}}
 const actionMap={
- 'owner-status':openAdminStatus,
+ 'owner-status':openAdminStatus,'open-users':()=>navigate('users'),'users-refresh':()=>loadUsers(),'invite-user':()=>openInvite(),'create-invite':createInvite,'copy-invite':copyInvite,'confirm-user':confirmUserAction,
+ 'retry-access':async(el)=>{if(el.disabled)return;el.disabled=true;await reload();if(el.isConnected)el.disabled=false;},
  'new-route':()=>routeModal(), 'open-routes':()=>navigate('routes'),'open-filters':()=>navigate('filters'),'open-queue':()=>navigate('queue'),'open-settings':()=>navigate('more'),
- 'refresh':()=>reload(),'refresh-inspector':refreshInspector, 'pause':()=>updatePause(true), 'resume':()=>updatePause(false),'close-modal':closeModal,
+ 'refresh':()=>reload(true,{preserve:true}),'refresh-inspector':refreshInspector, 'pause':()=>updatePause(true), 'resume':()=>updatePause(false),'close-modal':()=>closeModal(),
  'run-sim':simulate,'load-chats':loadChats,
  'refresh-route-chats':refreshRouteChats,'resolve-source':()=>addChatReference('source'),'resolve-destination':()=>addChatReference('destination'),
  'disconnect':async()=>{if(!confirm('Disconnect the server from Telegram? The saved session will remain available for reconnect.'))return;try{await request('/telegram/disconnect',{method:'POST'});await reload();toast('Telegram disconnected');}catch(e){toast(e.message,true);}},
@@ -339,7 +504,10 @@ document.addEventListener('change',event=>{
 }
 });
 document.addEventListener('click',async event=>{
- const target=event.target.closest('[data-nav],[data-mode],[data-action],[data-edit],[data-delete],[data-jobtab],[data-retry],[data-approve],[data-reject],[data-copy],[data-usechat],[data-filter-preset],[data-route-preset],[data-filter-mode],[data-inspector-kind]');if(!target)return;
+ const target=event.target.closest('[data-user-action],[data-invite-revoke],[data-nav],[data-mode],[data-action],[data-edit],[data-delete],[data-jobtab],[data-retry],[data-approve],[data-reject],[data-copy],[data-usechat],[data-filter-preset],[data-route-preset],[data-filter-mode],[data-inspector-kind]');if(!target||target.disabled)return;
+ if(state.access!=='approved'&&!['retry-access','unlock'].includes(target.dataset.action))return;
+ if(target.dataset.userAction){openUserAction(target.dataset.userId,target.dataset.userAction);return;}
+ if(target.dataset.inviteRevoke){openInviteRevocation(target.dataset.inviteRevoke);return;}
  if(target.dataset.filterPreset){applyFilterPreset(target.dataset.filterPreset);return;}
  if(target.dataset.filterMode){document.querySelectorAll('.becs-mode-button').forEach(b=>{const active=b===target;b.classList.toggle('active',active);b.setAttribute('aria-pressed',active?'true':'false');});return;}
  if(target.dataset.routePreset){applyFilterPreset(target.dataset.routePreset,true);return;}
@@ -360,9 +528,10 @@ document.addEventListener('change',event=>{const t=event.target;if(t.dataset.rou
 document.addEventListener('input',event=>{if(['sourceChatSearch','destChatSearch','routeSources','routeDests'].includes(event.target.id))renderChatPicker();});
 document.addEventListener('submit',event=>{if(event.target.id==='routeForm')saveRoute(event);});
 dom('accountButton').addEventListener('click',()=>navigate('more'));
-dom('refreshBtn').addEventListener('click',()=>reload());
-dom('modalClose').addEventListener('click',closeModal);
+dom('refreshBtn').addEventListener('click',()=>reload(true,{preserve:true}));
+dom('modalClose').addEventListener('click',()=>closeModal());
 dom('modal').addEventListener('click',event=>{if(event.target===dom('modal'))closeModal();});
-document.addEventListener('keydown',event=>{if(event.key==='Escape'&&!dom('modal').classList.contains('hidden'))closeModal();});
+document.addEventListener('keydown',event=>{if(dom('modal').classList.contains('hidden'))return;if(event.key==='Escape')closeModal();if(event.key==='Tab'&&state.modalKind!=='route'){const nodes=[...dom('modal').querySelectorAll('button:not(:disabled),input:not(:disabled),a[href]')].filter(node=>node.offsetParent!==null);if(!nodes.length)return;const first=nodes[0],last=nodes[nodes.length-1];if(event.shiftKey&&document.activeElement===first){event.preventDefault();last.focus();}else if(!event.shiftKey&&document.activeElement===last){event.preventDefault();first.focus();}}});
+render();
 reload();
 })();

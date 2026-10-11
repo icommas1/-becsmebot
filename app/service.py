@@ -3,7 +3,7 @@ import hashlib
 import json
 import logging
 import time
-from .db import connection, event, get_setting, set_setting
+from .db import connection, event, get_setting, set_setting, workspace, current_workspace
 from .engine import decide,dedup_fingerprint
 from .ai import evaluate_text
 
@@ -33,6 +33,8 @@ def enqueue(db,route,src,dest,msg_id,text,fp):
 
 async def ingest_message(source_id: str, message_id: int, text: str, service):
     """Extract addresses in memory; queue only the contract address, never other text or media."""
+    if service is not None and hasattr(service, 'check_access'):
+        service.check_access()
     if get_setting('paused','false')=='true': return
     from .engine import extract_addresses
     addresses=extract_addresses(text)
@@ -85,10 +87,29 @@ async def background_ai(text, route_id,src,dest):
         with connection() as db:event(db,'ai',f"AI: {result.get('category','')} · {result.get('reason','')}",route_id,src,dest)
 
 
-async def delivery_worker(manager, stop: asyncio.Event):
+async def delivery_worker(manager, stop: asyncio.Event, user_id=None):
+    """Bind this worker to its own workspace even when its caller has another scope."""
+    from contextlib import nullcontext
+    from .access import AccessError, owner_id
+    manager_id = getattr(manager, 'user_id', None)
+    if user_id is not None and manager_id is not None and str(user_id) != str(manager_id):
+        raise ValueError('Worker account does not match its workspace')
+    user_id = user_id or manager_id or current_workspace.get()
+    if user_id is None:
+        try:
+            user_id = owner_id()
+        except (AccessError, ValueError, RuntimeError):
+            pass  # Offline legacy tests have no configured Telegram owner.
+    with workspace(user_id) if user_id is not None else nullcontext():
+        await _delivery_loop(manager, stop)
+
+
+async def _delivery_loop(manager, stop: asyncio.Event):
     """Sequential send loop. One outbound send at a time, honoring Telegram flood waits."""
     while not stop.is_set():
         try:
+            if hasattr(manager, 'check_access'):
+                manager.check_access()
             if get_setting('paused','false')=='true':
                 await asyncio.sleep(0.6);continue
             # Telegram FLOOD_WAIT is account-wide. Do not attempt other sends until it expires.
@@ -97,6 +118,8 @@ async def delivery_worker(manager, stop: asyncio.Event):
             if time.time()<cooldown:
                 await asyncio.sleep(min(1.0,cooldown-time.time()));continue
             status=await manager.status()
+            if hasattr(manager, 'check_access'):
+                manager.check_access()
             if not status['authorized']:
                 await asyncio.sleep(1);continue
             with connection() as db:
@@ -109,10 +132,28 @@ async def delivery_worker(manager, stop: asyncio.Event):
             if not job:
                 await asyncio.sleep(0.25);continue
             try:
+                if stop.is_set():
+                    raise asyncio.CancelledError
+                if hasattr(manager, 'check_access'):
+                    manager.check_access()
                 await manager.send(job,'text')
                 with connection() as db:
                     db.execute("UPDATE jobs SET status='sent',sent_at=?,error='',message_preview='' WHERE id=?",(time.time(),job['id']))
                     event(db,'forwarded',f"Delivered → {job['destination_id']}",job['route_id'],job['source_id'],job['destination_id'])
+            except asyncio.CancelledError:
+                # Cancellation may race a remote acceptance. Never auto-retry an
+                # uncertain delivery after access is restored.
+                with connection() as db:
+                    db.execute("UPDATE jobs SET status='failed',error=? WHERE id=?",
+                               ('Delivery interrupted; verify destination before retrying', job['id']))
+                raise
+            except PermissionError:
+                # The final permission recheck can fail after remote acceptance.
+                # Keep that ambiguity visible instead of automatically resending.
+                with connection() as db:
+                    db.execute("UPDATE jobs SET status='failed',error=? WHERE id=?",
+                               ('Workspace access stopped; verify destination before retrying', job['id']))
+                return
             except Exception as ex:
                 attempts=job['attempts']+1
                 seconds=getattr(ex,'seconds',None)
@@ -131,6 +172,8 @@ async def delivery_worker(manager, stop: asyncio.Event):
                 logger.warning('Delivery issue (%s) for job %s',type(ex).__name__,job['id'])
         except asyncio.CancelledError:
             break
-        except Exception:
-            logger.exception('Delivery worker unexpected error')
+        except PermissionError:
+            break
+        except Exception as ex:
+            logger.warning('Delivery worker unexpected error (%s)', type(ex).__name__)
             await asyncio.sleep(2)

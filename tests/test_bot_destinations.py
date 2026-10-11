@@ -213,7 +213,8 @@ class BotDestinationTests(unittest.IsolatedAsyncioTestCase):
         # ASGITransport does not start the production lifespan or delivery worker.
         with tempfile.TemporaryDirectory() as temp, \
              patch.object(database, 'DB_PATH', Path(temp) / 'test.sqlite'), \
-             patch('app.main.manager', self.manager):
+             patch('app.main.manager', self.manager), \
+             patch('app.main.is_development_request', return_value=True):
             database.init_db()
             transport = httpx.ASGITransport(app=app, client=('testclient', 123))
             async with httpx.AsyncClient(transport=transport, base_url='http://testserver') as api:
@@ -240,7 +241,8 @@ class BotDestinationTests(unittest.IsolatedAsyncioTestCase):
         self.client.blocked = True
         with tempfile.TemporaryDirectory() as temp, \
              patch.object(database, 'DB_PATH', Path(temp) / 'test.sqlite'), \
-             patch('app.main.manager', self.manager):
+             patch('app.main.manager', self.manager), \
+             patch('app.main.is_development_request', return_value=True):
             database.init_db()
             transport = httpx.ASGITransport(app=app, client=('testclient', 123))
             async with httpx.AsyncClient(transport=transport, base_url='http://testserver') as api:

@@ -28,7 +28,9 @@ def respond(route):
     path = url.path
     method = request.method
     if path.startswith('/api/'):
-        if path == '/api/overview':
+        if path == '/api/me':
+            data = {'user':{'telegram_id':'123456','status':'approved','role':'admin'},'is_admin':True,'capacity':3}
+        elif path == '/api/overview':
             data = OVERVIEW
         elif path == '/api/routes' and method == 'GET':
             data = {'routes':saved}

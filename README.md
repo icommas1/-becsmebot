@@ -51,7 +51,7 @@ In your private `.env` file:
 You can also optionally configure a separate control bot:
 
 - `TELEGRAM_BOT_TOKEN`: your own @BotFather token.
-- `BECS_ALLOWED_TELEGRAM_ID`: **your numeric Telegram user ID**. The control bot ignores other senders, and Mini App authorization accepts only this ID.
+- `BECS_ALLOWED_TELEGRAM_ID`: **the administrator’s numeric Telegram user ID**. Additional users need a private single-use invitation and explicit approval. See [Private Workspaces](PRIVATE_WORKSPACES.md).
 - `BECS_MINI_APP_URL`: an **HTTPS** URL once you explicitly choose to host the app. Until then, Telegram cannot open an externally hosted Mini App. The local browser UI remains available.
 - `BECS_ADMIN_TOKEN`: long random server-side access key for browser/API access when not launched from an authorized Telegram Mini App.
 
@@ -88,12 +88,12 @@ becs/
 
 ## Design decisions and limits
 
-- **Personal V1**: one authenticated personal Telegram account; future multi-account support is an architectural extension, **not currently implemented**.
-- All outgoing messages share a single worker. Telegram's per-account/per-destination rate limits are dynamic, so no millisecond-level speed guarantees are made.
+- **Private workspaces**: one administrator and up to two explicitly approved members, each with an independent database, Telegram session, routes, filters, logs, and delivery worker. See [access flow, migration, verification, and rollback](PRIVATE_WORKSPACES.md).
+- Each account’s outgoing messages share its own sequential worker. Telegram's per-account/per-destination rate limits are dynamic, so no millisecond-level speed guarantees are made.
 - Telegram Bot API access and personal Telegram account access are **separate**; a bot cannot see arbitrary groups/channels without permission.
 - Native forwards preserve original content/media attribution; text mode sends text only, omitting media. Exact / contract-first dedupe can hide repeat alerts about the same token; configure route cooldown carefully.
 - The Mini App is not yet reachable *inside Telegram* because this version has not been deployed to an HTTPS host. Hosted operation, free-tier server accounts and real Telegram connection require your credentials and later setup approval.
-- No on-chain RPC verification, semantic embedding vector store, native iOS binary, multi-account routing or guaranteed uptime is claimed.
+- No on-chain RPC verification, semantic embedding vector store, native iOS binary or guaranteed uptime is claimed.
 - Local account logout / disconnect in V1 **retains** the encrypted session. Stop server access and manage the encrypted session file privately to revoke local storage; Telegram active sessions can be revoked through official Telegram account settings.
 - When paused, incoming messages are not added to the queue; queued sends wait until resumed. No backfill or replay is implemented.
 

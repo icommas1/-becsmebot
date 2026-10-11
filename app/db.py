@@ -1,4 +1,6 @@
-"""Simple single-process SQLite state for personal V1."""
+"""Workspace-isolated SQLite state; the owner's legacy database stays in place."""
+from contextlib import contextmanager
+from contextvars import ContextVar
 import json
 import os
 import sqlite3
@@ -7,10 +9,38 @@ from pathlib import Path
 
 DB_PATH = Path(os.getenv('BECS_DB_PATH', str(Path(__file__).resolve().parents[1] / 'data' / 'becs.sqlite')))
 DB_PATH.parent.mkdir(parents=True, exist_ok=True)
+current_workspace = ContextVar('becs_workspace', default=None)
+
+
+def validated_workspace_id(user_id):
+    value = str(user_id)
+    if not value.isascii() or not value.isdigit() or value.startswith('0') or len(value) > 19:
+        raise ValueError('Invalid workspace identity')
+    return value
+
+
+@contextmanager
+def workspace(user_id):
+    token = current_workspace.set(validated_workspace_id(user_id))
+    try:
+        yield
+    finally:
+        current_workspace.reset(token)
+
+
+def workspace_path(user_id=None):
+    user_id = current_workspace.get() if user_id is None else validated_workspace_id(user_id)
+    # An unset context exists only for legacy owner startup/offline maintenance.
+    # HTTP requests, bot commands and background workers always set it explicitly.
+    if user_id is None or user_id == os.getenv('BECS_ALLOWED_TELEGRAM_ID', '').strip():
+        return Path(DB_PATH)
+    return Path(DB_PATH).parent / 'workspaces' / (validated_workspace_id(user_id) + '.sqlite')
 
 
 def connection():
-    db = sqlite3.connect(DB_PATH, timeout=15)
+    path = workspace_path()
+    path.parent.mkdir(parents=True, exist_ok=True, mode=0o700)
+    db = sqlite3.connect(path, timeout=15)
     db.row_factory = sqlite3.Row
     db.execute('PRAGMA journal_mode=WAL')
     db.execute('PRAGMA busy_timeout=15000')
