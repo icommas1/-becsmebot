@@ -79,6 +79,12 @@ def main():
             expect(page.locator('#recoveryConsentCopy')).to_have_text('Allow '+ADMIN['display_name']+' to securely back up your Telegram session for @becsmebot updates and recovery? A saved session carries your account’s permissions, including reading and sending messages.')
             assert page.locator('#recoveryConsentCopy img').count() == 0
             assert '/api/overview' not in requests
+            if width==390:
+                preview=ROOT/'preview/recovery';preview.mkdir(parents=True,exist_ok=True)
+                adversarial_name=ADMIN['display_name'];ADMIN['display_name']='Telegram user 1001'
+                page.reload();expect(page.locator('#recoveryConsentCopy')).to_contain_text('Allow Telegram user 1001')
+                page.screenshot(path=str(preview/('hosted-consent.png' if args.dist else 'source-consent.png')),full_page=True)
+                ADMIN['display_name']=adversarial_name
             state['fail_save'] = True;page.get_by_role('button', name='No', exact=True).click()
             expect(page.locator('#recoveryConsentError')).to_contain_text('not saved')
             state['fail_save'] = False;page.get_by_role('button', name='No', exact=True).click()
@@ -94,6 +100,9 @@ def main():
             requests.clear();page.goto(ORIGIN+'/recovery');expect(page.locator('#begin')).to_be_visible()
             page.locator('#begin').click();expect(page.locator('#status')).to_contain_text('explicitly confirm');assert page.locator('#passwordForm').is_hidden()
             state['status'] = 'confirmed';expect(page.locator('#passwordForm')).to_be_visible(timeout=7000)
+            if width==390:
+                assert page.locator('#password').input_value()==page.locator('#passwordAgain').input_value()==''
+                page.screenshot(path=str(preview/'secure-page.png'),full_page=True)
             page.locator('#password').fill('SYNTHETIC-ONLY-PASSWORD');page.locator('#passwordAgain').fill('DIFFERENT-PASSWORD');page.locator('#generate').click()
             expect(page.locator('#status')).to_contain_text('same password twice');assert state['exports'] == 0
             page.locator('#passwordAgain').fill('SYNTHETIC-ONLY-PASSWORD');page.locator('#generate').click();expect(page.locator('#download')).to_be_visible()
@@ -120,6 +129,8 @@ def main():
         # A plain external browser receives no access. Signed hash is scrubbed.
         context = browser.new_context(service_workers='block');context.route('**/*', lambda route: route.fulfill(content_type='text/html', body=(ROOT/'static/recovery.html').read_text()))
         page = context.new_page();page.goto(ORIGIN+'/recovery');expect(page.locator('#begin')).to_be_hidden();expect(page.locator('#reopen')).to_be_visible()
+        # A fresh Telegram launch loads a new document; changing only the hash does not rerun scripts.
+        page.close();page=context.new_page()
         page.goto(ORIGIN+'/recovery#tgWebAppData=SYNTHETIC_RECOVERY_SIGNATURE');expect(page.locator('#begin')).to_be_visible();assert page.url == ORIGIN+'/recovery'
         context.close();browser.close()
     print('PASS: synthetic recovery consent and encrypted archive UI (390px, 1440px)')
