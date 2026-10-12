@@ -7,6 +7,7 @@ from unittest.mock import patch
 from urllib.parse import urlencode
 
 import httpx
+from fastapi.middleware.cors import CORSMiddleware
 
 from app.main import app, init_data_status, is_valid_init_data
 
@@ -19,7 +20,7 @@ SIGNED_FIXTURE = (
     'user=%7B%22id%22%3A123456%2C%22first_name%22%3A%22Test+%2B+Owner%22%7D&'
     'hash=a1e2917a6e210e9e9cfe49801ef162f1fe3c3c459c0dc91ced9422338c24da5f'
 )
-ORIGIN = 'https://becs-crypto-forwarding-terminal-59lgyp.v2.appdeploy.ai'
+ORIGIN = 'https://app.example.test'
 
 
 def signed_payload(token, user_id, timestamp=None):
@@ -87,6 +88,11 @@ class TelegramAuthenticationRegression(unittest.TestCase):
 
 class TelegramCorsRegression(unittest.IsolatedAsyncioTestCase):
     async def asyncSetUp(self):
+        cors = next(middleware for middleware in app.user_middleware if middleware.cls is CORSMiddleware)
+        self.origins = patch.object(cors, 'kwargs', {**cors.kwargs, 'allow_origins': [ORIGIN]})
+        self.origins.start()
+        self.stack = patch.object(app, 'middleware_stack', None)
+        self.stack.start()
         self.config = patch.dict('os.environ', {
             'TELEGRAM_BOT_TOKEN': 'test-token-for-regression',
             'BECS_ALLOWED_TELEGRAM_ID': '123456', 'BECS_ADMIN_TOKEN': ''})
@@ -100,6 +106,8 @@ class TelegramCorsRegression(unittest.IsolatedAsyncioTestCase):
     async def asyncTearDown(self):
         await self.client.aclose()
         self.config.stop()
+        self.stack.stop()
+        self.origins.stop()
 
     async def test_allowed_origin_can_read_early_401_reason(self):
         for path in ['/api/overview', '/api/routes', '/api/jobs']:

@@ -14,8 +14,8 @@ from app import backup
 from playwright.sync_api import sync_playwright, expect
 
 ROOT = Path(__file__).resolve().parents[1]
-APP = 'https://becs-crypto-forwarding-terminal-59lgyp.v2.appdeploy.ai'
-API = 'https://becsbot-production.up.railway.app'
+APP = 'https://app.example.test'
+API = 'https://api.example.test'
 SIGNED = 'SYNTHETIC_BACKUP_BROWSER_SIGNATURE'
 OWNER = {'telegram_id': '1001', 'role': 'admin', 'status': 'approved', 'display_name': 'Owner'}
 OVERVIEW = {'stats': dict.fromkeys(['routes','enabled_routes','forwarded','queued','failed','duplicates','contracts','reviews'],0), 'activity': [], 'graph':[0]*12,'cooldown_seconds':0,'paused':False,'telegram':{'authorized':True,'configured':True},'ai_configured':False,'bot_configured':True}

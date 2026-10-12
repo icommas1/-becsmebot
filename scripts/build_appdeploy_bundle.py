@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Build Becs's local-only, deterministic AppDeploy partial update.
+"""Build BecsAutoForward's local-only, deterministic hosted frontend bundle.
 
 This script has no network calls or deployment integration. It creates reviewable
 files and a payload only. Production publication requires separate authorization.
@@ -10,17 +10,15 @@ import argparse
 import hashlib
 import json
 import re
-import shutil
+import sys
 import zipfile
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
-APP_ID = 'becs-crypto-forwarding-terminal-59lgyp'
-APP_NAME = 'Becs Crypto Forwarding Terminal'
-APP_URL = f'https://{APP_ID}.v2.appdeploy.ai'
-API_URL = 'https://becsbot-production.up.railway.app/api'
-BASE_VERSION = '1791693928637'
-LINK_ID = 'link_6acb693aa0e4819184217c94d7f0bde2'
+sys.path.insert(0, str(ROOT))
+from app.config import https_url, validate_bot_username
+
+APP_NAME = 'BecsAutoForward'
 BASE_HASHES = {
     'index.html': '71b0155345c40256f64e067e378706050eb6eb1862fc9e13a07e8130e3e4894d',
     'package.json': '62f8f64749796b56b1e1d9bbf24e7933239437dc62e2ef9996f9170a7449d002',
@@ -69,7 +67,10 @@ def replace_function(source: str, start: str, end: str, replacement: str) -> str
     return before + replacement.rstrip() + '\n' + end + after
 
 
-def hosted_script(source: str) -> str:
+def hosted_script(source: str, *, api_url: str, bot_username: str = '') -> str:
+    api_url = https_url(api_url)
+    bot_username = validate_bot_username(bot_username)
+    bot_name = '@' + bot_username if bot_username else 'your Telegram bot'
     source = replace_once(
         source,
         "if ('serviceWorker' in navigator && location.protocol === 'https:') navigator.serviceWorker.register('/assets/sw.js').catch(()=>{});",
@@ -79,7 +80,7 @@ def hosted_script(source: str) -> str:
                               'function toast(', """async function request(path, options = {}) {
   const signed = tg?.initData || '';
   if (!signed) {
-    const error = new Error('Open Becs from @becsmebot in Telegram, then launch the Mini App again.');
+    const error = new Error('Open Becs from __BOT_NAME__ in Telegram, then launch the Mini App again.');
     error.status = 401;
     error.reason = 'missing_telegram_launch';
     state.me = null;
@@ -99,7 +100,7 @@ def hosted_script(source: str) -> str:
   };
   let response;
   try {
-    response = await fetch('""" + API_URL + """' + path, {
+    response = await fetch(""" + json.dumps(api_url) + """ + path, {
       ...options,
       headers,
       cache: 'no-store',
@@ -115,7 +116,7 @@ def hosted_script(source: str) -> str:
     error.status = response.status;
     error.reason = payload.reason || detail?.reason || '';
     if (error.status === 401) {
-      error.message = 'Your Telegram launch is missing, invalid or expired. Close Becs and reopen it from @becsmebot in Telegram.';
+      error.message = 'Your Telegram launch is missing, invalid or expired. Close Becs and reopen it from __BOT_NAME__ in Telegram.';
       state.me = null;
       state.access = 'unknown';
       state.accessVersion++;
@@ -135,20 +136,20 @@ def hosted_script(source: str) -> str:
   }
   return payload;
 }
-""")
+""".replace('__BOT_NAME__', bot_name))
     source = replace_function(source, 'function gatePage(){', 'function accessPage(){', """function gatePage() {
   return `<section class="access-card">
     <span class="access-symbol">${icon('lock')}</span>
     <p class="eyebrow">BECS / SECURE TELEGRAM ACCESS</p>
     <h1>Open Becs in Telegram</h1>
-    <p>Open @becsmebot in Telegram and launch Becs using the Mini App button.</p>
+    <p>Open __BOT_NAME__ in Telegram and launch Becs using the Mini App button.</p>
     <div class="notice warn" role="alert">${safe(state.apiError || 'A verified Telegram launch is required.')}</div>
     <p>If this launch has expired, close the Mini App and open it again from the bot.</p>
     <button class="button button-primary" data-action="retry-access">${icon('refresh')} Check access</button>
     <div class="access-footer">Invite-only access. Each approved person gets a private workspace.</div>
   </section>`;
 }
-""")
+""".replace('__BOT_NAME__', bot_name))
     source = replace_once(
         source,
         " 'unlock':async()=>{sessionStorage.setItem('becs_key',dom('adminKey').value);await reload();if(state.apiError)toast('Invalid access key or server configuration',true);}\n",
@@ -157,7 +158,7 @@ def hosted_script(source: str) -> str:
     source = replace_once(source, "!['retry-access','unlock'].includes(target.dataset.action)",
                           "target.dataset.action!=='retry-access'")
     source = replace_once(source, 'Local or self-hosted; no deployment requested',
-                          'Private workspace API hosted on Railway')
+                          'Private workspace API on your configured server')
     for forbidden in FORBIDDEN_HOSTED:
         if forbidden.lower() in source.lower():
             raise ValueError(f'Forbidden hosted behavior remains: {forbidden}')
@@ -233,7 +234,9 @@ def readable_css(source: str) -> str:
     return '\n'.join(result) + '\n'
 
 
-def production_tests() -> list[dict]:
+def production_tests(bot_username: str = '') -> list[dict]:
+    bot_username = validate_bot_username(bot_username)
+    bot_name = '@' + bot_username if bot_username else 'your Telegram bot'
     guardrail = (
         'Use a fresh unsigned normal-browser session only. Do not enter credentials, '
         'phone numbers, login codes, passwords, invite tokens or real signed Telegram data. '
@@ -249,7 +252,7 @@ def production_tests() -> list[dict]:
             'description': 'Unauthenticated visitors remain outside private workspaces, including after a deliberate access retry.',
             'steps': [guardrail, 'Open the app without a Telegram launch payload.',
                       'Choose Check access once.',
-                      'Verify the guidance to reopen the Mini App from @becsmebot and inspect the unavailable workspace navigation.'],
+                      f'Verify the guidance to reopen the Mini App from {bot_name} and inspect the unavailable workspace navigation.'],
             'expected': 'The Telegram-only access screen remains visible; no routes, user list, invitation controls or sign-in fields are exposed, and no API call is made without signed launch data.',
         },
         {
@@ -279,12 +282,26 @@ def safe_relative(path: str) -> bool:
     return not candidate.is_absolute() and '..' not in candidate.parts and '\\' not in path
 
 
-def build_changes(source_root: Path = ROOT) -> tuple[dict[str, str], dict]:
+def build_changes(source_root: Path = ROOT, *, api_url: str, app_url: str,
+                  bot_username: str = '', app_id: str = '', link_id: str = '',
+                  app_name: str = APP_NAME, base_version: str = '') -> tuple[dict[str, str], dict]:
+    api_url = https_url(api_url)
+    app_url = https_url(app_url, origin_only=True)
+    bot_username = validate_bot_username(bot_username)
+    for name, value in [('app_id', app_id), ('link_id', link_id)]:
+        if value and not re.fullmatch(r'[A-Za-z0-9_-]{1,128}', value):
+            raise ValueError(f'Invalid explicit {name}.')
+    if app_id and not base_version:
+        raise ValueError('Existing app updates require an explicit base version.')
+    if base_version and (not app_id or not re.fullmatch(r'[0-9]{1,32}', base_version)):
+        raise ValueError('A numeric base version may be specified only for an explicit app ID.')
+    if not app_name.strip() or len(app_name) > 80 or any(ord(char) < 32 for char in app_name):
+        raise ValueError('App name must contain 1 to 80 printable characters.')
     static = source_root / 'static'
     originals = {name: (static / name).read_text() for name in (
         'index.html', 'app.js', 'styles.css', 'icon.svg', 'manifest.webmanifest',
     )}
-    js = hosted_script(originals['app.js'])
+    js = hosted_script(originals['app.js'], api_url=api_url, bot_username=bot_username)
     css = readable_css(originals['styles.css'])
     icon = originals['icon.svg']
     asset_map = {}
@@ -311,7 +328,7 @@ def build_changes(source_root: Path = ROOT) -> tuple[dict[str, str], dict]:
     # Preserve text and elements; break adjacent tags into readable source lines.
     index = re.sub(r'>\s*<', '>\n<', index)
     changes['index.html'] = index.rstrip() + '\n'
-    changes['tests/tests.json'] = serialized(production_tests())
+    changes['tests/tests.json'] = serialized(production_tests(bot_username))
     changes = dict(sorted(changes.items()))
     for path in changes:
         if not safe_relative(path):
@@ -319,36 +336,47 @@ def build_changes(source_root: Path = ROOT) -> tuple[dict[str, str], dict]:
         if path in BASE_HASHES and digest(changes[path]) == BASE_HASHES[path]:
             raise ValueError(f'Unchanged file would be submitted: {path}')
     info = {
-        'base_version': BASE_VERSION,
-        'base_version_label': 'v3',
-        'app_id': APP_ID,
-        'app_url': APP_URL,
-        'api_url': API_URL,
+        'base_version': base_version or None,
+        'deployment_mode': 'update' if app_id else 'create',
+        'app_id': app_id or None,
+        'link_id': link_id or None,
+        'app_name': app_name,
+        'app_url': app_url,
+        'api_url': api_url,
+        'bot_username': bot_username or None,
         'publication_performed': False,
         'assets': asset_map,
         'source_sha256': {f'static/{name}': digest(content) for name, content in sorted(originals.items())},
         'changed_sha256': {path: digest(content) for path, content in changes.items()},
         'base_sha256': BASE_HASHES,
         'unchanged_scaffold': list(BUILD_BASE_PATHS),
-        'service_worker': 'No registration in hosted script; preserved v3 worker file is dormant.',
+        'service_worker': 'No registration in hosted script; any explicitly supplied snapshot worker remains dormant.',
     }
     return changes, info
 
 
-def deployment_payload(changes: dict[str, str]) -> dict:
-    return {
-        'link_id': LINK_ID,
-        'app_id': APP_ID,
-        'app_name': APP_NAME,
+def deployment_payload(changes: dict[str, str], info: dict,
+                       build_base: dict[str, bytes] | None = None) -> dict:
+    files = changes
+    if not info['app_id']:
+        if build_base is None:
+            raise ValueError('New frontend payloads require a verified build scaffold.')
+        files = {name: build_base[name].decode() for name in BUILD_BASE_PATHS} | changes
+    payload = {
+        'app_name': info['app_name'],
         'app_type': 'frontend-only',
         'frontend_template': 'html-static',
         'model': 'chat',
-        'intent': 'feature',
+        'intent': 'feature' if info['app_id'] else 'initial app deploy',
         'initiator': 'user',
-        'type': 'feature',
-        'description': 'Private workspace Users and invite management with Telegram-only hosted access and the existing Railway API.',
-        'files': [{'filename': path, 'content': content} for path, content in changes.items()],
+        'type': 'feature' if info['app_id'] else 'create',
+        'description': 'Private workspace Users and invite management with Telegram-only hosted access and the explicitly configured API.',
+        'files': [{'filename': path, 'content': content} for path, content in sorted(files.items())],
     }
+    for key in ('app_id', 'link_id'):
+        if info[key]:
+            payload[key] = info[key]
+    return payload
 
 
 def verified_base(base: Path, full_snapshot: bool) -> dict[str, bytes]:
@@ -360,7 +388,7 @@ def verified_base(base: Path, full_snapshot: bool) -> dict[str, bytes]:
             raise ValueError(f'Missing or unsafe pinned base file: {name}')
         content = file.read_bytes()
         if digest(content) != expected_hash:
-            raise ValueError(f'Pinned v3 snapshot changed: {name}; reread the live snapshot before release.')
+            raise ValueError(f'Pinned build template changed: {name}; review the template before release.')
         result[name] = content
     actual = {str(file.relative_to(base)) for file in base.rglob('*') if file.is_file()}
     if actual != set(expected):
@@ -374,7 +402,10 @@ def write_file(root: Path, name: str, content: str | bytes):
     target.write_bytes(content.encode() if isinstance(content, str) else content)
 
 
-def build_bundle(output: Path, source_root: Path = ROOT, snapshot: Path | None = None) -> dict:
+def build_bundle(output: Path, source_root: Path = ROOT, snapshot: Path | None = None,
+                 *, api_url: str, app_url: str, bot_username: str = '',
+                 app_id: str = '', link_id: str = '', app_name: str = APP_NAME,
+                 base_version: str = '') -> dict:
     output = output.resolve()
     repo = source_root.resolve()
     if output == repo or output.is_relative_to(repo) or repo.is_relative_to(output):
@@ -382,7 +413,9 @@ def build_bundle(output: Path, source_root: Path = ROOT, snapshot: Path | None =
     if output.exists() and any(output.iterdir()):
         raise ValueError('Output directory must be empty; choose a new directory for each build.')
     # Verify everything before writing, and never delete an existing directory.
-    changes, info = build_changes(source_root)
+    changes, info = build_changes(source_root, api_url=api_url, app_url=app_url,
+                                  bot_username=bot_username, app_id=app_id,
+                                  link_id=link_id, app_name=app_name, base_version=base_version)
     base = verified_base(snapshot or source_root / 'scripts/appdeploy_base', snapshot is not None)
     info['full_snapshot_preserved'] = snapshot is not None
     output.mkdir(parents=True, exist_ok=True)
@@ -391,11 +424,11 @@ def build_bundle(output: Path, source_root: Path = ROOT, snapshot: Path | None =
     for path, content in changes.items():
         write_file(output / 'changed', path, content)
         write_file(output / 'project', path, content)
-    write_file(output, 'deployment_payload.json', serialized(deployment_payload(changes)))
+    payload = deployment_payload(changes, info, base)
+    info['payload_sha256'] = {entry['filename']: digest(entry['content']) for entry in payload['files']}
+    write_file(output, 'deployment_payload.json', serialized(payload))
     write_file(output, 'release_manifest.json', serialized(info))
-    release_doc = source_root / 'APPDEPLOY_RELEASE.md'
-    if release_doc.exists():
-        shutil.copyfile(release_doc, output / 'APPDEPLOY_RELEASE.md')
+    write_file(output, 'BUNDLE_GUIDE.txt', bundle_guide(info))
     zip_path = output.with_suffix('.zip')
     if zip_path.exists():
         raise ValueError(f'Archive already exists: {zip_path}')
@@ -409,13 +442,48 @@ def build_bundle(output: Path, source_root: Path = ROOT, snapshot: Path | None =
     return info
 
 
+def bundle_guide(info: dict) -> str:
+    mode = ('Complete independent frontend, including the verified build scaffold.'
+            if info['deployment_mode'] == 'create'
+            else 'Partial update for the explicitly selected app; verify its current source and base version before publication.')
+    return f'''{info['app_name']} hosted frontend bundle
+
+{mode}
+Frontend origin: {info['app_url']}
+Backend API: {info['api_url']}
+Bot username: {info['bot_username'] or '(unspecified; generic bot launch guidance)'}
+App ID: {info['app_id'] or '(none; prepare a new independent app)'}
+Account link: {info['link_id'] or '(none; choose the intended account explicitly before publication)'}
+Base version: {info['base_version'] or '(none; independent new frontend)'}
+
+This bundle is local preparation only. Nothing was deployed or published.
+The project directory is a complete Vite project: npm install, then npm run build.
+The generated payload and manifest record the files and their checksums.
+For new apps, the payload includes the build scaffold; updates include only changed files.
+Choose the actual new hosted frontend URL before building a production bundle.
+On the independently hosted backend, set BECS_FRONTEND_ORIGINS={info['app_url']}
+and BECS_MINI_APP_URL={info['app_url']}. Set BECS_TELEGRAM_BOT_USERNAME to this project's bot.
+The backend continues to verify Telegram signatures, ownership and workspace access.
+'''
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--output', type=Path, required=True, help='New bundle directory outside this repository')
-    parser.add_argument('--snapshot', type=Path, help='Optional exact read-only AppDeploy v3 snapshot for a complete source merge')
+    parser.add_argument('--snapshot', type=Path, help='Optional exact read-only pinned source snapshot for a complete source merge')
+    parser.add_argument('--api-url', required=True, help='Explicit HTTPS backend API base URL, normally ending in /api')
+    parser.add_argument('--app-url', required=True, help='Explicit HTTPS frontend origin')
+    parser.add_argument('--bot-username', default='', help='Optional Telegram bot username for launch guidance')
+    parser.add_argument('--app-name', default=APP_NAME, help='Independent project name')
+    parser.add_argument('--app-id', default='', help='Optional explicitly chosen existing AppDeploy app ID')
+    parser.add_argument('--link-id', default='', help='Optional explicitly chosen existing AppDeploy link ID')
+    parser.add_argument('--base-version', default='', help='Explicit numeric reviewed base version, required with --app-id')
     args = parser.parse_args()
-    info = build_bundle(args.output, snapshot=args.snapshot)
-    print(f'Prepared {len(info["changed_sha256"])} changed files for {APP_ID}; no deployment performed.')
+    info = build_bundle(args.output, snapshot=args.snapshot, api_url=args.api_url,
+                        app_url=args.app_url, bot_username=args.bot_username,
+                        app_id=args.app_id, link_id=args.link_id, app_name=args.app_name,
+                        base_version=args.base_version)
+    print(f'Prepared {len(info["changed_sha256"])} changed files for {info["app_name"]}; no deployment performed.')
     print(f'Payload: {args.output / "deployment_payload.json"}')
     print(f'Build directory: {args.output / "project"}')
     print(f'Archive: {args.output.with_suffix(".zip")}')

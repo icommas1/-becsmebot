@@ -19,8 +19,8 @@ from urllib.parse import urlsplit
 
 from playwright.sync_api import expect, sync_playwright
 
-APP_ORIGIN = 'https://becs-crypto-forwarding-terminal-59lgyp.v2.appdeploy.ai'
-API_ORIGIN = 'https://becsbot-production.up.railway.app'
+APP_ORIGIN = 'https://app.example.test'
+API_ORIGIN = 'https://api.example.test'
 SIGNED = 'query_id=SYNTHETIC_OFFLINE_ONLY&auth_date=1234567890&hash=NOT_A_REAL_SIGNATURE'
 TOKEN = 'SYNTHETIC_OFFLINE_INVITE_ONLY'
 OWNER = {'telegram_id': '1001', 'display_name': 'Owner', 'status': 'approved', 'role': 'admin'}

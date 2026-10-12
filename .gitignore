@@ -4,3 +4,12 @@ __pycache__/
 data/
 *.pyc
 node_modules/
+.venv/
+venv/
+*.sqlite
+*.sqlite-*
+*.session
+*.session-*
+preview/
+dist/
+compact-filters-preview.png

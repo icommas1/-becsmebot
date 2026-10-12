@@ -1,0 +1,207 @@
+{
+  "schema_version": 1,
+  "inspected_date_utc": "2026-10-12",
+  "source": {
+    "repository": "icommas1/BecsBot",
+    "url": "https://github.com/icommas1/BecsBot.git",
+    "visibility": "PRIVATE",
+    "branch_refs_reviewed": 87,
+    "symbolic_origin_head_excluded": true,
+    "refs_modified": false
+  },
+  "account_repository_inventory": [
+    {
+      "name": "dot-widget",
+      "visibility": "PRIVATE"
+    },
+    {
+      "name": "BecsBot",
+      "visibility": "PRIVATE"
+    },
+    {
+      "name": "-becsmebot",
+      "visibility": "PUBLIC",
+      "empty": true
+    },
+    {
+      "name": "bexs",
+      "visibility": "PRIVATE"
+    },
+    {
+      "name": "BecsSuperAgent",
+      "visibility": "PUBLIC"
+    }
+  ],
+  "target": {
+    "repository": "icommas1/BecsAutoForward",
+    "visibility": "PRIVATE",
+    "default_branch": "main",
+    "publication_status": "pending",
+    "repository_creation_status": "blocked_by_github_integration",
+    "source_refs_untouched": true
+  },
+  "baseline": {
+    "source_ref": "refs/heads/becs-forwarding-v1",
+    "source_sha": "34acedd607e5648153a47cfa591e0e979191c164",
+    "selection_basis": "Git ancestry and Python forwarding code; README was not read."
+  },
+  "new_main": {
+    "ref": "refs/heads/main",
+    "base_sha": "34acedd607e5648153a47cfa591e0e979191c164",
+    "extraction_commit_sha": null,
+    "status": "pending_extraction_commit"
+  },
+  "forwarding_branch_count": 13,
+  "forwarding_branches": [
+    {
+      "name": "becs-forwarding-v1",
+      "source_ref": "refs/heads/becs-forwarding-v1",
+      "source_sha": "34acedd607e5648153a47cfa591e0e979191c164",
+      "target_ref": "refs/heads/becs-forwarding-v1",
+      "status": "baseline",
+      "integrated_in_baseline": true,
+      "baseline_only_commit_count": 0,
+      "branch_only_commit_count": 0
+    },
+    {
+      "name": "becs-multi-account-isolation",
+      "source_ref": "refs/heads/becs-multi-account-isolation",
+      "source_sha": "2cc7c0ba623028b54cc61fab471d91742dfac74b",
+      "target_ref": "refs/heads/becs-multi-account-isolation",
+      "status": "historical_divergent_preserved",
+      "integrated_in_baseline": false,
+      "baseline_only_commit_count": 94,
+      "branch_only_commit_count": 1
+    },
+    {
+      "name": "feature/becs-chat-picker",
+      "source_ref": "refs/heads/feature/becs-chat-picker",
+      "source_sha": "9783e24120788b335334e1145296d8037173e07e",
+      "target_ref": "refs/heads/feature/becs-chat-picker",
+      "status": "historical_integrated",
+      "integrated_in_baseline": true,
+      "baseline_only_commit_count": 103,
+      "branch_only_commit_count": 0
+    },
+    {
+      "name": "feature/becs-chat-search-fix",
+      "source_ref": "refs/heads/feature/becs-chat-search-fix",
+      "source_sha": "ba3dbf76ad9397a5e454229244b76c0014c0bec7",
+      "target_ref": "refs/heads/feature/becs-chat-search-fix",
+      "status": "historical_integrated",
+      "integrated_in_baseline": true,
+      "baseline_only_commit_count": 100,
+      "branch_only_commit_count": 0
+    },
+    {
+      "name": "feature/becs-dashboard-session-5m",
+      "source_ref": "refs/heads/feature/becs-dashboard-session-5m",
+      "source_sha": "465f5be49fc0250c09aef6a2aa6ba8d96d4025ca",
+      "target_ref": "refs/heads/feature/becs-dashboard-session-5m",
+      "status": "historical_integrated",
+      "integrated_in_baseline": true,
+      "baseline_only_commit_count": 96,
+      "branch_only_commit_count": 0
+    },
+    {
+      "name": "feature/becs-owner-status",
+      "source_ref": "refs/heads/feature/becs-owner-status",
+      "source_sha": "a8a73e16a4e2a946d4a56ca1c80ff0a5f61abe4e",
+      "target_ref": "refs/heads/feature/becs-owner-status",
+      "status": "historical_integrated",
+      "integrated_in_baseline": true,
+      "baseline_only_commit_count": 25,
+      "branch_only_commit_count": 0
+    },
+    {
+      "name": "feature/becs-smart-filters-v2",
+      "source_ref": "refs/heads/feature/becs-smart-filters-v2",
+      "source_sha": "409952756a0f06c56da85defef36960b8e31e57b",
+      "target_ref": "refs/heads/feature/becs-smart-filters-v2",
+      "status": "historical_integrated",
+      "integrated_in_baseline": true,
+      "baseline_only_commit_count": 98,
+      "branch_only_commit_count": 0
+    },
+    {
+      "name": "feature/disable-sensitive-recovery",
+      "source_ref": "refs/heads/feature/disable-sensitive-recovery",
+      "source_sha": "29382e7aea025f2b21c4724628313e153ae6ab75",
+      "target_ref": "refs/heads/feature/disable-sensitive-recovery",
+      "status": "historical_integrated",
+      "integrated_in_baseline": true,
+      "baseline_only_commit_count": 4,
+      "branch_only_commit_count": 0
+    },
+    {
+      "name": "feature/private-invites-workspaces",
+      "source_ref": "refs/heads/feature/private-invites-workspaces",
+      "source_sha": "d5ce9b49b535529f401f736ff674bae8cf4c6c76",
+      "target_ref": "refs/heads/feature/private-invites-workspaces",
+      "status": "historical_integrated",
+      "integrated_in_baseline": true,
+      "baseline_only_commit_count": 8,
+      "branch_only_commit_count": 0
+    },
+    {
+      "name": "feature/recovery-consent-encrypted-v1",
+      "source_ref": "refs/heads/feature/recovery-consent-encrypted-v1",
+      "source_sha": "a991dbcf0362a10ec7f4fde93049a7c41cf22fdd",
+      "target_ref": "refs/heads/feature/recovery-consent-encrypted-v1",
+      "status": "historical_integrated",
+      "integrated_in_baseline": true,
+      "baseline_only_commit_count": 5,
+      "branch_only_commit_count": 0
+    },
+    {
+      "name": "fix/becs-bot-destinations",
+      "source_ref": "refs/heads/fix/becs-bot-destinations",
+      "source_sha": "582ece0209949728284e19316602a9f5158c2e97",
+      "target_ref": "refs/heads/fix/becs-bot-destinations",
+      "status": "historical_integrated",
+      "integrated_in_baseline": true,
+      "baseline_only_commit_count": 94,
+      "branch_only_commit_count": 0
+    },
+    {
+      "name": "simplify/becs-forward-only-v1",
+      "source_ref": "refs/heads/simplify/becs-forward-only-v1",
+      "source_sha": "834cee7f9938570e4089d894e792e85b872b6318",
+      "target_ref": "refs/heads/simplify/becs-forward-only-v1",
+      "status": "historical_integrated",
+      "integrated_in_baseline": true,
+      "baseline_only_commit_count": 58,
+      "branch_only_commit_count": 0
+    },
+    {
+      "name": "test/becs-isolated-filters-20261010",
+      "source_ref": "refs/heads/test/becs-isolated-filters-20261010",
+      "source_sha": "eafadd38618712a38b0ed5bba9d75e778fa235b3",
+      "target_ref": "refs/heads/test/becs-isolated-filters-20261010",
+      "status": "historical_integrated",
+      "integrated_in_baseline": true,
+      "baseline_only_commit_count": 30,
+      "branch_only_commit_count": 0
+    }
+  ],
+  "historical_decisions": [
+    {
+      "branch": "becs-multi-account-isolation",
+      "status": "preserve_only",
+      "reason": "One divergent commit adds unused app/accounts.py scaffolding. Current access/runtime/per-user SQLite isolation supersedes it; merging it would not add an implemented feature."
+    },
+    {
+      "branch": "feature/becs-dashboard-session-5m",
+      "status": "preserve_reverted_history",
+      "revert_commit_sha": "37c69e2576747b735fd2ade10ebf0395a4fb8f02",
+      "reason": "Five-minute dashboard lock was explicitly reverted at the owner's request and is not reactivated."
+    },
+    {
+      "branch": "simplify/becs-forward-only-v1",
+      "status": "preserve_superseded_history",
+      "replacement_commit_sha": "dd5478e27c974e6f2add385b34c0641f8e4c3852",
+      "reason": "Native full-message forwarding was superseded by standalone contract-address-only delivery; historical branch preservation does not restore full-message forwarding."
+    }
+  ],
+  "validation_results": null
+}

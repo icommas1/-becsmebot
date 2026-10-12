@@ -22,7 +22,7 @@ OVERVIEW = {'stats': dict.fromkeys(['routes','enabled_routes','forwarded','queue
 def main():
     parser=argparse.ArgumentParser();parser.add_argument('--dist', type=Path);args=parser.parse_args()
     app_origin='https://app.test' if args.dist else ORIGIN
-    api_origin='https://becsbot-production.up.railway.app' if args.dist else ORIGIN
+    api_origin='https://api.example.test' if args.dist else ORIGIN
     with sync_playwright() as p:
         browser = p.chromium.launch(executable_path=os.environ.get('BECS_CHROMIUM_EXECUTABLE') or None)
         for width in (390, 1440):

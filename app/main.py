@@ -30,6 +30,7 @@ from .runtime import RuntimeRegistry
 from .engine import decide, dedup_fingerprint
 from .service import get_routes, enqueue, delivery_worker
 from .telegram_client import PersonalTelegram, telegram_bot_poll
+from .config import load_config, telegram_bot_username
 
 logging.basicConfig(level=os.getenv('BECS_LOG_LEVEL','INFO'))
 # HTTP client request logs can contain Telegram bot tokens in URL paths.
@@ -37,6 +38,7 @@ logging.getLogger('httpx').setLevel(logging.WARNING)
 ROOT=Path(__file__).resolve().parents[1]
 STATIC=ROOT / 'static'
 runtime = RuntimeRegistry()
+config = load_config()
 
 
 class WorkspaceManager:
@@ -149,7 +151,7 @@ async def lifespan(app: FastAPI):
         await runtime.shutdown()
 
 
-app=FastAPI(title='Becs Crypto Forwarding',version='1.1.0',lifespan=lifespan,docs_url=None,redoc_url=None)
+app=FastAPI(title=config.project_name,version='1.1.0',lifespan=lifespan,docs_url=None,redoc_url=None)
 
 
 def denial(status, detail, reason):
@@ -224,11 +226,11 @@ async def protect_api(request: Request, call_next):
     return response
 
 # Register CORS last so it wraps authentication, including early 401 responses.
-# Only the official Becs Mini App origin may read the owner diagnostics.
+# Explicitly configured Mini App origins may read the owner diagnostics.
 # Authorization still requires Telegram's signed initData on every request.
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=['https://becs-crypto-forwarding-terminal-59lgyp.v2.appdeploy.ai'],
+    allow_origins=list(config.frontend_origins),
     allow_credentials=False,
     allow_methods=['GET','POST','PUT','DELETE'],
     allow_headers=['X-Telegram-Init-Data','Accept','Content-Type'],
@@ -272,12 +274,20 @@ def users(request: Request):
 
 def invite_response(invite):
     # The bearer token is returned once; never put it in logs or persisted frontend state.
-    return {'id': invite['id'], 'url': 'https://t.me/becsmebot?start=invite_' + invite['token'],
+    return {'id': invite['id'], 'url': 'https://t.me/' + configured_bot_username() + '?start=invite_' + invite['token'],
             'expires_at': invite['expires_at']}
+
+
+def configured_bot_username():
+    try:
+        return telegram_bot_username(required=True)
+    except ValueError:
+        raise HTTPException(503, 'Configure BECS_TELEGRAM_BOT_USERNAME before creating invitations.') from None
 
 
 @app.post('/api/admin/invites', status_code=201)
 def invite_user(request: Request):
+    configured_bot_username()
     return invite_response(access.create_invite(request.state.identity['user_id']))
 
 
@@ -325,6 +335,7 @@ def reject_user(user_id: str, request: Request):
 
 @app.post('/api/admin/users/{user_id}/reinvite', status_code=201)
 def reinvite_user(user_id: str, request: Request):
+    configured_bot_username()
     return invite_response(access.reinvite_user(request.state.identity['user_id'], user_id))
 
 @app.get('/api/admin/status')

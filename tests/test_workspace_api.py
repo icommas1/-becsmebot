@@ -136,6 +136,7 @@ class WorkspaceAPIRegression(unittest.IsolatedAsyncioTestCase):
         self.root = Path(self.directory.name)
         config = patch.dict(os.environ, {
             'TELEGRAM_BOT_TOKEN': BOT_TOKEN,
+            'BECS_TELEGRAM_BOT_USERNAME': 'offline_test_bot',
             'BECS_ALLOWED_TELEGRAM_ID': OWNER,
             'BECS_ADMIN_TOKEN': '', 'BECS_DEV_MODE': '0',
             'TELEGRAM_API_ID': '', 'TELEGRAM_API_HASH': '',
@@ -348,7 +349,7 @@ class WorkspaceAPIRegression(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(response.status_code, 201, response.text)
         invitation = response.json()
         self.assertIsInstance(invitation['id'], str)
-        self.assertTrue(invitation['url'].startswith('https://t.me/becsmebot?start=invite_'))
+        self.assertTrue(invitation['url'].startswith('https://t.me/offline_test_bot?start=invite_'))
         token = invitation['url'].split('invite_', 1)[1]
         listed = await self.request('GET', '/api/admin/invites')
         self.assertEqual(listed.status_code, 200, listed.text)
