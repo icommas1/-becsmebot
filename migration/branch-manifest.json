@@ -48,8 +48,8 @@
   "new_main": {
     "ref": "refs/heads/main",
     "base_sha": "34acedd607e5648153a47cfa591e0e979191c164",
-    "extraction_commit_sha": null,
-    "status": "pending_extraction_commit"
+    "extraction_commit_sha": "01854ae3c504c98396fc1ebd1761554737869d37",
+    "status": "prepared_and_validated_locally"
   },
   "forwarding_branch_count": 13,
   "forwarding_branches": [
@@ -203,5 +203,48 @@
       "reason": "Native full-message forwarding was superseded by standalone contract-address-only delivery; historical branch preservation does not restore full-message forwarding."
     }
   ],
-  "validation_results": null
+  "validation_results": {
+    "tested_extraction_commit_sha": "01854ae3c504c98396fc1ebd1761554737869d37",
+    "python": "3.12.14",
+    "node": "24.19.0",
+    "pytest": {
+      "passed": 233,
+      "subtests_passed": 215,
+      "command": "python -m pytest -q"
+    },
+    "syntax": {
+      "python_compileall": true,
+      "static_app_js": true,
+      "static_sw_js": true
+    },
+    "hosted_frontend_build": {
+      "passed": true,
+      "vite": "6.4.4",
+      "origins": "synthetic test origins only"
+    },
+    "browser_checks": [
+      "browser_bot_destination.py source mobile",
+      "browser_compact_filters.py source mobile",
+      "browser_users.py source mobile and desktop",
+      "browser_backup.py source mobile and desktop",
+      "browser_backup.py built mobile and desktop",
+      "browser_appdeploy.py built mobile and desktop"
+    ],
+    "browser_network": "Every request intercepted or aborted; synthetic identities only",
+    "entrypoint_smoke": {
+      "startup": true,
+      "health": true,
+      "static_assets": true,
+      "protected_api": true,
+      "sensitive_recovery_disabled": true,
+      "graceful_shutdown_completed": true,
+      "temporary_databases_retained": true
+    },
+    "preserved_branch_heads_verified": 13,
+    "original_checkout_clean": true,
+    "readme_used": false,
+    "github_ci_run": false,
+    "production_deployment": false,
+    "real_telegram_delivery_verified": false
+  }
 }

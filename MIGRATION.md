@@ -18,7 +18,7 @@ The intended new repository is **`icommas1/BecsAutoForward` (PRIVATE)** with def
 
 Reviewed **87 concrete BecsBot branch refs**, excluding the symbolic `origin/HEAD` alias. **13 forwarding branches** contain the Python forwarding implementation. Their exact source commits are recorded below and in [the machine-readable manifest](migration/branch-manifest.json).
 
-The baseline is `becs-forwarding-v1` at **`34acedd607e5648153a47cfa591e0e979191c164`**. Its current tree is a standalone Python/FastAPI Telegram forwarding project; the unrelated market-terminal branch heads are excluded. New `main` starts from this baseline; its extraction commit is pending and must be recorded after the separation changes are committed. Historical refs retain their original commits and names.
+The baseline is `becs-forwarding-v1` at **`34acedd607e5648153a47cfa591e0e979191c164`**. Its current tree is a standalone Python/FastAPI Telegram forwarding project; the unrelated market-terminal branch heads are excluded. New `main` starts from this baseline; its implementation extraction commit is `01854ae3c504c98396fc1ebd1761554737869d37`. Historical refs retain their original commits and names.
 
 | Source branch | Exact source commit | Transfer status |
 |---|---|---|
@@ -42,4 +42,23 @@ The five-minute dashboard lock was intentionally reverted at the owner's request
 
 ## Publication and verification
 
-Publication is pending because the GitHub integration could not create the intended repository. Keep the BecsBot refs intact until the new repository is available and its transferred refs are verified. Record the final `main` extraction commit and actual verification results after completion; this document makes no test-pass or deployment claim.
+Publication is pending: both GitHub GraphQL repository creation and REST `POST /user/repos` were rejected as inaccessible to the integration. An existing empty repository, `icommas1/-becsmebot`, was created on 2026-10-11 and may be the intended destination, but it is public and has not been selected by the owner. No code or branch history has been published there. Confirm the private destination before transferring the private source history. BecsBot source refs remain intact.
+
+The implementation extraction commit above passed these local checks:
+
+- 233 pytest tests and 215 subtests on Python 3.12.14.
+- Python compilation, browser JavaScript syntax, and Git whitespace checks.
+- Independent hosted frontend build with Vite 6.4.4 and Node 24.19.0, using synthetic origins.
+- Four source UI browser runs and two built UI browser runs, covering mobile and desktop workflows. All network requests were intercepted or aborted; identities were synthetic.
+- Uvicorn startup, health and static serving, API authentication, disabled sensitive recovery, completed graceful shutdown, and retained temporary databases.
+- All 13 preserved branch heads match their original source commits; original checkout is clean and README is unchanged.
+
+The new CI is configured for main and pull requests, with Python 3.11/3.12 backend checks and mocked browser checks. GitHub CI and real Telegram delivery have not run for the destination. No production service, credential, database, session or deployment was moved.
+
+## Transfer the prepared project
+
+The local repository contains only new `main` and the 13 preserved forwarding branch refs. The Git bundle includes their complete reachable history, including ancestors shared with earlier BecsBot work. Current main contains only the forwarding project.
+
+After the intended private destination exists and is available to the GitHub connection, verify it is empty, then add its URL as `origin` and push with `git push --atomic --all origin`. Use no force option and do not delete source branches. If the destination is populated, compare it before any push. Verify all destination branch heads against the manifest and new main, then check CI.
+
+`BecsAutoForward-source.zip` is the standalone source snapshot. `BecsAutoForward.bundle` carries main and all 13 original forwarding branches. For an offline reconstruction, run `git clone BecsAutoForward.bundle BecsAutoForward`, then create local branch refs from its imported `origin/*` refs before pushing all branches.
