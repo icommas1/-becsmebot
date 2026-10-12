@@ -2,7 +2,7 @@
 
 Inspected on 2026-10-12 using repository inventory, Git refs and ancestry, and implementation code. No GitHub README was read or used as a source.
 
-The intended new repository is **`icommas1/BecsAutoForward` (PRIVATE)** with default branch `main`. GitHub repository creation is blocked by the connected integration; publication remains pending. Source repository branches are untouched. Local extraction does not establish that the new GitHub repository exists or that migration has been published.
+The owner-selected destination is **`icommas1/-becsmebot` (PUBLIC)** with default branch `main`. The owner selected this existing repository after being informed that it is public. Its empty state and push access were verified. The integration could not change visibility to private. Publication is being prepared for this selected destination; source repository branches are untouched.
 
 ## Account repositories inspected
 
@@ -42,7 +42,7 @@ The five-minute dashboard lock was intentionally reverted at the owner's request
 
 ## Publication and verification
 
-Publication is pending: both GitHub GraphQL repository creation and REST `POST /user/repos` were rejected as inaccessible to the integration. An existing empty repository, `icommas1/-becsmebot`, was created on 2026-10-11 and may be the intended destination, but it is public and has not been selected by the owner. No code or branch history has been published there. Confirm the private destination before transferring the private source history. BecsBot source refs remain intact.
+Destination selection is complete: the owner requested `https://github.com/icommas1/-becsmebot`. The integration permits repository push access but rejects administration changes, including changing visibility. Publication to the selected public repository follows a committed-credential check. BecsBot source refs remain intact.
 
 The implementation extraction commit above passed these local checks:
 
@@ -59,6 +59,6 @@ The new CI is configured for main and pull requests, with Python 3.11/3.12 backe
 
 The local repository contains only new `main` and the 13 preserved forwarding branch refs. The Git bundle includes their complete reachable history, including ancestors shared with earlier BecsBot work. Current main contains only the forwarding project.
 
-After the intended private destination exists and is available to the GitHub connection, verify it is empty, then add its URL as `origin` and push with `git push --atomic --all origin`. Use no force option and do not delete source branches. If the destination is populated, compare it before any push. Verify all destination branch heads against the manifest and new main, then check CI.
+The selected destination was verified empty. Its URL is `https://github.com/icommas1/-becsmebot.git`; add this as `origin` and push with `git push --atomic --all origin`. Use no force option and do not delete source branches. If the destination is populated, compare it before any push. Verify all destination branch heads against the manifest and new main, then check CI.
 
 `BecsAutoForward-source.zip` is the standalone source snapshot. `BecsAutoForward.bundle` carries main and all 13 original forwarding branches. For an offline reconstruction, run `git clone BecsAutoForward.bundle BecsAutoForward`, then create local branch refs from its imported `origin/*` refs before pushing all branches.

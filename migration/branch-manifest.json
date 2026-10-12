@@ -33,12 +33,15 @@
     }
   ],
   "target": {
-    "repository": "icommas1/BecsAutoForward",
-    "visibility": "PRIVATE",
+    "repository": "icommas1/-becsmebot",
+    "visibility": "PUBLIC",
     "default_branch": "main",
-    "publication_status": "pending",
-    "repository_creation_status": "blocked_by_github_integration",
-    "source_refs_untouched": true
+    "publication_status": "ready_to_publish",
+    "repository_creation_status": "using_owner_selected_existing_repository",
+    "source_refs_untouched": true,
+    "visibility_change_status": "denied_by_github_integration",
+    "destination_empty_verified": true,
+    "owner_selected_after_public_visibility_disclosure": true
   },
   "baseline": {
     "source_ref": "refs/heads/becs-forwarding-v1",
