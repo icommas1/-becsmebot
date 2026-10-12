@@ -2,7 +2,7 @@
 
 Inspected on 2026-10-12 using repository inventory, Git refs and ancestry, and implementation code. No GitHub README was read or used as a source.
 
-The owner-selected destination is **`icommas1/-becsmebot` (PUBLIC)** with default branch `main`. The owner selected this existing repository after being informed that it is public. Its empty state and push access were verified. The integration could not change visibility to private. Publication is being prepared for this selected destination; source repository branches are untouched.
+The owner-selected destination is **`icommas1/-becsmebot` (PUBLIC)** with default branch `main`. The owner selected this existing repository after being informed that it is public. Its empty state and push access were verified. The integration could not change visibility to private. The standalone main and all 13 forwarding branches have been published and their remote SHAs verified. Source repository branches are untouched.
 
 ## Account repositories inspected
 
@@ -10,7 +10,7 @@ The owner-selected destination is **`icommas1/-becsmebot` (PUBLIC)** with defaul
 |---|---|---|
 | `icommas1/dot-widget` | PRIVATE | Inspected inventory |
 | `icommas1/BecsBot` | PRIVATE | Forwarding source |
-| `icommas1/-becsmebot` | PUBLIC | Empty |
+| `icommas1/-becsmebot` | PUBLIC | Empty at inspection; selected migration destination |
 | `icommas1/bexs` | PRIVATE | Inspected inventory |
 | `icommas1/BecsSuperAgent` | PUBLIC | Separate project |
 
@@ -42,7 +42,7 @@ The five-minute dashboard lock was intentionally reverted at the owner's request
 
 ## Publication and verification
 
-Destination selection is complete: the owner requested `https://github.com/icommas1/-becsmebot`. The integration permits repository push access but rejects administration changes, including changing visibility. Publication to the selected public repository follows a committed-credential check. BecsBot source refs remain intact.
+Destination selection is complete: the owner requested `https://github.com/icommas1/-becsmebot`. The integration permits repository push access but rejects administration changes, including changing visibility. Publication to the selected public repository is complete. The default branch is main, and all 13 historical forwarding refs match their original source SHAs. Before publication, masked custom scans reviewed 309 reachable commits and 947 blobs, finding no actual committed credentials, private keys, Telegram sessions or runtime databases; credential-shaped matches were synthetic test and CI fixtures. BecsBot source refs remain intact.
 
 The implementation extraction commit above passed these local checks:
 
@@ -53,7 +53,7 @@ The implementation extraction commit above passed these local checks:
 - Uvicorn startup, health and static serving, API authentication, disabled sensitive recovery, completed graceful shutdown, and retained temporary databases.
 - All 13 preserved branch heads match their original source commits; original checkout is clean and README is unchanged.
 
-The new CI is configured for main and pull requests, with Python 3.11/3.12 backend checks and mocked browser checks. GitHub CI and real Telegram delivery have not run for the destination. No production service, credential, database, session or deployment was moved.
+The new CI is configured for main and pull requests, with Python 3.11/3.12 backend checks and mocked browser checks. GitHub CI is running for the published main; its current result is available in [the workflow](https://github.com/icommas1/-becsmebot/actions/workflows/ci.yml). Real Telegram delivery is unverified by this repository transfer. No production service, credential, database, session or deployment was moved.
 
 ## Transfer the prepared project
 

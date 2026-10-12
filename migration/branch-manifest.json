@@ -36,12 +36,12 @@
     "repository": "icommas1/-becsmebot",
     "visibility": "PUBLIC",
     "default_branch": "main",
-    "publication_status": "ready_to_publish",
+    "publication_status": "published_and_remote_refs_verified",
     "repository_creation_status": "using_owner_selected_existing_repository",
     "source_refs_untouched": true,
     "visibility_change_status": "denied_by_github_integration",
-    "destination_empty_verified": true,
-    "owner_selected_after_public_visibility_disclosure": true
+    "owner_selected_after_public_visibility_disclosure": true,
+    "initial_destination_empty_verified": true
   },
   "baseline": {
     "source_ref": "refs/heads/becs-forwarding-v1",
@@ -52,7 +52,7 @@
     "ref": "refs/heads/main",
     "base_sha": "34acedd607e5648153a47cfa591e0e979191c164",
     "extraction_commit_sha": "01854ae3c504c98396fc1ebd1761554737869d37",
-    "status": "prepared_and_validated_locally"
+    "status": "published"
   },
   "forwarding_branch_count": 13,
   "forwarding_branches": [
@@ -246,8 +246,29 @@
     "preserved_branch_heads_verified": 13,
     "original_checkout_clean": true,
     "readme_used": false,
-    "github_ci_run": false,
+    "github_ci_run": true,
     "production_deployment": false,
-    "real_telegram_delivery_verified": false
+    "real_telegram_delivery_verified": false,
+    "github_ci_workflow_url": "https://github.com/icommas1/-becsmebot/actions/workflows/ci.yml"
+  },
+  "publication": {
+    "repository_url": "https://github.com/icommas1/-becsmebot",
+    "verified_at_utc": "2026-10-12T04:10:46.116756+00:00",
+    "initial_publication_commit_sha": "7d370a99ab81b34d06020f03f1e562fd88df5023",
+    "default_branch": "main",
+    "remote_branch_count": 14,
+    "forwarding_branch_heads_matched_to_original_source": 13,
+    "push_mode": "non-force main push followed by atomic push of all forwarding branches",
+    "source_repository_refs_modified": false,
+    "credential_scan": {
+      "reachable_commits": 309,
+      "unique_blobs": 947,
+      "through_commit_sha": "7d370a99ab81b34d06020f03f1e562fd88df5023",
+      "method": "masked custom blob and filename scans; gitleaks unavailable",
+      "actual_credentials_detected": false,
+      "runtime_sessions_or_databases_detected": false
+    },
+    "ci_workflow_url": "https://github.com/icommas1/-becsmebot/actions/workflows/ci.yml",
+    "ci_note": "CI executes for main publication; workflow URL shows the latest status."
   }
 }
