@@ -41,7 +41,10 @@
     "source_refs_untouched": true,
     "visibility_change_status": "denied_by_github_integration",
     "owner_selected_after_public_visibility_disclosure": true,
-    "initial_destination_empty_verified": true
+    "initial_destination_empty_verified": true,
+    "requested_default_branch": "becs-forwarding-v1",
+    "default_branch_change_status": "blocked_by_github_integration_403",
+    "main_deletion_status": "waiting_for_default_branch_change"
   },
   "baseline": {
     "source_ref": "refs/heads/becs-forwarding-v1",
@@ -64,7 +67,9 @@
       "status": "baseline",
       "integrated_in_baseline": true,
       "baseline_only_commit_count": 0,
-      "branch_only_commit_count": 0
+      "branch_only_commit_count": 0,
+      "target_ref_status": "advanced_with_standalone_project_and_ci",
+      "original_source_commit_preserved_in_ancestry": true
     },
     {
       "name": "becs-multi-account-isolation",
@@ -269,6 +274,12 @@
       "runtime_sessions_or_databases_detected": false
     },
     "ci_workflow_url": "https://github.com/icommas1/-becsmebot/actions/workflows/ci.yml",
-    "ci_note": "CI executes for main publication; workflow URL shows the latest status."
+    "ci_note": "CI now targets becs-forwarding-v1 and pull requests to that branch."
+  },
+  "standalone_project_branch": {
+    "ref": "refs/heads/becs-forwarding-v1",
+    "contains_previous_main_sha": "8331bb587033ad72914a7ea3bb9000e4c7ad8e47",
+    "original_source_sha": "34acedd607e5648153a47cfa591e0e979191c164",
+    "status": "prepared_for_main_removal"
   }
 }

@@ -18,7 +18,7 @@ The owner-selected destination is **`icommas1/-becsmebot` (PUBLIC)** with defaul
 
 Reviewed **87 concrete BecsBot branch refs**, excluding the symbolic `origin/HEAD` alias. **13 forwarding branches** contain the Python forwarding implementation. Their exact source commits are recorded below and in [the machine-readable manifest](migration/branch-manifest.json).
 
-The baseline is `becs-forwarding-v1` at **`34acedd607e5648153a47cfa591e0e979191c164`**. Its current tree is a standalone Python/FastAPI Telegram forwarding project; the unrelated market-terminal branch heads are excluded. New `main` starts from this baseline; its implementation extraction commit is `01854ae3c504c98396fc1ebd1761554737869d37`. Historical refs retain their original commits and names.
+The baseline is `becs-forwarding-v1` at **`34acedd607e5648153a47cfa591e0e979191c164`**. Its current tree is a standalone Python/FastAPI Telegram forwarding project; the unrelated market-terminal branch heads are excluded. New `main` starts from this baseline; its implementation extraction commit is `01854ae3c504c98396fc1ebd1761554737869d37`. The historical refs retain their original commits and names. The active destination `becs-forwarding-v1` has since been advanced to include the standalone changes previously on main; its original source commit remains in its ancestry.
 
 | Source branch | Exact source commit | Transfer status |
 |---|---|---|
@@ -53,7 +53,7 @@ The implementation extraction commit above passed these local checks:
 - Uvicorn startup, health and static serving, API authentication, disabled sensitive recovery, completed graceful shutdown, and retained temporary databases.
 - All 13 preserved branch heads match their original source commits; original checkout is clean and README is unchanged.
 
-The new CI is configured for main and pull requests, with Python 3.11/3.12 backend checks and mocked browser checks. GitHub CI is running for the published main; its current result is available in [the workflow](https://github.com/icommas1/-becsmebot/actions/workflows/ci.yml). Real Telegram delivery is unverified by this repository transfer. No production service, credential, database, session or deployment was moved.
+The new CI is configured for becs-forwarding-v1 and pull requests, with Python 3.11/3.12 backend checks and mocked browser checks. GitHub CI is running for the published main; its current result is available in [the workflow](https://github.com/icommas1/-becsmebot/actions/workflows/ci.yml). Real Telegram delivery is unverified by this repository transfer. No production service, credential, database, session or deployment was moved.
 
 ## Transfer the prepared project
 
@@ -62,3 +62,7 @@ The local repository contains only new `main` and the 13 preserved forwarding br
 The selected destination was verified empty. Its URL is `https://github.com/icommas1/-becsmebot.git`; add this as `origin` and push with `git push --atomic --all origin`. Use no force option and do not delete source branches. If the destination is populated, compare it before any push. Verify all destination branch heads against the manifest and new main, then check CI.
 
 `BecsAutoForward-source.zip` is the standalone source snapshot. `BecsAutoForward.bundle` carries main and all 13 original forwarding branches. For an offline reconstruction, run `git clone BecsAutoForward.bundle BecsAutoForward`, then create local branch refs from its imported `origin/*` refs before pushing all branches.
+
+## Requested main removal
+
+The owner requested removing main. The standalone project and CI are consolidated on `becs-forwarding-v1`, preserving the former main history. GitHub refused the default-branch administration change with HTTP 403; main cannot be deleted until the default branch is changed to `becs-forwarding-v1` in repository settings. See [the operations review](OPERATIONS_REVIEW.md) for the Railway inspection and deployment-removal evidence.

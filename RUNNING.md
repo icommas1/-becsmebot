@@ -64,6 +64,6 @@ node --check static/app.js
 node --check static/sw.js
 ```
 
-The main/PR workflow also builds the optional frontend and exercises the source
+The forwarding-branch/PR workflow also builds the optional frontend and exercises the source
 and built UI at mobile and desktop sizes using intercepted requests and synthetic
 identities. These checks do not prove real Telegram delivery or deploy a service.

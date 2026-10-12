@@ -18,7 +18,7 @@ Use Python 3.11 or 3.12 and Node 22 or 24. Install `requirements-dev.txt`, then 
 `python -m pytest -q`, `python -m compileall -q app scripts tests`,
 `node --check static/app.js` and `node --check static/sw.js`.
 For UI changes, install Playwright Chromium and run the mocked browser checks
-listed in `.github/workflows/ci.yml`. Tests must use synthetic identities and
+listed in `.github/workflows/ci.yml` for `becs-forwarding-v1`. Tests must use synthetic identities and
 temporary stores; never contact Telegram or send real messages as a test.
 
 Run one application process: the SQLite stores and worker registry assume one
