@@ -677,6 +677,7 @@ function captureUpgradeView() {
 
 render = function () {
  captureUpgradeView();
+ const backupPanel = state.page==='backups' ? dom('mainView').querySelector('[data-upgrade-backup-panel]') : null;
  upgradeOriginalRender();
  if (state.access !== 'approved' || state.apiError || upgradeLevel() < 1) return;
  const main = dom('mainView');
@@ -706,11 +707,16 @@ render = function () {
   main.append(button);
  }
  if (state.page === 'backups' && state.me?.is_admin && upgradeLevel() >= 6) {
-  const section = document.createElement('section');
+  const section = backupPanel || document.createElement('section');
   section.className = 'panel upgrade-panel';
-  section.innerHTML = `<div class="panel-header"><h2>Preview a configuration backup</h2></div><div class="upgrade-backup-body"><label for="upgradeBackupFile">Choose a Becs configuration ZIP (up to 6 MiB)</label><input id="upgradeBackupFile" type="file" accept=".zip,application/zip"><div id="upgradeBackupPreview">Previewing does not change routes.</div></div>`;
+  section.dataset.upgradeBackupPanel = 'true';
+  if (!backupPanel) section.innerHTML = `<div class="panel-header"><h2>Preview a configuration backup</h2></div><div class="upgrade-backup-body"><label for="upgradeBackupFile">Choose a Becs configuration ZIP (up to 6 MiB)</label><input id="upgradeBackupFile" type="file" accept=".zip,application/zip"><div id="upgradeBackupPreview">Previewing does not change routes.</div></div>`;
   main.append(section);
   if (state.upgradeBackup) showUpgradeBackupPreview();
+  else if (!state.upgradeBackupLoading) {
+   dom('upgradeBackupPreview').textContent='Previewing does not change routes.';
+   dom('upgradeBackupFile').value='';
+  }
  }
  if (upgradeLevel() >= 7) {
   for (const [id,value] of Object.entries(state.upgradeViewState?.[state.page] || {})) {

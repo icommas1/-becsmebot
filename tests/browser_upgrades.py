@@ -132,6 +132,7 @@ def exercise(browser,width,height):
     output=io.BytesIO()
     with zipfile.ZipFile(output,'w') as archive:archive.writestr('synthetic.txt','Interception fixture; backend archive validation has separate tests.')
     page.locator('#upgradeBackupFile').set_input_files({'name':'synthetic.zip','mimeType':'application/zip','buffer':output.getvalue()})
+    expect(page.locator('#upgradeBackupPreview')).to_contain_text('Selected routes will be added',timeout=8000)
     page.locator('[data-upgrade-import-index="0"]').check()
     page.locator('[data-upgrade-action="import-backup"]').click()
     expect(page.locator('#upgradeBackupPreview')).to_contain_text('Previewing does not change routes')
