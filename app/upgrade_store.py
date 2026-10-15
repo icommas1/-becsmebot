@@ -8,7 +8,7 @@ import time
 
 from .db import connection
 
-RELEASE_LEVEL = 1
+RELEASE_LEVEL = 7
 RELEASES = ['Shadow Mode', 'Decision inspector', 'Route health', 'Custom presets',
             'Source comparison', 'Backup preview', 'Mobile polish']
 MAX_DECISIONS = 5000
