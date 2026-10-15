@@ -88,6 +88,8 @@ def init_db():
         CREATE TABLE IF NOT EXISTS settings (key TEXT PRIMARY KEY, value TEXT NOT NULL);
         ''')
         db.execute("INSERT OR IGNORE INTO settings VALUES ('paused','false')")
+        from .upgrade_store import migrate
+        migrate(db)
 
 
 def as_dict(row):
@@ -95,7 +97,7 @@ def as_dict(row):
     result = dict(row)
     for field in ('sources', 'destinations'):
         if field in result: result[field] = json.loads(result[field])
-    for field in ('enabled', 'require_contract'):
+    for field in ('enabled', 'require_contract', 'shadow_mode'):
         if field in result: result[field] = bool(result[field])
     return result
 

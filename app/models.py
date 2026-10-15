@@ -5,6 +5,7 @@ class RouteInput(BaseModel):
     name: str = Field(min_length=2, max_length=100)
     mode: Literal['express', 'smart', 'hybrid', 'ai-gated'] = 'smart'
     enabled: bool = False
+    shadow_mode: bool = False
     sources: list[str] = Field(default_factory=list, max_length=30)
     destinations: list[str] = Field(default_factory=list, max_length=30)
     allowed: str = Field(default='', max_length=500)

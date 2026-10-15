@@ -1,4 +1,4 @@
-"""Pure, fast crypto text filters. Address patterns find *candidates*, not verified token contracts."""
+"""One bounded, address-only rule evaluator shared by simulation and ingestion."""
 import hashlib
 import re
 import regex as safe_regex
@@ -8,68 +8,84 @@ SOL_PATTERN = re.compile(r'(?<![1-9A-HJ-NP-Za-km-z])[1-9A-HJ-NP-Za-km-z]{32,44}(
 EVM_PATTERN = re.compile(r'(?<![a-zA-Z0-9])0x[a-fA-F0-9]{40}(?![a-zA-Z0-9])')
 
 
-def is_base58_32(value: str) -> bool:
+def is_base58_32(value):
     if any(c not in B58 for c in value):
         return False
     number = 0
     for c in value:
         number = number * 58 + B58.index(c)
-    length = (number.bit_length() + 7) // 8 + len(value) - len(value.lstrip('1'))
-    return length == 32
+    return (number.bit_length()+7)//8 + len(value)-len(value.lstrip('1')) == 32
 
 
-def extract_addresses(text: str, network: str = 'both') -> list[dict]:
+def address_key(network, address):
+    return address.lower() if network == 'evm' else address
+
+
+def extract_addresses(text, network='both'):
+    text = text[:12000]
     candidates = []
     if network in ('solana', 'both'):
-        candidates += [{'network': 'solana', 'address': m.group(0)} for m in SOL_PATTERN.finditer(text) if is_base58_32(m.group(0))]
+        candidates.extend({'network':'solana','address':m.group(0)}
+                          for m in SOL_PATTERN.finditer(text) if is_base58_32(m.group(0)))
     if network in ('evm', 'both'):
-        candidates += [{'network': 'evm', 'address': m.group(0)} for m in EVM_PATTERN.finditer(text)]
-    seen = set()
-    return [p for p in candidates if not ((p['network'], p['address'].lower()) in seen or seen.add((p['network'], p['address'].lower())))]
+        candidates.extend({'network':'evm','address':m.group(0)} for m in EVM_PATTERN.finditer(text))
+    seen, result = set(), []
+    for candidate in candidates:
+        key = (candidate['network'], address_key(candidate['network'],candidate['address']))
+        if key not in seen:
+            seen.add(key)
+            result.append(candidate)
+    return result
 
 
-def split_terms(value: str) -> list[str]:
+def split_terms(value):
     return [term.strip() for term in value.split(',') if term.strip()]
 
 
-def normalized_text(value: str) -> str:
+def normalized_text(value):
     return ' '.join(re.sub(r'[^\w\s]', ' ', value.lower()).split())
 
 
-def decide(message: str, route: dict) -> dict:
-    """Deterministic filter result, used by simulation and live ingestion."""
+def rule_match(rule, text):
+    if rule.startswith('re:'):
+        pattern = rule[3:]
+        if not pattern or len(pattern) > 250:
+            raise ValueError('Regex requires 1 to 250 characters')
+        return bool(safe_regex.search(pattern,text,flags=safe_regex.IGNORECASE,timeout=0.025))
+    return rule.lower() in text.lower()
+
+
+def decide(message, route):
     message = message[:12000]
-    low = message.lower()
-    addresses = extract_addresses(message, route.get('network', 'both'))
-    blocked = [term for term in split_terms(route.get('blocked', '')) if term.lower() in low]
-    allowed = split_terms(route.get('allowed', ''))
-    found = [term for term in allowed if term.lower() in low]
-    if blocked:
-        return {'decision': 'block', 'reason': 'Blocked keyword: ' + ', '.join(blocked), 'addresses': addresses, 'allowed_hits': found, 'blocked_hits': blocked, 'regex_match': False}
-    if route.get('mode') == 'express':
-        return {'decision': 'forward', 'reason': 'Express route: essential checks passed', 'addresses': addresses, 'allowed_hits': [], 'blocked_hits': [], 'regex_match': False}
-    if route.get('require_contract', False) and not addresses:
-        return {'decision': 'block', 'reason': 'No valid address-format candidate', 'addresses': addresses, 'allowed_hits': found, 'blocked_hits': [], 'regex_match': False}
-    mode = route.get('match_mode', 'any')
-    if allowed and not (len(found) == len(allowed) if mode == 'all' else bool(found)):
-        return {'decision': 'block', 'reason': 'Allowlist condition not met', 'addresses': addresses, 'allowed_hits': found, 'blocked_hits': [], 'regex_match': False}
-    pattern = route.get('pattern', '').strip()
-    matched = False
-    if pattern:
-        try:
-            if len(pattern) > 250:
-                raise ValueError('Regex is too long (maximum 250 characters)')
-            matched = bool(safe_regex.search(pattern, message, flags=safe_regex.IGNORECASE, timeout=0.025))
-        except (safe_regex.error, TimeoutError, ValueError) as ex:
-            return {'decision': 'invalid', 'reason': f'Invalid or costly regex: {str(ex)[:120]}', 'addresses': addresses, 'allowed_hits': found, 'blocked_hits': [], 'regex_match': False}
-        if not matched:
-            return {'decision': 'block', 'reason': 'Custom regex did not match', 'addresses': addresses, 'allowed_hits': found, 'blocked_hits': [], 'regex_match': False}
-    return {'decision': 'forward', 'reason': 'All local checks passed', 'addresses': addresses, 'allowed_hits': found, 'blocked_hits': [], 'regex_match': matched}
+    addresses = extract_addresses(message,route.get('network','both'))
+    result = {'addresses':addresses,'allowed_hits':[],'blocked_hits':[],'regex_match':False}
+    def answer(decision, reason):
+        return {**result,'decision':decision,'reason':reason}
+    try:
+        blocked = route.get('blocked','').strip()
+        block_rules = [blocked] if blocked.startswith('re:') else split_terms(blocked)
+        result['blocked_hits'] = [rule for rule in block_rules if rule_match(rule,message)]
+        if result['blocked_hits']:
+            return answer('block','Blocked keyword or rule matched')
+        if not addresses:
+            return answer('block','No address-format candidate for the selected network')
+        allowed = route.get('allowed','').strip()
+        allow_rules = [allowed] if allowed.startswith('re:') else split_terms(allowed)
+        result['allowed_hits'] = [rule for rule in allow_rules if rule_match(rule,message)]
+        if allow_rules:
+            eligible = len(result['allowed_hits']) == len(allow_rules) if route.get('match_mode') == 'all' else bool(result['allowed_hits'])
+            if not eligible:
+                return answer('block','Allowlist condition not met')
+        pattern = route.get('pattern','').strip()
+        if pattern:
+            result['regex_match'] = rule_match('re:'+pattern,message)
+            if not result['regex_match']:
+                return answer('block','Custom regex did not match')
+    except (safe_regex.error,TimeoutError,ValueError):
+        return answer('invalid','Invalid or costly regex; no delivery')
+    return answer('forward','Address-only route filters passed')
 
 
-def dedup_fingerprint(message: str, result: dict) -> str:
-    contracts = sorted(f"{a['network']}:{a['address'].lower()}" for a in result['addresses'])
-    if not contracts:
-        return ''  # Never deduplicate ordinary message text.
-    key = '|'.join(contracts)
-    return hashlib.sha256(key.encode()).hexdigest()
+def dedup_fingerprint(message, result):
+    keys = sorted(f"{a['network']}:{address_key(a['network'],a['address'])}" for a in result['addresses'])
+    return hashlib.sha256('|'.join(keys).encode()).hexdigest() if keys else ''

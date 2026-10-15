@@ -2,9 +2,9 @@ name: BecsAutoForward checks
 
 on:
   push:
-    branches: [main]
+    branches: [main, upgrade/forwarding-20261015]
   pull_request:
-    branches: [main]
+    branches: [main, upgrade/forwarding-20261015]
   workflow_dispatch:
 
 permissions:

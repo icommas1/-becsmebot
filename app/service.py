@@ -16,69 +16,86 @@ def get_routes():
         return [as_dict(r) for r in db.execute('SELECT * FROM routes ORDER BY updated_at DESC')]
 
 
+def duplicate_job(db, route, destination, fingerprint, network='', address=''):
+    window = route['dedup_minutes'] * 60
+    if not window or not fingerprint:
+        return False
+    cutoff = time.time()-window
+    # Legacy entries have no canonical key. Preserve their cooldown while they age out.
+    legacy = hashlib.sha256((network+':'+address.lower()).encode()).hexdigest() if network else fingerprint
+    return db.execute("""SELECT id FROM jobs WHERE destination_id=?
+        AND status IN ('queued','sending','sent') AND created_at>=?
+        AND (fingerprint=? OR (address_key='' AND fingerprint=?)) LIMIT 1""",
+        (destination,cutoff,fingerprint,legacy)).fetchone() is not None
+
+
 def enqueue(db,route,src,dest,msg_id,text,fp):
-    now=time.time()
-    window=route['dedup_minutes']*60
-    if window and fp:
-        existing=db.execute('''SELECT id FROM jobs WHERE destination_id=? AND fingerprint=? AND
-            status IN ('queued','sending','sent') AND created_at>=? LIMIT 1''',(dest,fp,now-window)).fetchone()
-        if existing:
-            event(db,'duplicate',f"Duplicate contract address suppressed → {dest}",route['id'],src,dest)
-            return False
-    db.execute('''INSERT INTO jobs(route_id,source_id,destination_id,message_id,message_preview,fingerprint,status,created_at,next_attempt)
-        VALUES (?,?,?,?,?,?, 'queued',?,0)''',(route['id'],src,dest,msg_id,text,fp,now))
+    from .engine import extract_addresses,address_key
+    candidates = extract_addresses(text)
+    candidate = candidates[0] if len(candidates)==1 and candidates[0]['address']==text else None
+    network = candidate['network'] if candidate else ''
+    if route.get('shadow_mode'):
+        return False
+    if duplicate_job(db,route,dest,fp,network,text):
+        event(db,'duplicate',f"Duplicate contract address suppressed → {dest}",route['id'],src,dest)
+        return False
+    now = time.time()
+    db.execute("""INSERT INTO jobs
+        (route_id,source_id,destination_id,message_id,message_preview,fingerprint,
+         status,created_at,next_attempt,address_network,address_key)
+        VALUES (?,?,?,?,?,?,'queued',?,0,?,?)""",
+        (route['id'],src,dest,msg_id,text,fp,now,network,address_key(network,text) if candidate else ''))
     event(db,'queued',f"Delivery queued → {dest}",route['id'],src,dest)
     return True
 
 
-async def ingest_message(source_id: str, message_id: int, text: str, service):
-    """Extract addresses in memory; queue only the contract address, never other text or media."""
-    if service is not None and hasattr(service, 'check_access'):
-        service.check_access()
-    if get_setting('paused','false')=='true': return
+async def ingest_message(source_id, message_id, text, service):
+    """Process in memory; persist only candidates, rule outcomes and routing IDs."""
     from .engine import extract_addresses
-    addresses=extract_addresses(text)
-    if not addresses: return
-    for route in get_routes():
-        if not route['enabled'] or source_id not in route['sources']:continue
-        # Optional keyword controls affect eligibility, never the forwarded payload.
-        lower=text.lower()
-        from .engine import split_terms
-        # Filters only inspect the incoming text in memory. No message body is saved.
-        import regex as safe_regex
-        def matches_rule(rule):
-            rule=rule.strip()
-            if not rule:return False
-            if rule.startswith('re:'):
-                pattern=rule[3:]
-                if len(pattern)>250:return False
-                try:return bool(safe_regex.search(pattern,text,flags=safe_regex.IGNORECASE,timeout=0.025))
-                except (safe_regex.error,TimeoutError,ValueError):return False
-            return rule.lower() in lower
-        blocked=route.get('blocked','')
-        if blocked.startswith('re:'):
-            if matches_rule(blocked):continue
-        elif any(matches_rule(word) for word in split_terms(blocked)):continue
-        allowed=route.get('allowed','')
-        if allowed.startswith('re:'):
-            if not matches_rule(allowed):continue
-        elif allowed:
-            terms=split_terms(allowed)
-            hits=[matches_rule(term) for term in terms]
-            if not (all(hits) if route.get('match_mode')=='all' else any(hits)):continue
-        pattern=route.get('pattern','').strip()
-        if pattern and not matches_rule('re:'+pattern):continue
-        for addr in addresses:
-            address=addr['address']
-            if route.get('network','both') not in ('both',addr['network']):continue
-            fingerprint=hashlib.sha256((addr['network']+':'+address.lower()).encode()).hexdigest()
-            # Store only the detected address and network in token events.
-            # No original message text, media, or separate token-memory table.
+    from .upgrade_store import observe_source,record_decision
+    if service is not None and hasattr(service,'check_access'):
+        service.check_access()
+    if get_setting('paused','false') == 'true':
+        return
+    routes = [route for route in get_routes() if route['enabled'] and source_id in route['sources']]
+    if not routes:
+        return
+    addresses = extract_addresses(text)
+    with connection() as db:
+        observe_source(db,source_id,addresses)
+    for route in routes:
+        result = decide(text,route)
+        if result['decision'] != 'forward':
             with connection() as db:
-                event(db,'contract',f"{addr['network'].upper()} · {address}",route['id'],source_id)
-            for dest in route['destinations']:
-                if dest==source_id:continue
-                with connection() as db:enqueue(db,route,source_id,dest,message_id,address,fingerprint)
+                record_decision(db,route,source_id,None,message_id,result['decision'],result['reason'])
+                event(db,'blocked',result['reason'],route['id'],source_id)
+            continue
+        for candidate in result['addresses']:
+            address,network = candidate['address'],candidate['network']
+            fingerprint = dedup_fingerprint(address,{'addresses':[candidate]})
+            with connection() as db:
+                event(db,'contract',f"{network.upper()} · {address}",route['id'],source_id)
+            for destination in route['destinations']:
+                if destination == source_id:
+                    continue
+                with connection() as db:
+                    if route.get('shadow_mode'):
+                        duplicate = duplicate_job(db,route,destination,fingerprint,network,address)
+                        if route['dedup_minutes']:
+                            duplicate = duplicate or db.execute("""SELECT 1 FROM route_decisions
+                                WHERE route_id=? AND destination_id=? AND fingerprint=? AND shadow=1
+                                AND decision='would_forward' AND created_at>=? LIMIT 1""",
+                                (route['id'],destination,fingerprint,time.time()-route['dedup_minutes']*60)).fetchone() is not None
+                        decision = 'duplicate' if duplicate else 'would_forward'
+                        reason = 'Shadow duplicate suppressed' if duplicate else 'Shadow Mode: would send this address; nothing was queued'
+                        record_decision(db,route,source_id,destination,message_id,decision,reason,address,network,fingerprint)
+                        event(db,'shadow',reason,route['id'],source_id,destination)
+                    else:
+                        queued = enqueue(db,route,source_id,destination,message_id,address,fingerprint)
+                        record_decision(db,route,source_id,destination,message_id,
+                                        'queued' if queued else 'duplicate',
+                                        result['reason'] if queued else 'Destination cooldown matched',
+                                        address,network,fingerprint)
 
 
 async def background_ai(text, route_id,src,dest):
@@ -106,6 +123,9 @@ async def delivery_worker(manager, stop: asyncio.Event, user_id=None):
 
 async def _delivery_loop(manager, stop: asyncio.Event):
     """Sequential send loop. One outbound send at a time, honoring Telegram flood waits."""
+    with connection() as db:
+        db.execute("UPDATE jobs SET status='failed',error=? WHERE status='sending'",
+                   ('Delivery outcome unknown after restart; verify destination before retrying',))
     while not stop.is_set():
         try:
             if hasattr(manager, 'check_access'):
@@ -124,7 +144,7 @@ async def _delivery_loop(manager, stop: asyncio.Event):
                 await asyncio.sleep(1);continue
             with connection() as db:
                 row=db.execute("""SELECT j.*,r.delivery_style FROM jobs j JOIN routes r ON r.id=j.route_id
-                  WHERE j.status='queued' AND j.next_attempt<=? ORDER BY j.created_at, j.id LIMIT 1""",(time.time(),)).fetchone()
+                  WHERE j.status='queued' AND r.shadow_mode=0 AND j.next_attempt<=? ORDER BY j.created_at, j.id LIMIT 1""",(time.time(),)).fetchone()
                 if row:
                     job=dict(row)
                     db.execute("UPDATE jobs SET status='sending' WHERE id=?",(job['id'],))

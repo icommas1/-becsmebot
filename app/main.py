@@ -31,6 +31,8 @@ from .engine import decide, dedup_fingerprint
 from .service import get_routes, enqueue, delivery_worker
 from .telegram_client import PersonalTelegram, telegram_bot_poll
 from .config import load_config, telegram_bot_username
+from .upgrade_store import overview_fields
+from .upgrade_api import router as upgrade_router
 
 logging.basicConfig(level=os.getenv('BECS_LOG_LEVEL','INFO'))
 # HTTP client request logs can contain Telegram bot tokens in URL paths.
@@ -152,6 +154,7 @@ async def lifespan(app: FastAPI):
 
 
 app=FastAPI(title=config.project_name,version='1.1.0',lifespan=lifespan,docs_url=None,redoc_url=None)
+app.include_router(upgrade_router)
 
 
 def denial(status, detail, reason):
@@ -384,7 +387,7 @@ async def overview():
     cooldown_remaining=max(0,int(float(get_setting('account_cooldown_until','0'))-time.time()))
     return {'stats':stats,'activity':activity,'graph':graph,'cooldown_seconds':cooldown_remaining,'paused':get_setting('paused','false')=='true',
             'telegram':await manager.status(),'ai_configured':bool(os.getenv('GEMINI_API_KEY')),
-            'bot_configured':bool(os.getenv('TELEGRAM_BOT_TOKEN'))}
+        'bot_configured':bool(os.getenv('TELEGRAM_BOT_TOKEN')), **overview_fields()}
 
 @app.post('/api/control/pause')
 def pause():
@@ -412,15 +415,15 @@ def save_route(db, route:RouteInput,route_id=None):
     now=time.time()
     vals=[route.name,route.mode,int(route.enabled),json.dumps(route.sources),json.dumps(route.destinations),
           route.allowed,route.blocked,route.pattern,route.match_mode,route.network,int(route.require_contract),
-          route.dedup_minutes,route.delivery_style,now]
+          route.dedup_minutes,route.delivery_style,int(route.shadow_mode),now]
     if route_id:
         db.execute('''UPDATE routes SET name=?,mode=?,enabled=?,sources=?,destinations=?,allowed=?,blocked=?,pattern=?,
-            match_mode=?,network=?,require_contract=?,dedup_minutes=?,delivery_style=?,updated_at=? WHERE id=?''',
+            match_mode=?,network=?,require_contract=?,dedup_minutes=?,delivery_style=?,shadow_mode=?,updated_at=? WHERE id=?''',
             [*vals,route_id])
         return route_id
     cur=db.execute('''INSERT INTO routes(name,mode,enabled,sources,destinations,allowed,blocked,pattern,match_mode,
-        network,require_contract,dedup_minutes,delivery_style,updated_at,created_at)
-        VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)''',[ *vals,now])
+        network,require_contract,dedup_minutes,delivery_style,shadow_mode,updated_at,created_at)
+        VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)''',[ *vals,now])
     return cur.lastrowid
 
 
@@ -464,6 +467,11 @@ async def update_route(route_id:int,route:RouteInput):
     except Exception as ex: raise HTTPException(422, str(ex)[:180])
     with connection() as db:
         if not db.execute('SELECT 1 FROM routes WHERE id=?',(route_id,)).fetchone():raise HTTPException(404,'Route not found')
+        if route.shadow_mode:
+            if db.execute("SELECT 1 FROM jobs WHERE route_id=? AND status='sending' LIMIT 1",(route_id,)).fetchone():
+                raise HTTPException(409,'A delivery is in progress. Try Shadow Mode when it finishes.')
+            db.execute("UPDATE jobs SET status='failed',error=? WHERE route_id=? AND status='queued'",
+                       ('Route switched to Shadow Mode; verify before retrying',route_id))
         save_route(db,route,route_id)
         event(db,'route',f'Route updated: {route.name}',route_id)
         return {'route':as_dict(db.execute('SELECT * FROM routes WHERE id=?',(route_id,)).fetchone())}
@@ -489,13 +497,13 @@ def simulate(payload:Simulation):
 @app.get('/api/inspector')
 def inspector(limit:int=100, kind:str='all'):
     limit=max(1,min(limit,200))
-    allowed={'all','blocked','duplicate','queued','forwarded','review','error','contract','ai'}
+    allowed={'all','blocked','duplicate','queued','forwarded','review','error','contract','ai','shadow'}
     if kind not in allowed: raise HTTPException(422,'Unknown event kind')
     with connection() as db:
         sql="""SELECT e.*,r.name AS route_name FROM events e
             LEFT JOIN routes r ON r.id=e.route_id"""
         if kind=='all':
-            rows=db.execute(sql+" WHERE e.kind IN ('blocked','duplicate','queued','forwarded','review','error','contract','ai') ORDER BY e.id DESC LIMIT ?",(limit,)).fetchall()
+            rows=db.execute(sql+" WHERE e.kind IN ('blocked','duplicate','queued','forwarded','review','error','contract','ai','shadow') ORDER BY e.id DESC LIMIT ?",(limit,)).fetchall()
         else:
             rows=db.execute(sql+" WHERE e.kind=? ORDER BY e.id DESC LIMIT ?",(kind,limit)).fetchall()
     return {'items':[dict(row) for row in rows], 'source':'recorded_events'}
@@ -515,6 +523,8 @@ def retry_job(job_id:int):
         row=db.execute('SELECT * FROM jobs WHERE id=?',(job_id,)).fetchone()
         if not row:raise HTTPException(404,'Job not found')
         if row['status']!='failed':raise HTTPException(409,'Only failed jobs can be retried')
+        if db.execute('SELECT shadow_mode FROM routes WHERE id=?',(row['route_id'],)).fetchone()[0]:
+            raise HTTPException(409,'This route is in Shadow Mode. It cannot send queued jobs.')
         db.execute("UPDATE jobs SET status='queued', attempts=0, next_attempt=0, error='' WHERE id=?",(job_id,))
         event(db,'queued',f'Job #{job_id} manually retried',row['route_id'])
     return {'queued':True}
