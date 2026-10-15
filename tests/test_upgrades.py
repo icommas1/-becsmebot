@@ -8,20 +8,21 @@ from unittest.mock import patch
 
 from app import db, engine, service, upgrade_store
 from app.models import RouteInput
-from test_workspace_api import WorkspaceAPIRegression, OWNER, MEMBER_A
+import test_workspace_api as fixtures
+OWNER, MEMBER_A = fixtures.OWNER, fixtures.MEMBER_A
 
 SOL='So11111111111111111111111111111111111111112'
 
 
 class UpgradeAPIRegression(unittest.IsolatedAsyncioTestCase):
-    asyncSetUp=WorkspaceAPIRegression.asyncSetUp
-    initialize_workspace=WorkspaceAPIRegression.initialize_workspace
-    add_user=WorkspaceAPIRegression.add_user
-    request=WorkspaceAPIRegression.request
-    seed_workspace=WorkspaceAPIRegression.seed_workspace
+    asyncSetUp=fixtures.WorkspaceAPIRegression.asyncSetUp
+    initialize_workspace=fixtures.WorkspaceAPIRegression.initialize_workspace
+    add_user=fixtures.WorkspaceAPIRegression.add_user
+    request=fixtures.WorkspaceAPIRegression.request
+    seed_workspace=fixtures.WorkspaceAPIRegression.seed_workspace
 
     async def asyncSetUp(self):
-        await WorkspaceAPIRegression.asyncSetUp(self)
+        await fixtures.WorkspaceAPIRegression.asyncSetUp(self)
         setting=patch.object(upgrade_store,'RELEASE_LEVEL',7)
         setting.start()
         self.addCleanup(setting.stop)
@@ -72,6 +73,13 @@ class UpgradeAPIRegression(unittest.IsolatedAsyncioTestCase):
         response=await self.request('PUT','/api/routes/'+str(route['id']),json={**route,'shadow_mode':True})
         self.assertEqual(response.status_code,409)
 
+    async def test_legacy_editor_cannot_silently_disable_shadow_mode(self):
+        route=await self.route(shadow_mode=True)
+        route.pop('shadow_mode')
+        response=await self.request('PUT','/api/routes/'+str(route['id']),json=route)
+        self.assertEqual(response.status_code,200)
+        self.assertTrue(response.json()['route']['shadow_mode'])
+
     async def test_solana_case_is_preserved_and_evm_case_is_normalized(self):
         await self.route()
         first,second='A'*43,'a'+'A'*42
@@ -93,6 +101,16 @@ class UpgradeAPIRegression(unittest.IsolatedAsyncioTestCase):
             con.execute("UPDATE jobs SET fingerprint=?,address_key='',address_network=''",(legacy,))
         await self.ingest(SOL,message_id=2)
         self.assertEqual(len(self.rows('jobs')),1)
+
+    async def test_populated_legacy_migration_keeps_verified_database_backup(self):
+        await self.route()
+        with db.workspace(OWNER),db.connection() as con:
+            con.execute('ALTER TABLE routes DROP COLUMN shadow_mode')
+            upgrade_store.migrate(con)
+            upgrade_store.migrate(con)
+            self.assertEqual(con.execute('SELECT COUNT(*) FROM routes').fetchone()[0],1)
+            self.assertEqual(con.execute('SELECT shadow_mode FROM routes').fetchone()[0],0)
+        self.assertTrue((self.root/'backups'/'becs-before-ordered-upgrades.sqlite').exists())
 
     async def test_simulation_matches_live_address_and_filter_rules(self):
         route=await self.route(mode='express',allowed='re:launch|🚀')

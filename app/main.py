@@ -463,6 +463,11 @@ async def create_route(route:RouteInput):
 @app.put('/api/routes/{route_id}')
 async def update_route(route_id:int,route:RouteInput):
     validate_route(route)
+    if 'shadow_mode' not in route.model_fields_set:
+        with connection() as db:
+            existing=db.execute('SELECT shadow_mode FROM routes WHERE id=?',(route_id,)).fetchone()
+        if existing:
+            route=route.model_copy(update={'shadow_mode':bool(existing['shadow_mode'])})
     try: route = await canonicalize_route(route)
     except HTTPException: raise
     except Exception as ex: raise HTTPException(422, str(ex)[:180])

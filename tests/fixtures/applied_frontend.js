@@ -669,6 +669,8 @@ const upgradeOriginalRequest = request;
 
 clearWorkspace = function () {
  state.upgradeBackup = null;
+ state.upgradeBackupGeneration = (state.upgradeBackupGeneration || 0) + 1;
+ state.upgradeBackupLoading = false;
  state.upgradeViewState = {};
  state.upgradePresets = [];
  upgradeOriginalClearWorkspace();
@@ -809,16 +811,23 @@ async function previewUpgradeBackup(file) {
  state.upgradeBackup = null;
  const container = dom('upgradeBackupPreview');
  if (!file || file.size > 6*1024*1024) throw new Error('Choose a configuration ZIP no larger than 6 MiB.');
+ const generation = (state.upgradeBackupGeneration || 0) + 1;
+ state.upgradeBackupGeneration = generation;
+ const version = state.accessVersion;
+ state.upgradeBackupLoading = true;
  container.textContent = 'Validating backup…';
+ try {
  const bytes = new Uint8Array(await file.arrayBuffer());
  let binary = '';
  for (let offset=0;offset<bytes.length;offset+=32768) binary+=String.fromCharCode(...bytes.subarray(offset,offset+32768));
  const payload = {content_base64:btoa(binary)};
- const version = state.accessVersion;
  const preview = await request('/admin/backups/preview',{method:'POST',body:JSON.stringify(payload)});
- if (version!==state.accessVersion || !container.isConnected) return;
+ if (version!==state.accessVersion || generation!==state.upgradeBackupGeneration) return;
  state.upgradeBackup = {payload,preview};
  showUpgradeBackupPreview();
+ } finally {
+  if (generation===state.upgradeBackupGeneration) state.upgradeBackupLoading=false;
+ }
 }
 
 function showUpgradeBackupPreview() {
