@@ -83,6 +83,8 @@ def presets():
 @router.post('/presets',status_code=201)
 def save_preset(payload:PresetInput):
     require_level(4)
+    if len(payload.name.strip())<2:
+        raise HTTPException(422,'Enter a preset name with at least two non-space characters.')
     values = preset_values(payload)
     with connection() as db:
         if db.execute('SELECT COUNT(*) FROM filter_presets').fetchone()[0]>=50:
@@ -120,7 +122,7 @@ def source_comparison():
         source['first_observations']+=int(row['first_seen']==first[(row['network'],row['address_key'])])
         source['last_seen']=max(source['last_seen'],row['last_seen'])
     for source in totals.values():
-        source['repeat_percent']=round(100*(source['mentions']-source['unique_addresses'])/source['mentions'],1)
+        source['repeat_percent']=round(100*(source['mentions']-source['first_observations'])/source['mentions'],1)
     return {'sources':sorted(totals.values(),key=lambda row:(-row['first_observations'],row['source_id'])),
             'scope':'Address candidates observed since installation; up to seven days, 10,000 source/address pairs. First means first observed by this app, not first published.'}
 
@@ -157,11 +159,17 @@ def preview_backup(payload:BackupInput):
     routes=own_backup_routes(plan)
     with connection() as db:
         checksum=store.route_checksum(db)
-        current=[dict(row) for row in db.execute('SELECT id,name FROM routes ORDER BY id')]
+        current=[as_dict(row) for row in db.execute('SELECT * FROM routes ORDER BY id')]
+    comparisons=[]
+    for index,route in enumerate(routes):
+        matches=[item for item in current if item['name']==route['name']]
+        fields=('sources','destinations','mode','allowed','blocked','pattern','match_mode','network','dedup_minutes')
+        differences=sorted({field for item in matches for field in fields if item.get(field)!=route.get(field)})
+        comparisons.append({'index':index,'name':route['name'],'sources':route['sources'],
+                            'destinations':route['destinations'],'filters':{key:route[key] for key in PRESET_FIELDS},
+                            'comparison':'New route name' if not matches else 'Different fields: '+', '.join(differences) if differences else 'Same routing and filters as a current route'})
     return {'valid':True,'route_count':len(routes),'workspace_count':plan['workspace_count'],
-            'routes':[{'index':index,'name':route['name'],'sources':route['sources'],
-                       'destinations':route['destinations'],'filters':{key:route[key] for key in PRESET_FIELDS}}
-                      for index,route in enumerate(routes)],'current_routes':current,'current_checksum':checksum,
+            'routes':comparisons,'current_routes':current,'current_checksum':checksum,
             'notice':'Import adds selected routes to your own workspace, disabled and in Shadow Mode. Existing routes, access, sessions and credentials are retained. Checksums do not prove authenticity.'}
 
 

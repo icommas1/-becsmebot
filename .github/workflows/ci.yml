@@ -66,6 +66,8 @@ jobs:
       - run: python -m playwright install --with-deps chromium
       - name: Mocked mobile and desktop workflows
         run: |
+          python tests/browser_upgrades.py
+          python tests/browser_upgrades.py --script tests/fixtures/applied_frontend.js
           python tests/browser_bot_destination.py
           python tests/browser_compact_filters.py
           python tests/browser_users.py

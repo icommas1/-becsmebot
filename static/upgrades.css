@@ -1,0 +1,27 @@
+.upgrade-panel { margin-top: 18px; }
+.upgrade-shadow-control, .upgrade-presets { margin: 16px 0; padding: 14px; border: 1px solid #2d435e; border-radius: 12px; background: #101c2a; }
+.upgrade-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin: 9px 0; }
+.upgrade-actions input, .upgrade-actions select { min-width: 0; flex: 1 1 140px; }
+.upgrade-actions button { flex-shrink: 0; }
+.upgrade-decisions, .upgrade-backup-body { padding: 16px; }
+.upgrade-decision { border-bottom: 1px solid #25364b; padding: 12px 0; overflow-wrap: anywhere; }
+.upgrade-decision summary { cursor: pointer; line-height: 1.7; }
+.upgrade-decision summary span { display: block; font-family: monospace; color: #9bb5d2; }
+.upgrade-decision dl { display: grid; grid-template-columns: 100px minmax(0,1fr); gap: 8px; font-size: 13px; }
+.upgrade-decision dd { margin: 0; }
+.upgrade-route-health { display: grid; gap: 5px; padding: 12px 0; color: #a6bed8; font-size: 12px; }
+.upgrade-route-health span:first-child { color: #76d7d3; font-weight: 700; }
+.upgrade-table-wrap { max-width: 100%; overflow-x: auto; }
+.upgrade-table { border-collapse: collapse; width: 100%; font-size: 13px; }
+.upgrade-table th, .upgrade-table td { padding: 12px 8px; text-align: left; border-bottom: 1px solid #25364b; }
+.upgrade-source-button { margin-top: 18px; }
+.upgrade-backup-body input[type=file] { max-width: 100%; margin: 12px 0; }
+@media (max-width: 600px) {
+ .upgrade-panel .panel-header { flex-wrap: wrap; gap: 10px; }
+ .upgrade-decision dl { grid-template-columns: 80px minmax(0,1fr); }
+ .upgrade-actions button { white-space: normal; }
+ .upgrade-backup-body button { max-width: 100%; white-space: normal; }
+}
+@media (prefers-reduced-motion: reduce) {
+ .app-shell *, .modal-sheet * { animation-duration: .01ms !important; transition-duration: .01ms !important; scroll-behavior: auto !important; }
+}

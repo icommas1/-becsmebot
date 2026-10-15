@@ -1,6 +1,9 @@
 """Bounded workspace-local routing observations and ordered capabilities."""
 import hashlib
 import json
+import os
+from pathlib import Path
+import sqlite3
 import time
 
 from .db import connection
@@ -15,6 +18,27 @@ RETENTION_SECONDS = 7 * 86400
 def migrate(db):
     columns = {row['name'] for row in db.execute('PRAGMA table_info(routes)')}
     if 'shadow_mode' not in columns:
+        populated = db.execute('SELECT COUNT(*) FROM routes').fetchone()[0] or db.execute('SELECT COUNT(*) FROM jobs').fetchone()[0]
+        source_file = db.execute('PRAGMA database_list').fetchone()['file']
+        if populated and source_file:
+            # A consistent SQLite backup includes WAL data; never copy a live DB file.
+            source_path = Path(source_file)
+            backup_dir = source_path.parent / 'backups'
+            backup_dir.mkdir(mode=0o700,parents=True,exist_ok=True)
+            backup_path = backup_dir / (source_path.stem+'-before-ordered-upgrades.sqlite')
+            if not backup_path.exists():
+                db.commit()
+                temporary = backup_path.with_suffix('.sqlite.tmp')
+                try:
+                    with sqlite3.connect(temporary) as destination:
+                        db.backup(destination)
+                        if destination.execute('PRAGMA quick_check').fetchone()[0] != 'ok':
+                            raise RuntimeError('Pre-upgrade database backup verification failed')
+                    temporary.chmod(0o600)
+                    os.replace(temporary,backup_path)
+                finally:
+                    if temporary.exists():
+                        temporary.unlink()
         db.execute('ALTER TABLE routes ADD COLUMN shadow_mode INTEGER NOT NULL DEFAULT 0')
     for name in ('address_network', 'address_key'):
         if name not in {row['name'] for row in db.execute('PRAGMA table_info(jobs)')}:

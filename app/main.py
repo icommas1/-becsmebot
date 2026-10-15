@@ -31,7 +31,7 @@ from .engine import decide, dedup_fingerprint
 from .service import get_routes, enqueue, delivery_worker
 from .telegram_client import PersonalTelegram, telegram_bot_poll
 from .config import load_config, telegram_bot_username
-from .upgrade_store import overview_fields
+from .upgrade_store import overview_fields, RELEASE_LEVEL
 from .upgrade_api import router as upgrade_router
 
 logging.basicConfig(level=os.getenv('BECS_LOG_LEVEL','INFO'))
@@ -146,6 +146,7 @@ async def lifespan(app: FastAPI):
         init_db()
     stop = asyncio.Event()
     await runtime.start(stop)
+    logging.getLogger('becs').info('Forwarding upgrade level %s is running',RELEASE_LEVEL)
     try:
         yield
     finally:

@@ -174,7 +174,7 @@ function applyFilterPreset(id,route=false){
  if(n)n.value=p.network;if(c)c.checked=p.contract;if(rx)rx.value=p.pattern;
  toast(p.label+' preset applied. Review before saving.');
 }
-const currentSimRoute=()=>({name:'Filter Lab',mode:'smart',enabled:false,sources:[],destinations:[],allowed:dom('labAllow')?.value||'',blocked:dom('labBlock')?.value||'',pattern:dom('labPattern')?.value||'',match_mode:dom('labMatch')?.value||'any',network:dom('labNetwork')?.value||'both',require_contract:dom('labContract')?.checked||false,dedup_minutes:60,delivery_style:'native'});
+const currentSimRoute=()=>({name:'Filter Lab',mode:'smart',enabled:false,sources:[],destinations:[],allowed:dom('labAllow')?.value||'',blocked:dom('labBlock')?.value||'',pattern:dom('labPattern')?.value||'',match_mode:dom('labMatch')?.value||'any',network:dom('labNetwork')?.value||'both',require_contract:true,dedup_minutes:60,delivery_style:'native'});
 function filtersPage(){
  const addresses=state.simResult?.addresses||[];const res=state.simResult;
  return `${pageHead('CRYPTO ENGINE / LOCAL TEST','Crypto Filter Lab','Test contract detection, custom regex, keyword rules and blacklists without forwarding anything.')}
@@ -184,7 +184,7 @@ function filtersPage(){
  <div class="field"><label>Allowed keywords (comma-separated)</label><input id="labAllow" value="${safe(state.labAllow??'launch, liquidity, CA')}" placeholder="launch, liquidity, CA"></div>
  <div class="field"><label>Blocked keywords</label><input id="labBlock" value="${safe(state.labBlock??'scam, giveaway')}" placeholder="scam, giveaway"></div>
  <div class="field"><label>Custom regex (optional)</label><input id="labPattern" spellcheck="false" value="${safe(state.labPattern??'')}" placeholder="\\b(launch|presale)\\b"><span class="field-help">Timeout-protected regex. Custom patterns require a match when provided.</span></div>
- <label class="checkboxline"><input type="checkbox" id="labContract"> Require an address-format match</label>
+ <label class="checkboxline"><input type="checkbox" id="labContract" checked disabled> Address-format match required for every delivery</label>
  <button class="button button-primary" data-action="run-sim">${icon('flask')} Test filter</button></section>
  <section class="panel"><div class="panel-header"><h2>Decision inspector</h2>${pill('LOCAL ONLY')}</div>${res?`<div class="lab-result"><div style="display:flex;justify-content:space-between;align-items:center"><b>Evaluation result</b>${pill(res.decision.toUpperCase(),res.decision==='forward'?'success':res.decision==='invalid'?'error':'warn')}</div><p class="helper-line">${safe(res.reason)}</p></div><div class="result-detail"><span>Address candidates</span><b>${addresses.length}</b></div><div class="result-detail"><span>Keyword matches</span><b>${safe(res.allowed_hits.join(', ')||'None')}</b></div><div class="result-detail"><span>Blacklist hits</span><b>${safe(res.blocked_hits.join(', ')||'None')}</b></div><div class="result-detail"><span>Custom regex</span><b>${res.regex_match?'Matched':'Not matched / inactive'}</b></div><div class="divider"></div><h3 class="section-title">Extracted addresses</h3>${addresses.length?`<div class="tag-list">${addresses.map(a=>`<span class="chip">${safe(a.network)} · ${safe(a.address)}</span>`).join('')}</div>`:'<p class="helper-line">No valid Solana / EVM address-format candidates found.</p>'}<p class="small-help">Address-format detection does not prove token-mint validity or confirm on-chain contracts. The simulator makes no network requests.</p>`:empty('flask','Ready to test','Set up filter rules and click Test filter to see the exact decision.')}</section></div>`;
 }
@@ -446,7 +446,7 @@ function routeModal(route=null){
  <div class="field"><label for="routeName">Route name</label><input id="routeName" required minlength="2" maxlength="100" value="${safe(r.name)}" placeholder="Crypto signals"></div>
  <input id="routeSources" type="hidden" value="${safe(r.sources.join(', '))}">
  <input id="routeDests" type="hidden" value="${safe(r.destinations.join(', '))}">
- <input id="routeMode" type="hidden" value="smart"><input id="routeMatch" type="hidden" value="${safe(r.match_mode||'any')}">
+ <input id="routeMode" type="hidden" value="${safe(r.mode||'smart')}"><input id="routeMatch" type="hidden" value="${safe(r.match_mode||'any')}">
  <input id="routeNetwork" type="hidden" value="${safe(network)}">
  <input id="routePattern" type="hidden" value="${safe(r.pattern||'')}">
  <input id="routeStyle" type="hidden" value="text">
@@ -525,7 +525,7 @@ function collectRoute(){
  let allowed=dom('routeAllow').value.trim();
  if(mode==='all'||mode==='token')allowed='';
  if((mode==='keywords'||mode==='both')&&!allowed)throw Error('Enter at least one included keyword or regex');
- return {name:dom('routeName').value.trim(),mode:'smart',enabled:dom('routeEnabled').checked,
+ return {name:dom('routeName').value.trim(),mode:dom('routeMode').value,enabled:dom('routeEnabled').checked,
  sources:[...new Set(terms('routeSources'))],destinations:[...new Set(terms('routeDests'))],
  allowed,blocked:dom('routeBlock').value.trim(),pattern,match_mode:'any',
  network:sol&&evm?'both':sol?'solana':'evm',require_contract:true,
@@ -591,6 +591,234 @@ dom('refreshBtn').addEventListener('click',()=>reload(true,{preserve:true}));
 dom('modalClose').addEventListener('click',()=>closeModal());
 dom('modal').addEventListener('click',event=>{if(event.target===dom('modal'))closeModal();});
 document.addEventListener('keydown',event=>{if(dom('modal').classList.contains('hidden'))return;if(event.key==='Escape')closeModal();if(event.key==='Tab'&&state.modalKind!=='route'){const nodes=[...dom('modal').querySelectorAll('button:not(:disabled),input:not(:disabled),a[href]')].filter(node=>node.offsetParent!==null);if(!nodes.length)return;const first=nodes[0],last=nodes[nodes.length-1];if(event.shiftKey&&document.activeElement===first){event.preventDefault();last.focus();}else if(!event.shiftKey&&document.activeElement===last){event.preventDefault();first.focus();}}});
+// Ordered capabilities come from the authenticated workspace overview.
+const upgradeLevel = () => Number(state.overview?.upgrade_level || 0);
+const upgradeOriginalRender = render;
+const upgradeOriginalRouteModal = routeModal;
+const upgradeOriginalCollectRoute = collectRoute;
+const upgradeOriginalClearWorkspace = clearWorkspace;
+const upgradeOriginalRequest = request;
+
+clearWorkspace = function () {
+ state.upgradeBackup = null;
+ state.upgradeViewState = {};
+ state.upgradePresets = [];
+ upgradeOriginalClearWorkspace();
+};
+
+request = async function (path, options = {}) {
+ if (upgradeLevel() < 7 || options.signal) return upgradeOriginalRequest(path, options);
+ const controller = new AbortController();
+ const timer = setTimeout(() => controller.abort(), 15000);
+ try { return await upgradeOriginalRequest(path, {...options, signal:controller.signal}); }
+ catch (error) {
+  if (controller.signal.aborted) throw new Error('The request took too long. Your existing routes are still running; retry when connected.');
+  throw error;
+ } finally { clearTimeout(timer); }
+};
+
+collectRoute = function () {
+ return {...upgradeOriginalCollectRoute(), match_mode:dom('routeMatch')?.value||'any', shadow_mode:!!dom('routeShadow')?.checked};
+};
+
+routeModal = function (route = null) {
+ upgradeOriginalRouteModal(route);
+ if (upgradeLevel() < 1) return;
+ const field = document.createElement('section');
+ field.className = 'upgrade-shadow-control';
+ field.innerHTML = `<label class="checkboxline"><input id="routeShadow" type="checkbox" ${route?.shadow_mode?'checked':''}> Shadow Mode — observe without sending</label><p class="field-help">An enabled shadow route records what would pass or repeat. It never queues deliveries. Switching a live route to Shadow Mode holds its pending jobs for review.</p>`;
+ dom('routeForm').querySelector('.becs-smart-panel').before(field);
+ if (upgradeLevel() >= 4) installPresetControls();
+};
+
+async function installPresetControls() {
+ const form = dom('routeForm');
+ const version = state.accessVersion;
+ if (!form) return;
+ const section = document.createElement('section');
+ section.className = 'upgrade-presets';
+ section.innerHTML = `<h3>My filter presets</h3><div class="upgrade-actions"><select id="upgradePreset" aria-label="Saved filter preset"><option value="">Choose a saved preset</option></select><button type="button" class="button button-small" data-upgrade-action="apply-preset">Apply</button><button type="button" class="button button-small" data-upgrade-action="delete-preset">Delete selected</button></div><label for="upgradePresetName">Save these rules as</label><div class="upgrade-actions"><input id="upgradePresetName" maxlength="80" placeholder="Preset name"><button type="button" class="button button-small" data-upgrade-action="save-preset">Save preset</button></div><p class="field-help">Only filters are saved. Chats, enabled state and delivery mode stay with the route.</p>`;
+ form.querySelector('.becs-smart-panel').after(section);
+ try {
+  const data = await request('/presets');
+  if (!section.isConnected || version !== state.accessVersion) return;
+  state.upgradePresets = data.presets;
+  dom('upgradePreset').innerHTML = '<option value="">Choose a saved preset</option>' + data.presets.map(p=>`<option value="${p.id}">${safe(p.name)}</option>`).join('');
+ } catch (error) { if (section.isConnected) section.insertAdjacentHTML('beforeend',`<p role="alert">${safe(error.message)}</p>`); }
+}
+
+function upgradeDecisionRows(items) {
+ return items.length ? items.map(row=>`<details class="upgrade-decision"><summary><strong>${safe(row.decision.replaceAll('_',' '))}</strong> · ${safe(row.route_name||'Removed route')} <span>${safe(row.address||'No eligible address')}</span></summary><dl><dt>Why</dt><dd>${safe(row.reason)}</dd><dt>Source</dt><dd>${safe(row.source_id)} · message ${row.message_id}</dd><dt>Destination</dt><dd>${safe(row.destination_id||'Not queued')}</dd><dt>Delivery</dt><dd>${row.shadow?'Shadow only — no send':'See Queue for the final delivery outcome'}</dd><dt>Observed</dt><dd>${safe(new Date(row.created_at*1000).toLocaleString())}</dd></dl></details>`).join('') : '<p>No matching observations yet. Enabled routes will populate this view as new messages arrive.</p>';
+}
+
+async function loadUpgradeDecisions(container) {
+ const version = state.accessVersion;
+ try {
+  const data = await request(upgradeLevel() >= 2 ? '/decisions' : '/shadow');
+  if (!container.isConnected || state.accessVersion !== version) return;
+  container.innerHTML = upgradeDecisionRows(data.items) + `<p class="field-help">${safe(data.scope)} Up to ${data.maximum_records} records / ${data.retention_days} days.</p>`;
+ } catch (error) { if (container.isConnected) container.innerHTML = `<p role="alert">${safe(error.message)}</p>`; }
+}
+
+function captureUpgradeView() {
+ if (upgradeLevel() < 7 || state.access !== 'approved') return;
+ const values = {};
+ for (const id of ['labMessage','labAllow','labBlock','labPattern','labNetwork','labMatch','labContract']) {
+  const element = dom(id);
+  if (element) values[id] = {value:element.value,checked:element.checked};
+ }
+ state.upgradeViewState ||= {};
+ state.upgradeViewState[state.upgradeRenderedPage || state.page] = values;
+ const focused = document.activeElement;
+ state.upgradeFocus = focused?.id && values[focused.id] ? {id:focused.id,start:focused.selectionStart,end:focused.selectionEnd} : null;
+}
+
+render = function () {
+ captureUpgradeView();
+ upgradeOriginalRender();
+ if (state.access !== 'approved' || state.apiError || upgradeLevel() < 1) return;
+ const main = dom('mainView');
+ if (state.page === 'routes' && upgradeLevel() >= 3) {
+  for (const card of main.querySelectorAll('.route-card')) {
+   const id = Number(card.querySelector('[data-edit]')?.dataset.edit);
+   const health = state.overview.route_health?.find(row=>row.id===id);
+   if (!health) continue;
+   const section = document.createElement('div');
+   section.className = 'upgrade-route-health';
+   section.innerHTML = `<span>${health.shadow_mode?'Shadow Mode':'Live delivery'}</span><span>${health.delivered} delivered · ${health.queued} queued · ${health.failed} need review</span><span>Last observed: ${health.last_seen?age(health.last_seen):'Awaiting activity'}${health.oldest_queued_seconds?' · Oldest queued '+health.oldest_queued_seconds+'s':''}</span>`;
+   card.querySelector('.route-footer').before(section);
+  }
+ }
+ if (state.page === 'inspector' || state.page === 'queue') {
+  const section = document.createElement('section');
+  section.className = 'panel upgrade-panel';
+  section.innerHTML = `<div class="panel-header"><h2>${upgradeLevel()>=2?'Why this happened':'Shadow observations'}</h2>${upgradeLevel()>=5?'<button class="button button-small" data-upgrade-action="compare-sources">Compare sources</button>':''}</div><div class="upgrade-decisions">Loading observations…</div>`;
+  main.append(section);
+  loadUpgradeDecisions(section.querySelector('.upgrade-decisions'));
+ }
+ if (state.page === 'home' && upgradeLevel() >= 5) {
+  const button = document.createElement('button');
+  button.className = 'button upgrade-source-button';
+  button.dataset.upgradeAction = 'compare-sources';
+  button.textContent = 'Compare signal sources';
+  main.append(button);
+ }
+ if (state.page === 'backups' && state.me?.is_admin && upgradeLevel() >= 6) {
+  const section = document.createElement('section');
+  section.className = 'panel upgrade-panel';
+  section.innerHTML = `<div class="panel-header"><h2>Preview a configuration backup</h2></div><div class="upgrade-backup-body"><label for="upgradeBackupFile">Choose a Becs configuration ZIP (up to 6 MiB)</label><input id="upgradeBackupFile" type="file" accept=".zip,application/zip"><div id="upgradeBackupPreview">Previewing does not change routes.</div></div>`;
+  main.append(section);
+  if (state.upgradeBackup) showUpgradeBackupPreview();
+ }
+ if (upgradeLevel() >= 7) {
+  for (const [id,value] of Object.entries(state.upgradeViewState?.[state.page] || {})) {
+   const element = dom(id);
+   if (element) { element.value=value.value; if (element.type==='checkbox') element.checked=value.checked; }
+  }
+  const focus = state.upgradeFocus;
+  if (focus && dom(focus.id)) {
+   dom(focus.id).focus({preventScroll:true});
+   try { dom(focus.id).setSelectionRange(focus.start,focus.end); } catch (_) {}
+  }
+ }
+ state.upgradeRenderedPage = state.page;
+};
+
+async function compareUpgradeSources() {
+ state.modalKind = 'source-comparison';
+ dom('modalTitle').textContent = 'Source comparison';
+ dom('modalBody').innerHTML = '<p>Loading observed sources…</p>';
+ dom('modal').classList.remove('hidden');
+ const body = dom('modalBody');
+ try {
+  const data = await request('/sources/comparison');
+  if (state.modalKind !== 'source-comparison' || !body.isConnected) return;
+  body.innerHTML = `<p class="field-help">${safe(data.scope)}</p><div class="upgrade-table-wrap"><table class="upgrade-table"><thead><tr><th>Source</th><th>Unique addresses</th><th>First observed</th><th>Repeat mentions</th></tr></thead><tbody>${data.sources.map(row=>`<tr><td>${safe(state.chats.find(chat=>chat.id===row.source_id)?.title||row.source_id)}</td><td>${row.unique_addresses}</td><td>${row.first_observations}</td><td>${row.repeat_percent}%</td></tr>`).join('')}</tbody></table></div>${data.sources.length?'':'<p>No observations yet. This starts collecting with the upgrade; it does not scan chat history.</p>'}`;
+ } catch (error) { if (state.modalKind==='source-comparison') body.textContent=error.message; }
+}
+
+async function previewUpgradeBackup(file) {
+ state.upgradeBackup = null;
+ const container = dom('upgradeBackupPreview');
+ if (!file || file.size > 6*1024*1024) throw new Error('Choose a configuration ZIP no larger than 6 MiB.');
+ container.textContent = 'Validating backup…';
+ const bytes = new Uint8Array(await file.arrayBuffer());
+ let binary = '';
+ for (let offset=0;offset<bytes.length;offset+=32768) binary+=String.fromCharCode(...bytes.subarray(offset,offset+32768));
+ const payload = {content_base64:btoa(binary)};
+ const version = state.accessVersion;
+ const preview = await request('/admin/backups/preview',{method:'POST',body:JSON.stringify(payload)});
+ if (version!==state.accessVersion || !container.isConnected) return;
+ state.upgradeBackup = {payload,preview};
+ showUpgradeBackupPreview();
+}
+
+function showUpgradeBackupPreview() {
+ const {preview} = state.upgradeBackup;
+ const container = dom('upgradeBackupPreview');
+ if (!container) return;
+ container.innerHTML = `<p>${safe(preview.notice)}</p><p>${preview.current_routes.length} current routes will be retained. ${preview.route_count} routes from your own backup workspace are available.</p>${preview.routes.map(route=>`<label class="checkboxline"><input type="checkbox" data-upgrade-import-index="${route.index}"> ${safe(route.name)} · ${route.sources.length} sources → ${route.destinations.length} destinations</label><p class="field-help">${safe(route.comparison||'')}</p>`).join('')}<button class="button" data-upgrade-action="import-backup" ${preview.routes.length?'':'disabled'}>Import selected as disabled shadow routes</button><p class="field-help">Other users' archived workspaces cannot be imported here. Reconnecting Telegram and granting membership remain separate actions.</p>`;
+}
+
+document.addEventListener('change',async event=>{
+ if (event.target.id!=='upgradeBackupFile' || state.access!=='approved' || !state.me?.is_admin) return;
+ try { await previewUpgradeBackup(event.target.files[0]); }
+ catch (error) { if (dom('upgradeBackupPreview')) dom('upgradeBackupPreview').textContent=error.message; }
+});
+
+document.addEventListener('click',async event=>{
+ const button = event.target.closest('[data-upgrade-action]');
+ if (!button || button.disabled || state.access!=='approved') return;
+ button.disabled = true;
+ try {
+  const action = button.dataset.upgradeAction;
+  if (action === 'compare-sources') await compareUpgradeSources();
+  if (action === 'save-preset') {
+   const route = collectRoute();
+   const filters = Object.fromEntries(['allowed','blocked','pattern','match_mode','network','dedup_minutes','require_contract'].map(key=>[key,route[key]]));
+   const name = dom('upgradePresetName').value.trim();
+   if (name.length<2) throw new Error('Enter a preset name with at least two characters.');
+   await request('/presets',{method:'POST',body:JSON.stringify({name,filters})});
+   dom('routeForm').querySelector('.upgrade-presets').remove();
+   await installPresetControls();
+   toast('Filter preset saved in your workspace');
+  }
+  if (action === 'apply-preset' || action === 'delete-preset') {
+   const preset = state.upgradePresets?.find(row=>row.id===Number(dom('upgradePreset').value));
+   if (!preset) throw new Error('Choose a saved preset first.');
+   if (action==='delete-preset') {
+    if (!confirm('Delete the saved filter preset '+preset.name+'? Existing routes are retained.')) return;
+    await request('/presets/'+preset.id,{method:'DELETE'});
+    dom('routeForm').querySelector('.upgrade-presets').remove();
+    await installPresetControls();
+   } else {
+    const filters = preset.filters;
+    dom('routeAllow').value=filters.allowed;
+    dom('routeBlock').value=filters.blocked;
+    dom('routePattern').value=filters.pattern;
+    dom('routeCooldown').value=filters.dedup_minutes;
+    dom('routeMatch').value=filters.match_mode;
+    dom('routeSolana').checked=filters.network!=='evm';
+    dom('routeEvm').checked=filters.network!=='solana';
+    dom('routeReqLink').checked=false;dom('routeReqNumber').checked=false;dom('routeReqMention').checked=false;
+    document.querySelectorAll('.becs-mode-button').forEach(control=>{const active=control.dataset.filterMode===(filters.allowed?'both':'token');control.classList.toggle('active',active);control.setAttribute('aria-pressed',String(active));});
+    toast('Preset loaded. Review and save the route to apply it.');
+   }
+  }
+  if (action === 'import-backup') {
+   const backup = state.upgradeBackup;
+   if (!backup || !state.me?.is_admin) throw new Error('Preview a backup first.');
+   const indices = [...document.querySelectorAll('[data-upgrade-import-index]:checked')].map(input=>Number(input.dataset.upgradeImportIndex));
+   if (!indices.length) throw new Error('Select at least one route to import.');
+   const result = await request('/admin/backups/import',{method:'POST',body:JSON.stringify({...backup.payload,route_indices:indices,expected_checksum:backup.preview.current_checksum})});
+   state.upgradeBackup=null;
+   toast(result.imported+' routes imported disabled and in Shadow Mode');
+   await reload();
+  }
+ } catch (error) { toast(error.message,true); }
+ finally { if (button.isConnected) button.disabled=false; }
+});
+
 render();
 reload();
 })();
